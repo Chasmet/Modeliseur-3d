@@ -132,7 +132,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
 
-    // Version officielle encore compatible avec minSdk 21.
+    // Version officielle publiée sur Maven Central et compatible avec minSdk 21.
     // Elle inclut NNAPI, XNNPACK et le runtime Java complet.
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }
