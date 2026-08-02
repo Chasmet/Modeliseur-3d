@@ -123,20 +123,20 @@ public final class GlbExporter {
     ) {
         StringBuilder json = new StringBuilder(1800);
         json.append('{');
-        json.append("\"asset\":{\"version\":\"2.0\",\"generator\":\"Modeliseur 3D V2 Android\"},");
+        json.append("\"asset\":{\"version\":\"2.0\",\"generator\":\"Modeliseur 3D V4 Neural Android\"},");
         json.append("\"scene\":0,");
         json.append("\"scenes\":[{\"nodes\":[0]}],");
-        json.append("\"nodes\":[{\"mesh\":0,\"name\":\"Personnage\"}],");
-        json.append("\"meshes\":[{\"name\":\"Personnage\",\"primitives\":[{");
+        json.append("\"nodes\":[{\"mesh\":0,\"name\":\"Personnage V4 Neural\"}],");
+        json.append("\"meshes\":[{\"name\":\"Personnage V4 Neural\",\"primitives\":[{");
         json.append("\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},");
         json.append("\"indices\":3,\"material\":0}]}],");
-        json.append("\"materials\":[{\"name\":\"Texture multivue\",");
+        json.append("\"materials\":[{\"name\":\"Texture multivue neuronale\",");
         json.append("\"pbrMetallicRoughness\":{\"baseColorTexture\":{\"index\":0},");
-        json.append("\"metallicFactor\":0.0,\"roughnessFactor\":0.86},");
+        json.append("\"metallicFactor\":0.0,\"roughnessFactor\":0.82},");
         json.append("\"doubleSided\":true,\"alphaMode\":\"MASK\",\"alphaCutoff\":0.05}],");
         json.append("\"textures\":[{\"sampler\":0,\"source\":0}],");
         json.append("\"samplers\":[{\"magFilter\":9729,\"minFilter\":9987,\"wrapS\":33071,\"wrapT\":33071}],");
-        json.append("\"images\":[{\"bufferView\":4,\"mimeType\":\"image/png\",\"name\":\"texture_multivue\"}],");
+        json.append("\"images\":[{\"bufferView\":4,\"mimeType\":\"image/png\",\"name\":\"texture_multivue_v4\"}],");
         json.append("\"buffers\":[{\"byteLength\":").append(binaryLength).append("}],");
         json.append("\"bufferViews\":[");
         appendBufferView(json, positionOffset, positionLength, 34962);
