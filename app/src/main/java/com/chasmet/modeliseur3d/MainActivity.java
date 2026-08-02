@@ -29,9 +29,9 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
     private static final int REQUEST_IMAGE = 2001;
-    private static final int MAX_INPUT_SIDE = 2048;
+    private static final int MAX_INPUT_SIDE = 3072;
 
-    // Un coordinateur en arrière-plan. Le moteur V2 répartit lui-même la reconstruction sur les cœurs CPU.
+    // Le coordinateur reste léger. Le moteur V3 répartit la reconstruction sur les cœurs CPU.
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ImageToMeshGenerator generator = new ImageToMeshGenerator();
 
@@ -73,14 +73,22 @@ public final class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(intent, REQUEST_IMAGE);
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            @Nullable Intent data
+    ) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK || data == null || data.getData() == null) {
+        if (requestCode != REQUEST_IMAGE
+                || resultCode != RESULT_OK
+                || data == null
+                || data.getData() == null) {
             return;
         }
 
@@ -108,7 +116,9 @@ public final class MainActivity extends AppCompatActivity {
                         imageUri,
                         MAX_INPUT_SIDE
                 );
-                runOnUiThread(() -> statusText.setText(R.string.status_generating_multiview));
+                runOnUiThread(() -> statusText.setText(
+                        R.string.status_generating_multiview
+                ));
                 ImageToMeshGenerator.Result result = generator.generate(source);
 
                 currentMesh = result.getMesh();
@@ -128,12 +138,17 @@ public final class MainActivity extends AppCompatActivity {
             } catch (Exception error) {
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_generation);
-                    Toast.makeText(this,
-                            getString(R.string.error_generation) + " " + safeMessage(error),
-                            Toast.LENGTH_LONG).show();
+                    Toast.makeText(
+                            this,
+                            getString(R.string.error_generation)
+                                    + " " + safeMessage(error),
+                            Toast.LENGTH_LONG
+                    ).show();
                 });
             } finally {
-                if (source != null && source != currentTexture && !source.isRecycled()) {
+                if (source != null
+                        && source != currentTexture
+                        && !source.isRecycled()) {
                     source.recycle();
                 }
             }
@@ -150,7 +165,11 @@ public final class MainActivity extends AppCompatActivity {
         setBusy(true, R.string.status_exporting);
         worker.execute(() -> {
             try {
-                ObjExporter.ExportResult result = ObjExporter.export(this, mesh, texture);
+                ObjExporter.ExportResult result = ObjExporter.export(
+                        this,
+                        mesh,
+                        texture
+                );
                 runOnUiThread(() -> {
                     setBusy(false, R.string.status_exported);
                     shareFiles(result);
@@ -158,9 +177,12 @@ public final class MainActivity extends AppCompatActivity {
             } catch (Exception error) {
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
-                    Toast.makeText(this,
-                            getString(R.string.error_export) + " " + safeMessage(error),
-                            Toast.LENGTH_LONG).show();
+                    Toast.makeText(
+                            this,
+                            getString(R.string.error_export)
+                                    + " " + safeMessage(error),
+                            Toast.LENGTH_LONG
+                    ).show();
                 });
             }
         });
@@ -179,17 +201,23 @@ public final class MainActivity extends AppCompatActivity {
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V2 — GLB + OBJ");
-        share.putExtra(Intent.EXTRA_TEXT,
-                "GLB autonome et fichiers OBJ créés dans : " + result.getDirectory().getAbsolutePath());
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V3 — GLB + OBJ");
+        share.putExtra(
+                Intent.EXTRA_TEXT,
+                "GLB V3 autonome et fichiers OBJ créés dans : "
+                        + result.getDirectory().getAbsolutePath()
+        );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-        ClipData clipData = ClipData.newRawUri("Modèle 3D V2", uris.get(0));
+        ClipData clipData = ClipData.newRawUri("Modèle 3D V3", uris.get(0));
         for (int i = 1; i < uris.size(); i++) {
             clipData.addItem(new ClipData.Item(uris.get(i)));
         }
         share.setClipData(clipData);
-        startActivity(Intent.createChooser(share, getString(R.string.share_model)));
+        startActivity(Intent.createChooser(
+                share,
+                getString(R.string.share_model)
+        ));
     }
 
     private void setBusy(boolean busy, int messageRes) {
@@ -201,7 +229,9 @@ public final class MainActivity extends AppCompatActivity {
 
     private static String safeMessage(Throwable error) {
         String message = error.getMessage();
-        return message == null || message.trim().isEmpty() ? "" : "(" + message + ")";
+        return message == null || message.trim().isEmpty()
+                ? ""
+                : "(" + message + ")";
     }
 
     @Override
