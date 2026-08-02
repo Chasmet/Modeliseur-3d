@@ -2,7 +2,10 @@ package com.chasmet.modeliseur3d.model;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.os.Build;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OnnxValue;
@@ -22,21 +25,21 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
- * Segmentation locale spécialisée pour les personnages dessinés, anime et jeux vidéo.
+ * Segmentation anime locale optimisée pour Android.
  *
- * Modèle : IS-Net Anime, issu du projet open source anime-segmentation et distribué
- * par rembg. La sortie est une carte de confiance continue utilisée avant la
- * reconstruction multivue. Le modèle est chargé uniquement pendant le détourage
- * afin de ne pas conserver en mémoire simultanément les deux gros réseaux V4.1.
+ * La V4.1.1 utilise une version INT8 de 44 Mo afin de réduire fortement la
+ * mémoire nécessaire au chargement du réseau. L'image conserve son ratio et
+ * est centrée dans une entrée 1024 x 1024, conformément au prétraitement du
+ * modèle original.
  */
 public final class AnimeSegmentationEngine implements AutoCloseable {
-    public static final String MODEL_NAME = "IS-Net Anime";
+    public static final String MODEL_NAME = "IS-Net Anime INT8 mobile";
 
-    private static final String MODEL_ASSET = "models/isnet_anime.onnx";
-    private static final String MODEL_FILE = "isnet_anime_v41.onnx";
+    private static final String MODEL_ASSET = "models/isnet_anime_int8.onnx";
+    private static final String MODEL_FILE = "isnet_anime_int8_v411.onnx";
     private static final int INPUT_SIZE = 1024;
     private static final float[] MEAN = {0.485f, 0.456f, 0.406f};
-    private static final long MINIMUM_MODEL_BYTES = 150_000_000L;
+    private static final long MINIMUM_MODEL_BYTES = 40_000_000L;
 
     private final OrtEnvironment environment;
     private final OrtSession session;
@@ -46,10 +49,9 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
     public AnimeSegmentationEngine(Context context) throws Exception {
         File model = copyModelIfNeeded(context.getApplicationContext());
         environment = OrtEnvironment.getEnvironment();
-        SessionBundle bundle = createSession(model);
-        session = bundle.session;
-        backend = bundle.backend;
+        session = createCpuSession(model);
         inputName = session.getInputNames().iterator().next();
+        backend = "IS-Net Anime INT8 • CPU multi-cœurs";
     }
 
     public Mask segment(Bitmap source) throws Exception {
@@ -57,16 +59,9 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
             throw new IllegalArgumentException("Planche absente pour la segmentation");
         }
 
-        Bitmap resized = Bitmap.createScaledBitmap(
-                source,
-                INPUT_SIZE,
-                INPUT_SIZE,
-                true
-        );
-        FloatBuffer inputBuffer = createInputBuffer(resized);
-        if (resized != source && !resized.isRecycled()) {
-            resized.recycle();
-        }
+        PreparedInput prepared = prepareInput(source);
+        FloatBuffer inputBuffer = createInputBuffer(prepared.bitmap);
+        prepared.bitmap.recycle();
 
         long[] shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
         try (OnnxTensor input = OnnxTensor.createTensor(
@@ -95,17 +90,19 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                     );
                 }
                 if (raw.length != expected) {
-                    float[] tail = new float[expected];
-                    System.arraycopy(raw, raw.length - expected, tail, 0, expected);
-                    raw = tail;
+                    float[] primaryOutput = new float[expected];
+                    System.arraycopy(raw, 0, primaryOutput, 0, expected);
+                    raw = primaryOutput;
                 }
                 normalizeRobust(raw);
-                return Mask.resize(
+                return new Mask(
                         raw,
                         INPUT_SIZE,
                         INPUT_SIZE,
-                        source.getWidth(),
-                        source.getHeight()
+                        prepared.contentLeft,
+                        prepared.contentTop,
+                        prepared.contentWidth,
+                        prepared.contentHeight
                 );
             }
         }
@@ -120,55 +117,61 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         try {
             session.close();
         } catch (OrtException ignored) {
-            // Fermeture défensive : l'inférence est déjà terminée.
+            // La fermeture ne doit jamais empêcher le repli géométrique.
         }
     }
 
-    private SessionBundle createSession(File model) throws Exception {
+    private OrtSession createCpuSession(File model) throws Exception {
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
-        int threads = Math.max(2, Math.min(8, processors - 1));
+        int threads = Math.max(2, Math.min(4, processors - 1));
 
-        OrtSession.SessionOptions accelerated = new OrtSession.SessionOptions();
-        accelerated.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-        accelerated.setIntraOpNumThreads(threads);
-        accelerated.setInterOpNumThreads(1);
-
-        boolean nnapi = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1;
-        if (nnapi) {
-            try {
-                accelerated.addNnapi();
-            } catch (OrtException ignored) {
-                nnapi = false;
-            }
-        }
-
+        OrtSession.SessionOptions options = new OrtSession.SessionOptions();
+        options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+        options.setIntraOpNumThreads(threads);
+        options.setInterOpNumThreads(1);
         try {
-            OrtSession created = environment.createSession(
-                    model.getAbsolutePath(),
-                    accelerated
-            );
-            accelerated.close();
-            return new SessionBundle(
-                    created,
-                    nnapi ? "IS-Net NNAPI + CPU" : "IS-Net CPU multi-cœurs"
-            );
-        } catch (Exception firstError) {
-            accelerated.close();
-
-            OrtSession.SessionOptions cpu = new OrtSession.SessionOptions();
-            cpu.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-            cpu.setIntraOpNumThreads(threads);
-            cpu.setInterOpNumThreads(1);
-            try {
-                OrtSession created = environment.createSession(
-                        model.getAbsolutePath(),
-                        cpu
-                );
-                return new SessionBundle(created, "IS-Net CPU multi-cœurs");
-            } finally {
-                cpu.close();
-            }
+            return environment.createSession(model.getAbsolutePath(), options);
+        } finally {
+            options.close();
         }
+    }
+
+    private static PreparedInput prepareInput(Bitmap source) {
+        float scale = Math.min(
+                INPUT_SIZE / (float) source.getWidth(),
+                INPUT_SIZE / (float) source.getHeight()
+        );
+        int contentWidth = Math.max(1, Math.round(source.getWidth() * scale));
+        int contentHeight = Math.max(1, Math.round(source.getHeight() * scale));
+        int contentLeft = (INPUT_SIZE - contentWidth) / 2;
+        int contentTop = (INPUT_SIZE - contentHeight) / 2;
+
+        Bitmap bitmap = Bitmap.createBitmap(
+                INPUT_SIZE,
+                INPUT_SIZE,
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+                        | Paint.FILTER_BITMAP_FLAG
+                        | Paint.DITHER_FLAG
+        );
+        RectF destination = new RectF(
+                contentLeft,
+                contentTop,
+                contentLeft + contentWidth,
+                contentTop + contentHeight
+        );
+        canvas.drawBitmap(source, null, destination, paint);
+        return new PreparedInput(
+                bitmap,
+                contentLeft,
+                contentTop,
+                contentWidth,
+                contentHeight
+        );
     }
 
     private static FloatBuffer createInputBuffer(Bitmap bitmap) {
@@ -216,6 +219,9 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 maximum = Math.max(maximum, value);
             }
         }
+        if (!Float.isFinite(minimum) || !Float.isFinite(maximum)) {
+            throw new IllegalArgumentException("Masque IS-Net invalide");
+        }
         float range = Math.max(1.0e-6f, maximum - minimum);
         for (int i = 0; i < values.length; i++) {
             float value = values[i];
@@ -230,7 +236,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         File directory = new File(context.getFilesDir(), "neural_models");
         if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
             throw new IllegalStateException(
-                    "Impossible de créer le dossier des réseaux V4.1"
+                    "Impossible de créer le dossier des réseaux V4.1.1"
             );
         }
 
@@ -260,7 +266,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         if (temporary.length() < MINIMUM_MODEL_BYTES) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Le réseau IS-Net Anime embarqué est incomplet"
+                    "Le réseau IS-Net Anime INT8 embarqué est incomplet"
             );
         }
         if (destination.exists() && !destination.delete()) {
@@ -272,7 +278,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         if (!temporary.renameTo(destination)) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Installation de la segmentation V4.1 impossible"
+                    "Installation de la segmentation V4.1.1 impossible"
             );
         }
         return destination;
@@ -282,13 +288,29 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         return Math.max(0.0f, Math.min(1.0f, value));
     }
 
-    private static final class SessionBundle {
-        final OrtSession session;
-        final String backend;
+    private static float lerp(float first, float second, float amount) {
+        return first + (second - first) * amount;
+    }
 
-        SessionBundle(OrtSession session, String backend) {
-            this.session = session;
-            this.backend = backend;
+    private static final class PreparedInput {
+        final Bitmap bitmap;
+        final int contentLeft;
+        final int contentTop;
+        final int contentWidth;
+        final int contentHeight;
+
+        PreparedInput(
+                Bitmap bitmap,
+                int contentLeft,
+                int contentTop,
+                int contentWidth,
+                int contentHeight
+        ) {
+            this.bitmap = bitmap;
+            this.contentLeft = contentLeft;
+            this.contentTop = contentTop;
+            this.contentWidth = contentWidth;
+            this.contentHeight = contentHeight;
         }
     }
 
@@ -296,65 +318,84 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         private final float[] values;
         private final int width;
         private final int height;
+        private final int contentLeft;
+        private final int contentTop;
+        private final int contentWidth;
+        private final int contentHeight;
+        private final boolean inverted;
 
-        private Mask(float[] values, int width, int height) {
+        Mask(
+                float[] values,
+                int width,
+                int height,
+                int contentLeft,
+                int contentTop,
+                int contentWidth,
+                int contentHeight
+        ) {
             this.values = values;
             this.width = width;
             this.height = height;
+            this.contentLeft = contentLeft;
+            this.contentTop = contentTop;
+            this.contentWidth = contentWidth;
+            this.contentHeight = contentHeight;
+            this.inverted = borderAverage() > 0.52f;
         }
 
-        static Mask resize(
-                float[] source,
-                int sourceWidth,
-                int sourceHeight,
-                int width,
-                int height
-        ) {
-            float[] output = new float[width * height];
-            for (int y = 0; y < height; y++) {
-                float sy = (y + 0.5f) * sourceHeight / (float) height - 0.5f;
-                int y0 = Math.max(0, Math.min(sourceHeight - 1, (int) Math.floor(sy)));
-                int y1 = Math.min(sourceHeight - 1, y0 + 1);
-                float ty = sy - (float) Math.floor(sy);
-                for (int x = 0; x < width; x++) {
-                    float sx = (x + 0.5f) * sourceWidth / (float) width - 0.5f;
-                    int x0 = Math.max(0, Math.min(sourceWidth - 1, (int) Math.floor(sx)));
-                    int x1 = Math.min(sourceWidth - 1, x0 + 1);
-                    float tx = sx - (float) Math.floor(sx);
+        public float sampleNormalized(float normalizedX, float normalizedY) {
+            float x = contentLeft
+                    + clamp01(normalizedX) * Math.max(1, contentWidth - 1);
+            float y = contentTop
+                    + clamp01(normalizedY) * Math.max(1, contentHeight - 1);
+            int x0 = Math.max(0, Math.min(width - 1, (int) Math.floor(x)));
+            int y0 = Math.max(0, Math.min(height - 1, (int) Math.floor(y)));
+            int x1 = Math.min(width - 1, x0 + 1);
+            int y1 = Math.min(height - 1, y0 + 1);
+            float tx = x - x0;
+            float ty = y - y0;
 
-                    float top = lerp(
-                            source[y0 * sourceWidth + x0],
-                            source[y0 * sourceWidth + x1],
-                            tx
-                    );
-                    float bottom = lerp(
-                            source[y1 * sourceWidth + x0],
-                            source[y1 * sourceWidth + x1],
-                            tx
-                    );
-                    output[y * width + x] = lerp(top, bottom, ty);
-                }
-            }
-            return new Mask(output, width, height);
+            float top = lerp(
+                    values[y0 * width + x0],
+                    values[y0 * width + x1],
+                    tx
+            );
+            float bottom = lerp(
+                    values[y1 * width + x0],
+                    values[y1 * width + x1],
+                    tx
+            );
+            float value = lerp(top, bottom, ty);
+            return inverted ? 1.0f - value : value;
         }
 
-        public float get(int x, int y) {
-            if (x < 0 || y < 0 || x >= width || y >= height) {
-                return 0.0f;
+        private float borderAverage() {
+            int samples = 96;
+            float sum = 0.0f;
+            int count = 0;
+            for (int i = 0; i < samples; i++) {
+                float t = i / (float) Math.max(1, samples - 1);
+                sum += rawSample(t, 0.01f);
+                sum += rawSample(t, 0.99f);
+                sum += rawSample(0.01f, t);
+                sum += rawSample(0.99f, t);
+                count += 4;
             }
+            return sum / Math.max(1, count);
+        }
+
+        private float rawSample(float normalizedX, float normalizedY) {
+            int x = Math.max(0, Math.min(
+                    width - 1,
+                    Math.round(contentLeft
+                            + clamp01(normalizedX) * Math.max(1, contentWidth - 1))
+            ));
+            int y = Math.max(0, Math.min(
+                    height - 1,
+                    Math.round(contentTop
+                            + clamp01(normalizedY) * Math.max(1, contentHeight - 1))
+            ));
             return values[y * width + x];
         }
-
-        public int getWidth() {
-            return width;
-        }
-
-        public int getHeight() {
-            return height;
-        }
-    }
-
-    private static float lerp(float first, float second, float amount) {
-        return first + (second - first) * amount;
     }
 }
