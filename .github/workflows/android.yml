@@ -34,6 +34,25 @@ jobs:
             app/src/main/assets/models/isnet_anime_int8.onnx
           key: modeliseur-v411-depth-afb6a5c2-isnet-int8-a6832786
 
+      - name: Télécharger et vérifier IS-Net Anime INT8
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="app/src/main/assets/models/isnet_anime_int8.onnx"
+          PART="${MODEL}.part"
+          SHA="a6832786351b9a1283bb1cd4a2b9a77f1fe0330ad5e7324a6c4603db478b034e"
+          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model_int8.onnx?download=true"
+          mkdir -p "$(dirname "$MODEL")"
+          if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
+            echo "IS-Net Anime INT8 déjà présent dans le cache et vérifié."
+          else
+            rm -f "$MODEL" "$PART"
+            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
+              -o "$PART" "$URL"
+            echo "$SHA  $PART" | sha256sum -c -
+            mv "$PART" "$MODEL"
+          fi
+
       - name: Installer le SDK Android
         uses: android-actions/setup-android@v3
 
