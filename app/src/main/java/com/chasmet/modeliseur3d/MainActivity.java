@@ -84,8 +84,10 @@ public final class MainActivity extends AppCompatActivity {
 
         Uri imageUri = data.getData();
         try {
-            int takeFlags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
-            getContentResolver().takePersistableUriPermission(imageUri, takeFlags);
+            getContentResolver().takePersistableUriPermission(
+                    imageUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+            );
         } catch (SecurityException ignored) {
             // Certains fournisseurs n'autorisent pas la permission persistante.
         }
