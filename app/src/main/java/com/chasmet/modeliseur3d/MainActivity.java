@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -28,8 +29,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
+    private static final String TAG = "Modeliseur3D";
     private static final int REQUEST_IMAGE = 2001;
-    private static final int MAX_INPUT_SIDE = 3072;
+    private static final int MAX_INPUT_SIDE = 2048;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -148,13 +150,18 @@ public final class MainActivity extends AppCompatActivity {
                             result.getTotalDurationMs() / 1000.0
                     ));
                 });
-            } catch (Exception error) {
+            } catch (Exception | OutOfMemoryError error) {
+                Log.e(TAG, "Échec de reconstruction V4.1.1", error);
+                String details = safeMessage(error);
+                Runtime.getRuntime().gc();
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_generation);
+                    statusText.setText(
+                            getString(R.string.error_generation) + " " + details
+                    );
                     Toast.makeText(
                             this,
-                            getString(R.string.error_generation)
-                                    + " " + safeMessage(error),
+                            getString(R.string.error_generation) + " " + details,
                             Toast.LENGTH_LONG
                     ).show();
                 });
@@ -187,13 +194,17 @@ public final class MainActivity extends AppCompatActivity {
                     setBusy(false, R.string.status_exported);
                     shareFiles(result);
                 });
-            } catch (Exception error) {
+            } catch (Exception | OutOfMemoryError error) {
+                Log.e(TAG, "Échec d'export", error);
+                String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
+                    statusText.setText(
+                            getString(R.string.error_export) + " " + details
+                    );
                     Toast.makeText(
                             this,
-                            getString(R.string.error_export)
-                                    + " " + safeMessage(error),
+                            getString(R.string.error_export) + " " + details,
                             Toast.LENGTH_LONG
                     ).show();
                 });
@@ -214,16 +225,16 @@ public final class MainActivity extends AppCompatActivity {
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V4 neuronal — GLB + OBJ");
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V4.1.1 — GLB + OBJ");
         share.putExtra(
                 Intent.EXTRA_TEXT,
-                "GLB V4 neuronal et fichiers OBJ créés dans : "
+                "GLB V4.1.1 et fichiers OBJ créés dans : "
                         + result.getDirectory().getAbsolutePath()
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4 neuronal",
+                "Modèle 3D V4.1.1",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -244,10 +255,31 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private static String safeMessage(Throwable error) {
-        String message = error.getMessage();
-        return message == null || message.trim().isEmpty()
-                ? ""
-                : "(" + message + ")";
+        if (error instanceof OutOfMemoryError) {
+            return "(mémoire du téléphone insuffisante ; ferme les autres applications puis réessaie)";
+        }
+
+        Throwable current = error;
+        String message = null;
+        while (current != null) {
+            String candidate = current.getMessage();
+            if (candidate != null && !candidate.trim().isEmpty()) {
+                message = candidate.trim();
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
+        }
+
+        String type = error.getClass().getSimpleName();
+        if (message == null || message.isEmpty()) {
+            return "(" + type + ")";
+        }
+        if (message.length() > 180) {
+            message = message.substring(0, 177) + "…";
+        }
+        return "(" + type + " : " + message + ")";
     }
 
     @Override
@@ -267,6 +299,9 @@ public final class MainActivity extends AppCompatActivity {
         worker.shutdownNow();
         if (generator != null) {
             generator.close();
+        }
+        if (currentTexture != null && !currentTexture.isRecycled()) {
+            currentTexture.recycle();
         }
         super.onDestroy();
     }
