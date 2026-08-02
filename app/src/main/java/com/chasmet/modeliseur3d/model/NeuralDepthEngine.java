@@ -121,7 +121,11 @@ public final class NeuralDepthEngine implements AutoCloseable {
 
     @Override
     public void close() {
-        session.close();
+        try {
+            session.close();
+        } catch (OrtException ignored) {
+            // La fermeture ne doit jamais faire planter l'activité Android.
+        }
     }
 
     private SessionBundle createSession(File model) throws Exception {
