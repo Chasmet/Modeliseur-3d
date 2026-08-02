@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 3D V4.1.2 Neural</string>
-    <string name="title">Modéliseur 3D V4.1.2 neuronal</string>
-    <string name="subtitle">Importe une planche avec face, dos et profil. IS-Net Anime FP32 détoure le personnage sur le CPU, puis la coque est soudée, lissée et affinée par Depth Anything V2.</string>
-    <string name="select_image">Choisir la planche</string>
+    <string name="app_name">Modéliseur 3D V4.2 Neural</string>
+    <string name="title">Modéliseur 3D V4.2 neuronal</string>
+    <string name="subtitle">Importe une image unique ou une planche multivue. La V4.2 regroupe les morceaux du personnage, reconnaît les vraies vues et adapte automatiquement le volume 3D.</string>
+    <string name="select_image">Choisir une image</string>
     <string name="reset_view">Recentrer</string>
     <string name="export_obj">Exporter GLB + OBJ</string>
     <string name="empty_message">Le modèle 3D neuronal apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
     <string name="status_ready">Prêt — réseaux locaux optimisés et replis automatiques.</string>
     <string name="status_loading">Lecture optimisée de la planche…</string>
-    <string name="status_loading_neural_engine">Préparation des moteurs neuronaux V4.1.2…</string>
-    <string name="status_generating">Création du maillage 3D V4.1.2…</string>
-    <string name="status_generating_multiview">Détourage anime précis et reconstruction multivue…</string>
-    <string name="status_generating_neural">IS-Net Anime FP32 sur CPU, coque 3D lissée, puis relief Depth Anything V2 avec repli automatique…</string>
-    <string name="status_done">Modèle V4.1.2 prêt.</string>
+    <string name="status_loading_neural_engine">Préparation des moteurs neuronaux V4.2…</string>
+    <string name="status_generating">Création du maillage 3D V4.2…</string>
+    <string name="status_generating_multiview">Regroupement des morceaux et calibration des vues…</string>
+    <string name="status_generating_neural">Détourage FP32, analyse image unique ou multivue, volume préservant les éléments fins, puis relief neuronal…</string>
+    <string name="status_done">Modèle V4.2 prêt.</string>
     <string name="status_done_details">%1$d vues • qualité %2$s • %3$d cœurs • %4$d triangles • %5$s • réseau %6$.1f s • total %7$.1f s</string>
-    <string name="status_exporting">Création du GLB V4.1.2 autonome et des fichiers OBJ…</string>
-    <string name="status_exported">GLB, OBJ, MTL et texture multivue V4.1.2 créés.</string>
-    <string name="share_model">Partager ou enregistrer le modèle 3D V4.1.2</string>
+    <string name="status_exporting">Création du GLB V4.2 autonome et des fichiers OBJ…</string>
+    <string name="status_exported">GLB, OBJ, MTL et texture V4.2 créés.</string>
+    <string name="share_model">Partager ou enregistrer le modèle 3D V4.2</string>
     <string name="error_image">Impossible de lire cette image.</string>
-    <string name="error_generation">La reconstruction V4.1.2 a échoué. Le détail est affiché ci-dessous.</string>
+    <string name="error_generation">La reconstruction V4.2 a échoué. Le détail est affiché ci-dessous.</string>
     <string name="error_export">L’export GLB a échoué.</string>
 </resources>

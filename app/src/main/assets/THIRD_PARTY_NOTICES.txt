@@ -1,4 +1,4 @@
-MODÉLISEUR 3D V4.1.2 NEURAL — COMPOSANTS OPEN SOURCE
+MODÉLISEUR 3D V4.2 NEURAL — COMPOSANTS OPEN SOURCE
 
 1. IS-Net Anime / Anime Segmentation
 Projet d'origine : SkyTNT/anime-segmentation
@@ -15,7 +15,7 @@ Licence du modèle Small : Apache License 2.0
 Copyright : auteurs et contributeurs de Depth Anything V2
 Article : Depth Anything V2: A More Capable Foundation Model for Monocular Depth Estimation
 
-Le modèle est utilisé localement pour estimer les cartes de profondeur de face, de dos et de profil après la reconstruction géométrique. Si le téléphone ne peut pas charger ce réseau, la V4.1.2 conserve automatiquement le maillage géométrique lissé.
+Le modèle est utilisé localement pour estimer les cartes de profondeur utiles après la reconstruction géométrique. Si le téléphone ne peut pas charger ce réseau, la V4.2 conserve automatiquement le maillage géométrique lissé.
 
 3. ONNX Runtime Android
 Projet : microsoft/onnxruntime

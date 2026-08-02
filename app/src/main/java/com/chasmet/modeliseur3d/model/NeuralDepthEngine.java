@@ -2,6 +2,10 @@ package com.chasmet.modeliseur3d.model;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.os.Build;
 
 import ai.onnxruntime.OnnxTensor;
@@ -60,15 +64,12 @@ public final class NeuralDepthEngine implements AutoCloseable {
             throw new IllegalArgumentException("Image neuronale absente");
         }
 
-        Bitmap resized = Bitmap.createScaledBitmap(
-                source,
-                INPUT_SIZE,
-                INPUT_SIZE,
-                true
-        );
-        FloatBuffer inputBuffer = createInputBuffer(resized);
-        if (resized != source && !resized.isRecycled()) {
-            resized.recycle();
+        PreparedInput prepared = prepareInput(source);
+        FloatBuffer inputBuffer;
+        try {
+            inputBuffer = createInputBuffer(prepared.bitmap);
+        } finally {
+            prepared.bitmap.recycle();
         }
 
         long[] shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
@@ -110,7 +111,7 @@ public final class NeuralDepthEngine implements AutoCloseable {
                         );
                     }
                 }
-                return DepthMap.fromRaw(raw, side, side);
+                return DepthMap.fromRaw(raw, side, side, prepared);
             }
         }
     }
@@ -215,6 +216,48 @@ public final class NeuralDepthEngine implements AutoCloseable {
         return buffer;
     }
 
+    private static PreparedInput prepareInput(Bitmap source) {
+        float scale = Math.min(
+                INPUT_SIZE / (float) source.getWidth(),
+                INPUT_SIZE / (float) source.getHeight()
+        );
+        int contentWidth = Math.max(1, Math.round(source.getWidth() * scale));
+        int contentHeight = Math.max(1, Math.round(source.getHeight() * scale));
+        int contentLeft = (INPUT_SIZE - contentWidth) / 2;
+        int contentTop = (INPUT_SIZE - contentHeight) / 2;
+
+        Bitmap bitmap = Bitmap.createBitmap(
+                INPUT_SIZE,
+                INPUT_SIZE,
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.BLACK);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+                        | Paint.FILTER_BITMAP_FLAG
+                        | Paint.DITHER_FLAG
+        );
+        canvas.drawBitmap(
+                source,
+                null,
+                new RectF(
+                        contentLeft,
+                        contentTop,
+                        contentLeft + contentWidth,
+                        contentTop + contentHeight
+                ),
+                paint
+        );
+        return new PreparedInput(
+                bitmap,
+                contentLeft,
+                contentTop,
+                contentWidth,
+                contentHeight
+        );
+    }
+
     private static File copyModelIfNeeded(Context context) throws Exception {
         File modelDirectory = new File(context.getFilesDir(), "neural_models");
         if (!modelDirectory.exists()
@@ -270,24 +313,94 @@ public final class NeuralDepthEngine implements AutoCloseable {
         }
     }
 
+    private static final class PreparedInput {
+        final Bitmap bitmap;
+        final int contentLeft;
+        final int contentTop;
+        final int contentWidth;
+        final int contentHeight;
+
+        PreparedInput(
+                Bitmap bitmap,
+                int contentLeft,
+                int contentTop,
+                int contentWidth,
+                int contentHeight
+        ) {
+            this.bitmap = bitmap;
+            this.contentLeft = contentLeft;
+            this.contentTop = contentTop;
+            this.contentWidth = contentWidth;
+            this.contentHeight = contentHeight;
+        }
+    }
+
     public static final class DepthMap {
         private final float[] values;
         private final int width;
         private final int height;
+        private final float contentLeft;
+        private final float contentTop;
+        private final float contentRight;
+        private final float contentBottom;
 
-        private DepthMap(float[] values, int width, int height) {
+        private DepthMap(
+                float[] values,
+                int width,
+                int height,
+                float contentLeft,
+                float contentTop,
+                float contentRight,
+                float contentBottom
+        ) {
             this.values = values;
             this.width = width;
             this.height = height;
+            this.contentLeft = contentLeft;
+            this.contentTop = contentTop;
+            this.contentRight = contentRight;
+            this.contentBottom = contentBottom;
         }
 
-        static DepthMap fromRaw(float[] raw, int width, int height) {
-            float[] sample = new float[(raw.length + 15) / 16];
+        static DepthMap fromRaw(
+                float[] raw,
+                int width,
+                int height,
+                PreparedInput prepared
+        ) {
+            float inputDenominator = Math.max(1.0f, INPUT_SIZE - 1.0f);
+            int contentLeftPixel = Math.max(0, Math.min(
+                    width - 1,
+                    Math.round(prepared.contentLeft
+                            / inputDenominator * (width - 1))
+            ));
+            int contentTopPixel = Math.max(0, Math.min(
+                    height - 1,
+                    Math.round(prepared.contentTop
+                            / inputDenominator * (height - 1))
+            ));
+            int contentRightPixel = Math.max(contentLeftPixel, Math.min(
+                    width - 1,
+                    Math.round((prepared.contentLeft
+                            + prepared.contentWidth - 1)
+                            / inputDenominator * (width - 1))
+            ));
+            int contentBottomPixel = Math.max(contentTopPixel, Math.min(
+                    height - 1,
+                    Math.round((prepared.contentTop
+                            + prepared.contentHeight - 1)
+                            / inputDenominator * (height - 1))
+            ));
+            int sampledWidth = (contentRightPixel - contentLeftPixel) / 4 + 1;
+            int sampledHeight = (contentBottomPixel - contentTopPixel) / 4 + 1;
+            float[] sample = new float[Math.max(1, sampledWidth * sampledHeight)];
             int sampleCount = 0;
-            for (int i = 0; i < raw.length; i += 16) {
-                float value = raw[i];
-                if (Float.isFinite(value)) {
-                    sample[sampleCount++] = value;
+            for (int y = contentTopPixel; y <= contentBottomPixel; y += 4) {
+                for (int x = contentLeftPixel; x <= contentRightPixel; x += 4) {
+                    float value = raw[y * width + x];
+                    if (Float.isFinite(value)) {
+                        sample[sampleCount++] = value;
+                    }
                 }
             }
             if (sampleCount < 32) {
@@ -307,12 +420,30 @@ public final class NeuralDepthEngine implements AutoCloseable {
                 normalized[i] = clamp01((value - low) / range);
             }
             blur(normalized, width, height, 2);
-            return new DepthMap(normalized, width, height);
+            return new DepthMap(
+                    normalized,
+                    width,
+                    height,
+                    prepared.contentLeft / inputDenominator,
+                    prepared.contentTop / inputDenominator,
+                    (prepared.contentLeft + prepared.contentWidth - 1)
+                            / inputDenominator,
+                    (prepared.contentTop + prepared.contentHeight - 1)
+                            / inputDenominator
+            );
         }
 
         public float sample(float normalizedX, float normalizedY) {
-            float x = clamp01(normalizedX) * (width - 1);
-            float y = clamp01(normalizedY) * (height - 1);
+            float x = lerp(
+                    contentLeft,
+                    contentRight,
+                    clamp01(normalizedX)
+            ) * (width - 1);
+            float y = lerp(
+                    contentTop,
+                    contentBottom,
+                    clamp01(normalizedY)
+            ) * (height - 1);
             int x0 = Math.max(0, Math.min(width - 1, (int) Math.floor(x)));
             int y0 = Math.max(0, Math.min(height - 1, (int) Math.floor(y)));
             int x1 = Math.min(width - 1, x0 + 1);

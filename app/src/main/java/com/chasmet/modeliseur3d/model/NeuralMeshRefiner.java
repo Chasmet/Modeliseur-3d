@@ -61,12 +61,20 @@ final class NeuralMeshRefiner {
 
             float fv = centered(front.sample(u, v));
             float bv = centered(back.sample(1.0f - u, v));
-            float rv = centered(side.sample(w, v));
-            float lv = centered(side.sample(1.0f - w, v));
+            float rv = side == null
+                    ? 0.0f
+                    : centered(side.sample(w, v));
+            float lv = side == null
+                    ? 0.0f
+                    : centered(side.sample(1.0f - w, v));
             float fw = square(Math.max(0.0f, nz));
             float bw = square(Math.max(0.0f, -nz));
-            float rw = square(Math.max(0.0f, nx));
-            float lw = square(Math.max(0.0f, -nx));
+            float rw = side == null
+                    ? 0.0f
+                    : square(Math.max(0.0f, nx));
+            float lw = side == null
+                    ? 0.0f
+                    : square(Math.max(0.0f, -nx));
             float total = Math.max(1.0e-5f, fw + bw + rw + lw);
             float dx = (rv * rw - lv * lw) / total * SIDE;
             float dz = (fv * fw - bv * bw) / total * FRONT_BACK;

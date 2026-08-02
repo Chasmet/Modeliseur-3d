@@ -27,7 +27,7 @@ import java.util.Map;
 /**
  * Segmentation anime locale optimisée pour Android.
  *
- * La V4.1.2 utilise le graphe FP32 officiel. Contrairement à la variante INT8,
+ * La V4.2 utilise le graphe FP32 officiel. Contrairement à la variante INT8,
  * il ne contient aucun opérateur ConvInteger non pris en charge sur certains
  * téléphones. La session reste volontairement sur le CPU ; NNAPI est réservé
  * à Depth Anything V2.
@@ -60,8 +60,12 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         }
 
         PreparedInput prepared = prepareInput(source);
-        FloatBuffer inputBuffer = createInputBuffer(prepared.bitmap);
-        prepared.bitmap.recycle();
+        FloatBuffer inputBuffer;
+        try {
+            inputBuffer = createInputBuffer(prepared.bitmap);
+        } finally {
+            prepared.bitmap.recycle();
+        }
 
         long[] shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
         try (OnnxTensor input = OnnxTensor.createTensor(
@@ -237,7 +241,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         File directory = new File(context.getFilesDir(), "neural_models");
         if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
             throw new IllegalStateException(
-                    "Impossible de créer le dossier des réseaux V4.1.2"
+                    "Impossible de créer le dossier des réseaux V4.2"
             );
         }
 
@@ -280,7 +284,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         if (!temporary.renameTo(destination)) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Installation de la segmentation V4.1.2 impossible"
+                    "Installation de la segmentation V4.2 impossible"
             );
         }
         deleteLegacyInt8Model(directory);

@@ -18,8 +18,10 @@ import java.util.concurrent.Future;
  * - une projection de texture multivue par triangle.
  */
 public final class SmoothHullMesher {
-    private static final float ISO_LEVEL = 0.43f;
-    private static final int SMOOTHING_PASSES = 2;
+    // Un seuil plus bas et un seul flou empêchent les doigts, pattes et
+    // accessoires fins de disparaître avant l'extraction de la surface.
+    private static final float ISO_LEVEL = 0.37f;
+    private static final int SMOOTHING_PASSES = 1;
 
     private static final int[][] CORNER_OFFSETS = {
             {0, 0, 0},

@@ -1,6 +1,6 @@
-# Modéliseur 3D V4.1.2 Neural — Android local
+# Modéliseur 3D V4.2 Neural — Android local
 
-Application Android Java spécialisée pour les **planches de rotation multivues** contenant le même personnage de face, de dos et de profil.
+Application Android Java pour une **image unique** ou une **planche de rotation multivue** d'un personnage, animal, monstre ou objet détourable.
 
 La V4 ajoute un véritable réseau neuronal embarqué à la reconstruction géométrique. L’image reste sur le téléphone.
 
@@ -8,18 +8,16 @@ La V4 ajoute un véritable réseau neuronal embarqué à la reconstruction géom
 
 Le pipeline est hybride afin de rester utilisable sur Android :
 
-1. lecture de la planche jusqu’à 3072 px ;
-2. détection des silhouettes et sélection automatique des vues ;
-3. construction d’une enveloppe 3D multivue fermée ;
-4. extraction d’une surface triangulée lisse ;
-5. découpe de l’atlas en face, dos et profil ;
-6. trois inférences locales avec **Depth Anything V2 Small FP32** ;
-7. normalisation et filtrage des cartes de profondeur ;
-8. fusion des profondeurs selon l’orientation de chaque normale ;
-9. déformation bornée de la surface pour ajouter le relief neuronal ;
-10. recalcul des normales ;
-11. affichage OpenGL ES 3 ;
-12. export GLB 2.0, OBJ, MTL et PNG.
+1. lecture de l'image jusqu’à 2048 px ;
+2. détourage neuronal puis regroupement des morceaux appartenant au même sujet ;
+3. distinction automatique entre image unique et vraies vues face/dos/profil ;
+4. volume monoculaire arrondi ou enveloppe 3D multivue selon l'entrée ;
+5. préservation des membres, pattes et accessoires séparés ;
+6. extraction d’une surface triangulée lisse ;
+7. création d'un atlas face, dos et profil synthétique ou réel ;
+8. une à trois inférences utiles avec **Depth Anything V2 Small FP32** ;
+9. fusion bornée du relief puis recalcul des normales ;
+10. affichage OpenGL ES 3 et export GLB 2.0, OBJ, MTL et PNG.
 
 ## Intelligence artificielle embarquée
 
@@ -97,7 +95,7 @@ APK généré :
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4.1.2-Neural-debug`.
+Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4.2-Neural-debug`.
 
 ## Structure principale
 
@@ -114,6 +112,7 @@ app/src/main/java/com/chasmet/modeliseur3d/
 │   ├── MeshData.java
 │   ├── NeuralDepthEngine.java
 │   ├── NeuralReconstructionEngine.java
+│   ├── ViewCandidateGrouper.java
 │   ├── ObjExporter.java
 │   └── SmoothHullMesher.java
 └── util/
@@ -124,6 +123,6 @@ app/src/main/java/com/chasmet/modeliseur3d/
 
 Cette V4 utilise bien deux réseaux neuronaux, mais elle ne prétend pas exécuter sur téléphone un grand modèle génératif 3D de plusieurs milliards de paramètres. Elle combine un détourage anime, une enveloppe multivue et une profondeur neuronale détaillée.
 
-La V4.1.2 accepte aussi une seule silhouette en dernier recours : elle réutilise cette vue pour estimer la profondeur latérale au lieu d'arrêter la génération. Une planche face/dos/profil reste fortement recommandée pour obtenir une forme correcte.
+La V4.2 ne réutilise plus une vue de face comme faux profil. Avec une image unique, l'épaisseur dépend de la distance au bord : les membres restent plus fins et le corps gagne un volume progressif. Avec une planche, les morceaux proches sont d'abord regroupés puis seules les vraies silhouettes sont comparées.
 
 Les zones absentes de toutes les vues restent estimées. Les espaces très fins entre les doigts, l’intérieur des vêtements et les éléments cachés ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est encore généré.

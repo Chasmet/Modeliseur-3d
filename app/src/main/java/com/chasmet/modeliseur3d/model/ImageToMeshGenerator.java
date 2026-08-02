@@ -8,11 +8,8 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -20,17 +17,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Générateur V3 spécialisé pour une planche de rotation :
- * grande face, petite face, dos, profil et trois-quarts.
+ * Générateur géométrique V4.2 pour image unique et planche de rotation.
  *
- * Le calcul reste entièrement local et utilise les cœurs CPU disponibles.
+ * Le calcul regroupe d'abord les morceaux d'une même silhouette, puis choisit
+ * une enveloppe multivue ou une épaisseur monoculaire arrondie.
  */
 public final class ImageToMeshGenerator {
     private static final int ATLAS_HEIGHT = 1024;
-    private static final float COMPONENT_MIN_HEIGHT = 0.18f;
-    private static final float COMPONENT_MIN_WIDTH = 0.018f;
-    private static final float RELAXED_COMPONENT_MIN_HEIGHT = 0.10f;
-    private static final float RELAXED_COMPONENT_MIN_WIDTH = 0.008f;
+    private static final float RELIABLE_SIDE_RATIO = 0.82f;
 
     public Result generate(Bitmap source) throws Exception {
         if (source == null || source.isRecycled()) {
@@ -39,13 +33,13 @@ public final class ImageToMeshGenerator {
 
         PerformanceProfile profile = PerformanceProfile.detect();
         boolean[] foreground = estimateForeground(source);
-        List<Component> components = findComponents(
+        ComponentMap componentMap = findComponents(
                 foreground,
                 source.getWidth(),
                 source.getHeight()
         );
         ViewSelection selection = selectViews(
-                components,
+                componentMap,
                 source.getWidth(),
                 source.getHeight()
         );
@@ -55,196 +49,245 @@ public final class ImageToMeshGenerator {
             );
         }
 
-        ViewData front = createView(source, foreground, selection.front);
+        ViewData front = createView(source, componentMap, selection.front);
         ViewData back = selection.back == null
                 ? front
-                : createView(source, foreground, selection.back);
-        ViewData side = createView(source, foreground, selection.side);
+                : createView(source, componentMap, selection.back);
+        ViewData side = selection.side == null
+                ? null
+                : createView(source, componentMap, selection.side);
+        foreground = null;
+        componentMap = null;
 
-        boolean[] frontMask = normalizeMask(front, profile.width, profile.height);
-        boolean[] sideMask = normalizeMask(side, profile.depth, profile.height);
-        cleanNormalizedMask(frontMask, profile.width, profile.height);
-        cleanNormalizedMask(sideMask, profile.depth, profile.height);
+        try {
+            boolean[] frontMask = normalizeMask(
+                    front,
+                    profile.width,
+                    profile.height
+            );
+            cleanNormalizedMask(frontMask, profile.width, profile.height);
+            int[] frontDistance = distanceTransform(
+                    frontMask,
+                    profile.width,
+                    profile.height
+            );
 
-        int[] frontDistance = distanceTransform(
-                frontMask,
-                profile.width,
-                profile.height
-        );
-        int[] sideDistance = distanceTransform(
-                sideMask,
-                profile.depth,
-                profile.height
-        );
+            boolean[] voxels;
+            if (side != null) {
+                boolean[] sideMask = normalizeMask(
+                        side,
+                        profile.depth,
+                        profile.height
+                );
+                cleanNormalizedMask(sideMask, profile.depth, profile.height);
+                int[] sideDistance = distanceTransform(
+                        sideMask,
+                        profile.depth,
+                        profile.height
+                );
+                voxels = buildVisualHull(
+                        frontMask,
+                        sideMask,
+                        frontDistance,
+                        sideDistance,
+                        profile
+                );
+            } else {
+                voxels = buildSingleViewHull(
+                        frontMask,
+                        frontDistance,
+                        profile
+                );
+            }
+            repairNarrowGaps(
+                    voxels,
+                    profile.width,
+                    profile.height,
+                    profile.depth
+            );
+            keepMeaningfulVolumes(
+                    voxels,
+                    profile.width,
+                    profile.height,
+                    profile.depth
+            );
 
-        boolean[] voxels = buildVisualHull(
-                frontMask,
-                sideMask,
-                frontDistance,
-                sideDistance,
-                profile
-        );
-        closeVolume(voxels, profile.width, profile.height, profile.depth);
-        keepLargestVolume(voxels, profile.width, profile.height, profile.depth);
+            SmoothHullMesher.AtlasLayout atlasLayout =
+                    SmoothHullMesher.AtlasLayout.create(
+                            profile.width,
+                            profile.height,
+                            profile.depth,
+                            ATLAS_HEIGHT
+                    );
 
-        SmoothHullMesher.AtlasLayout atlasLayout =
-                SmoothHullMesher.AtlasLayout.create(
+            Bitmap atlas = buildTextureAtlas(
+                    front,
+                    back,
+                    side,
+                    frontMask,
+                    frontDistance,
+                    profile,
+                    atlasLayout
+            );
+            MeshData mesh;
+            try {
+                mesh = SmoothHullMesher.build(
+                        voxels,
                         profile.width,
                         profile.height,
                         profile.depth,
-                        ATLAS_HEIGHT
+                        atlasLayout,
+                        profile.processors
                 );
+            } catch (Exception | OutOfMemoryError error) {
+                atlas.recycle();
+                throw error;
+            }
 
-        Bitmap atlas = buildTextureAtlas(
-                front,
-                back,
-                side,
-                profile,
-                atlasLayout
-        );
-        MeshData mesh = SmoothHullMesher.build(
-                voxels,
-                profile.width,
-                profile.height,
-                profile.depth,
-                atlasLayout,
-                profile.processors
-        );
-
-        front.recycleOwned();
-        if (back != front) {
-            back.recycleOwned();
+            return new Result(
+                    mesh,
+                    atlas,
+                    selection.detectedViewCount,
+                    profile.label,
+                    profile.processors,
+                    countTrue(voxels),
+                    selection.back != null,
+                    selection.side != null
+            );
+        } finally {
+            front.recycleOwned();
+            if (back != front) {
+                back.recycleOwned();
+            }
+            if (side != null && side != front && side != back) {
+                side.recycleOwned();
+            }
         }
-        side.recycleOwned();
-
-        return new Result(
-                mesh,
-                atlas,
-                selection.detectedViewCount,
-                profile.label,
-                profile.processors,
-                countTrue(voxels)
-        );
     }
 
     private static ViewSelection selectViews(
-            List<Component> components,
+            ComponentMap componentMap,
             int imageWidth,
             int imageHeight
     ) {
-        int minPixels = Math.max(220, imageWidth * imageHeight / 1800);
-        List<Component> usable = filterComponents(
-                components,
-                minPixels,
-                imageWidth,
-                imageHeight,
-                COMPONENT_MIN_WIDTH,
-                COMPONENT_MIN_HEIGHT
-        );
-        if (usable.size() < 2) {
-            usable = filterComponents(
-                    components,
-                    Math.max(80, minPixels / 3),
-                    imageWidth,
-                    imageHeight,
-                    RELAXED_COMPONENT_MIN_WIDTH,
-                    RELAXED_COMPONENT_MIN_HEIGHT
-            );
+        List<ViewCandidateGrouper.Piece> pieces = new ArrayList<>();
+        for (int index = 0; index < componentMap.components.size(); index++) {
+            Component component = componentMap.components.get(index);
+            pieces.add(new ViewCandidateGrouper.Piece(
+                    index,
+                    component.pixelCount,
+                    component.bounds.left,
+                    component.bounds.top,
+                    component.bounds.right,
+                    component.bounds.bottom
+            ));
         }
-
-        Collections.sort(usable, new Comparator<Component>() {
-            @Override
-            public int compare(Component first, Component second) {
-                return Integer.compare(first.bounds.left, second.bounds.left);
-            }
-        });
+        List<ViewCandidateGrouper.Group> usable =
+                ViewCandidateGrouper.group(pieces, imageWidth, imageHeight);
         if (usable.isEmpty()) {
             return new ViewSelection(null, null, null, usable.size());
         }
 
-        Component front = usable.get(0);
-        for (Component component : usable) {
-            if (component.pixelCount > front.pixelCount) {
-                front = component;
+        ViewCandidateGrouper.Group front = usable.get(0);
+        for (ViewCandidateGrouper.Group group : usable) {
+            if (frontScore(group, imageHeight) > frontScore(front, imageHeight)) {
+                front = group;
             }
         }
 
-        // Une image avec une seule silhouette reste générable : la même vue
-        // sert d'estimation latérale, au lieu de bloquer toute la reconstruction.
         if (usable.size() == 1) {
-            return new ViewSelection(front, null, front, 1);
+            return new ViewSelection(front, null, null, 1);
         }
 
-        List<Component> candidates = new ArrayList<>();
-        for (Component component : usable) {
-            if (component != front) {
-                candidates.add(component);
+        List<ViewCandidateGrouper.Group> candidates = new ArrayList<>();
+        for (ViewCandidateGrouper.Group group : usable) {
+            if (group != front) {
+                candidates.add(group);
             }
         }
-        if (candidates.isEmpty()) {
-            return new ViewSelection(front, null, null, usable.size());
-        }
 
-        Component side = candidates.get(0);
-        for (Component candidate : candidates) {
+        ViewCandidateGrouper.Group side = candidates.get(0);
+        for (ViewCandidateGrouper.Group candidate : candidates) {
             if (candidate.aspectRatio() < side.aspectRatio()) {
                 side = candidate;
             }
         }
-
-        List<Component> nonSide = new ArrayList<>();
-        for (Component candidate : candidates) {
-            if (candidate != side) {
-                nonSide.add(candidate);
-            }
+        float frontAspect = Math.max(0.05f, front.aspectRatio());
+        float medianAspect = medianAspect(usable);
+        boolean sideLargeEnough = side.height() >= front.height() * 0.35f
+                && side.pixelCount >= front.pixelCount * 0.035f;
+        boolean sideReliable = sideLargeEnough
+                && (side.aspectRatio() <= frontAspect * RELIABLE_SIDE_RATIO
+                || (usable.size() >= 3
+                && side.aspectRatio() <= medianAspect * 0.84f));
+        if (!sideReliable) {
+            side = null;
         }
-        Collections.sort(nonSide, new Comparator<Component>() {
-            @Override
-            public int compare(Component first, Component second) {
-                return Integer.compare(first.bounds.left, second.bounds.left);
-            }
-        });
 
-        Component back = null;
-        if (nonSide.size() >= 2) {
-            back = nonSide.get(1);
-        } else if (!nonSide.isEmpty()) {
-            back = nonSide.get(0);
+        ViewCandidateGrouper.Group back = null;
+        float bestBackScore = Float.POSITIVE_INFINITY;
+        for (ViewCandidateGrouper.Group candidate : candidates) {
+            if (candidate == side) {
+                continue;
+            }
+            float score = viewSimilarity(front, candidate);
+            if (score < bestBackScore) {
+                bestBackScore = score;
+                back = candidate;
+            }
         }
         return new ViewSelection(front, back, side, usable.size());
     }
 
-    private static List<Component> filterComponents(
-            List<Component> components,
-            int minimumPixels,
-            int imageWidth,
-            int imageHeight,
-            float minimumWidthFraction,
-            float minimumHeightFraction
+    private static float frontScore(
+            ViewCandidateGrouper.Group group,
+            int imageHeight
     ) {
-        List<Component> usable = new ArrayList<>();
-        for (Component component : components) {
-            if (component.pixelCount >= minimumPixels
-                    && component.bounds.height()
-                    >= imageHeight * minimumHeightFraction
-                    && component.bounds.width()
-                    >= imageWidth * minimumWidthFraction) {
-                usable.add(component);
-            }
+        float heightWeight = 0.70f
+                + 0.30f * Math.min(1.0f, group.height() / (float) imageHeight);
+        return group.pixelCount * heightWeight;
+    }
+
+    private static float medianAspect(
+            List<ViewCandidateGrouper.Group> groups
+    ) {
+        float[] values = new float[groups.size()];
+        for (int index = 0; index < groups.size(); index++) {
+            values[index] = groups.get(index).aspectRatio();
         }
-        return usable;
+        Arrays.sort(values);
+        return values[values.length / 2];
+    }
+
+    private static float viewSimilarity(
+            ViewCandidateGrouper.Group reference,
+            ViewCandidateGrouper.Group candidate
+    ) {
+        float aspect = Math.abs((float) Math.log(
+                Math.max(0.04f, candidate.aspectRatio())
+                        / Math.max(0.04f, reference.aspectRatio())
+        ));
+        float height = Math.abs((float) Math.log(
+                Math.max(1.0f, candidate.height())
+                        / Math.max(1.0f, reference.height())
+        ));
+        float area = Math.abs((float) Math.log(
+                Math.max(1.0f, candidate.pixelCount)
+                        / Math.max(1.0f, reference.pixelCount)
+        ));
+        return aspect + height * 0.42f + area * 0.18f;
     }
 
     private static ViewData createView(
             Bitmap source,
-            boolean[] sourceMask,
-            Component component
+            ComponentMap componentMap,
+            ViewCandidateGrouper.Group group
     ) {
         Rect crop = addMargin(
-                component.bounds,
+                new Rect(group.left, group.top, group.right, group.bottom),
                 source.getWidth(),
                 source.getHeight(),
-                0.035f
+                0.045f
         );
         Bitmap bitmap = Bitmap.createBitmap(
                 source,
@@ -254,20 +297,22 @@ public final class ImageToMeshGenerator {
                 crop.height()
         );
         boolean[] mask = new boolean[crop.width() * crop.height()];
+        boolean[] allowedComponents = new boolean[
+                componentMap.components.size()
+        ];
+        group.markPieces(allowedComponents);
         int sourceWidth = source.getWidth();
         for (int y = 0; y < crop.height(); y++) {
             int sourceOffset = (crop.top + y) * sourceWidth + crop.left;
             int targetOffset = y * crop.width();
-            System.arraycopy(
-                    sourceMask,
-                    sourceOffset,
-                    mask,
-                    targetOffset,
-                    crop.width()
-            );
+            for (int x = 0; x < crop.width(); x++) {
+                int componentId = componentMap.labels[sourceOffset + x];
+                mask[targetOffset + x] = componentId >= 0
+                        && componentId < allowedComponents.length
+                        && allowedComponents[componentId];
+            }
         }
-        closeSmallGaps(mask, crop.width(), crop.height(), 1);
-        retainLargest2D(mask, crop.width(), crop.height());
+        bridgeNarrowGaps2D(mask, crop.width(), crop.height());
         return new ViewData(bitmap, mask, crop.width(), crop.height());
     }
 
@@ -310,10 +355,35 @@ public final class ImageToMeshGenerator {
             int width,
             int height
     ) {
-        closeSmallGaps(mask, width, height, 1);
-        retainLargest2D(mask, width, height);
-        dilate(mask, width, height, 1);
-        erode(mask, width, height, 1);
+        // Ne jamais supprimer ici les petits volumes : une patte, une main ou
+        // un accessoire séparé doit rester présent dans le modèle final.
+        bridgeNarrowGaps2D(mask, width, height);
+    }
+
+    private static void bridgeNarrowGaps2D(
+            boolean[] mask,
+            int width,
+            int height
+    ) {
+        boolean[] source = Arrays.copyOf(mask, mask.length);
+        for (int y = 1; y < height - 1; y++) {
+            for (int x = 1; x < width - 1; x++) {
+                int index = y * width + x;
+                if (source[index]) {
+                    continue;
+                }
+                boolean horizontal = source[index - 1] && source[index + 1];
+                boolean vertical = source[index - width]
+                        && source[index + width];
+                boolean diagonalDown = source[index - width - 1]
+                        && source[index + width + 1];
+                boolean diagonalUp = source[index - width + 1]
+                        && source[index + width - 1];
+                if (horizontal || vertical || diagonalDown || diagonalUp) {
+                    mask[index] = true;
+                }
+            }
+        }
     }
 
     private static boolean[] buildVisualHull(
@@ -400,6 +470,75 @@ public final class ImageToMeshGenerator {
         return voxels;
     }
 
+    /**
+     * Volume arrondi pour une image unique.
+     *
+     * La V4.1.2 réutilisait la silhouette de face comme faux profil : les
+     * épaules devenaient aussi épaisses que larges et les animaux s'écrasaient
+     * en rubans. Ici l'épaisseur dépend de la distance réelle au bord. Les
+     * membres fins restent donc fins, tandis que le torse ou le corps gagne un
+     * volume progressif et symétrique.
+     */
+    private static boolean[] buildSingleViewHull(
+            boolean[] front,
+            int[] frontDistance,
+            PerformanceProfile profile
+    ) {
+        int width = profile.width;
+        int height = profile.height;
+        int depth = profile.depth;
+        boolean[] voxels = new boolean[width * height * depth];
+        int maximumDistance = 1;
+        for (int index = 0; index < front.length; index++) {
+            if (front[index] && frontDistance[index] < 100_000) {
+                maximumDistance = Math.max(
+                        maximumDistance,
+                        frontDistance[index]
+                );
+            }
+        }
+
+        int center = (depth - 1) / 2;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int frontIndex = y * width + x;
+                if (!front[frontIndex]) {
+                    continue;
+                }
+                int halfDepth = singleViewHalfDepth(
+                        frontDistance[frontIndex],
+                        maximumDistance,
+                        depth
+                );
+                int from = Math.max(1, center - halfDepth);
+                int to = Math.min(depth - 2, center + halfDepth);
+                for (int z = from; z <= to; z++) {
+                    voxels[voxelIndex(x, y, z, width, depth)] = true;
+                }
+            }
+        }
+        return voxels;
+    }
+
+    private static int singleViewHalfDepth(
+            int distance,
+            int maximumDistance,
+            int depth
+    ) {
+        float edgeDistance = Math.max(0.0f, distance - 3.0f);
+        float usableMaximum = Math.max(1.0f, maximumDistance - 3.0f);
+        float normalized = Math.max(
+                0.0f,
+                Math.min(1.0f, edgeDistance / usableMaximum)
+        );
+        float rounded = (float) Math.pow(normalized, 1.25f);
+        float maximumHalfDepth = Math.max(2.0f, depth * 0.42f);
+        return Math.max(
+                1,
+                Math.round(1.0f + rounded * (maximumHalfDepth - 1.0f))
+        );
+    }
+
     private static int[] rowMax(
             int[] distance,
             boolean[] mask,
@@ -420,66 +559,64 @@ public final class ImageToMeshGenerator {
         return result;
     }
 
-    private static void closeVolume(
+    private static void repairNarrowGaps(
             boolean[] voxels,
             int width,
             int height,
             int depth
     ) {
-        boolean[] dilated = new boolean[voxels.length];
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                for (int z = 0; z < depth; z++) {
-                    int current = voxelIndex(x, y, z, width, depth);
-                    if (voxels[current]
-                            || isVoxel(voxels, x - 1, y, z, width, height, depth)
-                            || isVoxel(voxels, x + 1, y, z, width, height, depth)
-                            || isVoxel(voxels, x, y - 1, z, width, height, depth)
-                            || isVoxel(voxels, x, y + 1, z, width, height, depth)
-                            || isVoxel(voxels, x, y, z - 1, width, height, depth)
-                            || isVoxel(voxels, x, y, z + 1, width, height, depth)) {
-                        dilated[current] = true;
-                    }
-                }
-            }
-        }
-
-        boolean[] eroded = new boolean[voxels.length];
+        boolean[] source = Arrays.copyOf(voxels, voxels.length);
         for (int y = 1; y < height - 1; y++) {
             for (int x = 1; x < width - 1; x++) {
                 for (int z = 1; z < depth - 1; z++) {
                     int current = voxelIndex(x, y, z, width, depth);
-                    eroded[current] = dilated[current]
-                            && isVoxel(dilated, x - 1, y, z, width, height, depth)
-                            && isVoxel(dilated, x + 1, y, z, width, height, depth)
-                            && isVoxel(dilated, x, y - 1, z, width, height, depth)
-                            && isVoxel(dilated, x, y + 1, z, width, height, depth)
-                            && isVoxel(dilated, x, y, z - 1, width, height, depth)
-                            && isVoxel(dilated, x, y, z + 1, width, height, depth);
+                    if (source[current]) {
+                        continue;
+                    }
+                    boolean bridgeX = isVoxel(
+                            source, x - 1, y, z, width, height, depth
+                    ) && isVoxel(
+                            source, x + 1, y, z, width, height, depth
+                    );
+                    boolean bridgeY = isVoxel(
+                            source, x, y - 1, z, width, height, depth
+                    ) && isVoxel(
+                            source, x, y + 1, z, width, height, depth
+                    );
+                    boolean bridgeZ = isVoxel(
+                            source, x, y, z - 1, width, height, depth
+                    ) && isVoxel(
+                            source, x, y, z + 1, width, height, depth
+                    );
+                    if (bridgeX || bridgeY || bridgeZ) {
+                        voxels[current] = true;
+                    }
                 }
             }
         }
-        System.arraycopy(eroded, 0, voxels, 0, voxels.length);
     }
 
-    private static void keepLargestVolume(
+    private static void keepMeaningfulVolumes(
             boolean[] voxels,
             int width,
             int height,
             int depth
     ) {
-        boolean[] visited = new boolean[voxels.length];
+        int[] labels = new int[voxels.length];
+        Arrays.fill(labels, -1);
         int[] queue = new int[voxels.length];
-        int[] largest = new int[0];
+        int[] sizes = new int[32];
+        int componentCount = 0;
+        int largestSize = 0;
 
         for (int start = 0; start < voxels.length; start++) {
-            if (!voxels[start] || visited[start]) {
+            if (!voxels[start] || labels[start] >= 0) {
                 continue;
             }
             int head = 0;
             int tail = 0;
             queue[tail++] = start;
-            visited[start] = true;
+            labels[start] = componentCount;
 
             while (head < tail) {
                 int current = queue[head++];
@@ -489,45 +626,53 @@ public final class ImageToMeshGenerator {
                 int y = value / width;
 
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x - 1, y, z, width, height, depth
                 );
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x + 1, y, z, width, height, depth
                 );
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x, y - 1, z, width, height, depth
                 );
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x, y + 1, z, width, height, depth
                 );
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x, y, z - 1, width, height, depth
                 );
                 tail = enqueueVolumeNeighbour(
-                        voxels, visited, queue, tail,
+                        voxels, labels, componentCount, queue, tail,
                         x, y, z + 1, width, height, depth
                 );
             }
 
-            if (tail > largest.length) {
-                largest = Arrays.copyOf(queue, tail);
+            if (componentCount >= sizes.length) {
+                sizes = Arrays.copyOf(sizes, sizes.length * 2);
             }
+            sizes[componentCount] = tail;
+            largestSize = Math.max(largestSize, tail);
+            componentCount++;
         }
 
-        Arrays.fill(voxels, false);
-        for (int index : largest) {
-            voxels[index] = true;
+        int minimumSize = Math.max(10, largestSize / 1_800);
+        for (int index = 0; index < voxels.length; index++) {
+            int label = labels[index];
+            if (voxels[index]
+                    && (label < 0 || sizes[label] < minimumSize)) {
+                voxels[index] = false;
+            }
         }
     }
 
     private static int enqueueVolumeNeighbour(
             boolean[] voxels,
-            boolean[] visited,
+            int[] labels,
+            int component,
             int[] queue,
             int tail,
             int x,
@@ -542,8 +687,8 @@ public final class ImageToMeshGenerator {
             return tail;
         }
         int neighbour = voxelIndex(x, y, z, width, depth);
-        if (voxels[neighbour] && !visited[neighbour]) {
-            visited[neighbour] = true;
+        if (voxels[neighbour] && labels[neighbour] < 0) {
+            labels[neighbour] = component;
             queue[tail++] = neighbour;
         }
         return tail;
@@ -553,6 +698,8 @@ public final class ImageToMeshGenerator {
             ViewData front,
             ViewData back,
             ViewData side,
+            boolean[] frontMask,
+            int[] frontDistance,
             PerformanceProfile profile,
             SmoothHullMesher.AtlasLayout layout
     ) {
@@ -566,11 +713,20 @@ public final class ImageToMeshGenerator {
                 profile.width,
                 profile.height
         );
-        Bitmap sideTexture = normalizedTexture(
-                side,
-                profile.depth,
-                profile.height
-        );
+        Bitmap sideTexture = side == null
+                ? syntheticSideTexture(
+                        frontTexture,
+                        frontMask,
+                        frontDistance,
+                        profile.width,
+                        profile.height,
+                        profile.depth
+                )
+                : normalizedTexture(
+                        side,
+                        profile.depth,
+                        profile.height
+                );
 
         Bitmap atlas = Bitmap.createBitmap(
                 layout.atlasWidth,
@@ -636,17 +792,85 @@ public final class ImageToMeshGenerator {
         canvas.drawBitmap(isolated, null, destination, paint);
         isolated.recycle();
 
-        bleedTexture(output);
+        bleedTexture(output, 10);
         return output;
     }
 
-    private static void bleedTexture(Bitmap bitmap) {
+    private static Bitmap syntheticSideTexture(
+            Bitmap frontTexture,
+            boolean[] frontMask,
+            int[] frontDistance,
+            int frontWidth,
+            int height,
+            int depth
+    ) {
+        Bitmap output = Bitmap.createBitmap(
+                depth,
+                height,
+                Bitmap.Config.ARGB_8888
+        );
+        int[] frontPixels = new int[frontWidth * height];
+        frontTexture.getPixels(
+                frontPixels,
+                0,
+                frontWidth,
+                0,
+                0,
+                frontWidth,
+                height
+        );
+        int[] sidePixels = new int[depth * height];
+        int maximumDistance = 1;
+        for (int index = 0; index < frontMask.length; index++) {
+            if (frontMask[index] && frontDistance[index] < 100_000) {
+                maximumDistance = Math.max(
+                        maximumDistance,
+                        frontDistance[index]
+                );
+            }
+        }
+
+        int centerZ = (depth - 1) / 2;
+        for (int y = 0; y < height; y++) {
+            int deepestX = -1;
+            int rowDistance = 0;
+            for (int x = 0; x < frontWidth; x++) {
+                int index = y * frontWidth + x;
+                if (frontMask[index]
+                        && frontDistance[index] > rowDistance) {
+                    rowDistance = frontDistance[index];
+                    deepestX = x;
+                }
+            }
+            if (deepestX < 0) {
+                continue;
+            }
+            int color = 0xFF000000
+                    | (frontPixels[y * frontWidth + deepestX] & 0x00FFFFFF);
+            int halfDepth = singleViewHalfDepth(
+                    rowDistance,
+                    maximumDistance,
+                    depth
+            );
+            int from = Math.max(0, centerZ - halfDepth);
+            int to = Math.min(depth - 1, centerZ + halfDepth);
+            for (int z = from; z <= to; z++) {
+                sidePixels[y * depth + z] = color;
+            }
+        }
+        output.setPixels(sidePixels, 0, depth, 0, 0, depth, height);
+        bleedTexture(output, 8);
+        return output;
+    }
+
+    private static void bleedTexture(Bitmap bitmap, int maximumDistance) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
 
-        boolean[] visited = new boolean[pixels.length];
+        int[] distance = new int[pixels.length];
+        Arrays.fill(distance, -1);
         int[] queue = new int[pixels.length];
         int head = 0;
         int tail = 0;
@@ -654,7 +878,7 @@ public final class ImageToMeshGenerator {
         for (int i = 0; i < pixels.length; i++) {
             if (Color.alpha(pixels[i]) > 24) {
                 pixels[i] = 0xFF000000 | (pixels[i] & 0x00FFFFFF);
-                visited[i] = true;
+                distance[i] = 0;
                 queue[tail++] = i;
             }
         }
@@ -667,15 +891,18 @@ public final class ImageToMeshGenerator {
 
         while (head < tail) {
             int current = queue[head++];
+            if (distance[current] >= maximumDistance) {
+                continue;
+            }
             int x = current % width;
             int y = current / width;
-            tail = propagateTexture(pixels, visited, queue, tail,
+            tail = propagateTexture(pixels, distance, queue, tail,
                     current, x - 1, y, width, height);
-            tail = propagateTexture(pixels, visited, queue, tail,
+            tail = propagateTexture(pixels, distance, queue, tail,
                     current, x + 1, y, width, height);
-            tail = propagateTexture(pixels, visited, queue, tail,
+            tail = propagateTexture(pixels, distance, queue, tail,
                     current, x, y - 1, width, height);
-            tail = propagateTexture(pixels, visited, queue, tail,
+            tail = propagateTexture(pixels, distance, queue, tail,
                     current, x, y + 1, width, height);
         }
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
@@ -683,7 +910,7 @@ public final class ImageToMeshGenerator {
 
     private static int propagateTexture(
             int[] pixels,
-            boolean[] visited,
+            int[] distance,
             int[] queue,
             int tail,
             int sourceIndex,
@@ -696,8 +923,8 @@ public final class ImageToMeshGenerator {
             return tail;
         }
         int target = y * width + x;
-        if (!visited[target]) {
-            visited[target] = true;
+        if (distance[target] < 0) {
+            distance[target] = distance[sourceIndex] + 1;
             pixels[target] = pixels[sourceIndex];
             queue[tail++] = target;
         }
@@ -746,8 +973,7 @@ public final class ImageToMeshGenerator {
             for (int i = 0; i < pixels.length; i++) {
                 alphaMask[i] = Color.alpha(pixels[i]) >= 24;
             }
-            dilate(alphaMask, width, height, 1);
-            erode(alphaMask, width, height, 1);
+            bridgeNarrowGaps2D(alphaMask, width, height);
             return alphaMask;
         }
 
@@ -838,29 +1064,33 @@ public final class ImageToMeshGenerator {
         return mask;
     }
 
-    private static List<Component> findComponents(
+    private static ComponentMap findComponents(
             boolean[] mask,
             int width,
             int height
     ) {
-        boolean[] visited = new boolean[mask.length];
-        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        int[] labels = new int[mask.length];
+        Arrays.fill(labels, -1);
+        int[] queue = new int[mask.length];
         List<Component> result = new ArrayList<>();
 
         for (int index = 0; index < mask.length; index++) {
-            if (!mask[index] || visited[index]) {
+            if (!mask[index] || labels[index] >= 0) {
                 continue;
             }
-            visited[index] = true;
-            queue.add(index);
+            int componentId = result.size();
+            labels[index] = componentId;
+            int head = 0;
+            int tail = 0;
+            queue[tail++] = index;
             int count = 0;
             int minX = width;
             int minY = height;
             int maxX = -1;
             int maxY = -1;
 
-            while (!queue.isEmpty()) {
-                int current = queue.removeFirst();
+            while (head < tail) {
+                int current = queue[head++];
                 int x = current % width;
                 int y = current / width;
                 count++;
@@ -881,9 +1111,9 @@ public final class ImageToMeshGenerator {
                             continue;
                         }
                         int next = nextY * width + nextX;
-                        if (mask[next] && !visited[next]) {
-                            visited[next] = true;
-                            queue.addLast(next);
+                        if (mask[next] && labels[next] < 0) {
+                            labels[next] = componentId;
+                            queue[tail++] = next;
                         }
                     }
                 }
@@ -894,60 +1124,7 @@ public final class ImageToMeshGenerator {
                         new Rect(minX, minY, maxX + 1, maxY + 1)));
             }
         }
-        return result;
-    }
-
-    private static void retainLargest2D(
-            boolean[] mask,
-            int width,
-            int height
-    ) {
-        boolean[] visited = new boolean[mask.length];
-        int[] queue = new int[mask.length];
-        int[] largest = new int[0];
-
-        for (int start = 0; start < mask.length; start++) {
-            if (!mask[start] || visited[start]) {
-                continue;
-            }
-            int head = 0;
-            int tail = 0;
-            queue[tail++] = start;
-            visited[start] = true;
-
-            while (head < tail) {
-                int current = queue[head++];
-                int x = current % width;
-                int y = current / width;
-                for (int offsetY = -1; offsetY <= 1; offsetY++) {
-                    for (int offsetX = -1; offsetX <= 1; offsetX++) {
-                        if (offsetX == 0 && offsetY == 0) {
-                            continue;
-                        }
-                        int nextX = x + offsetX;
-                        int nextY = y + offsetY;
-                        if (nextX < 0 || nextY < 0
-                                || nextX >= width || nextY >= height) {
-                            continue;
-                        }
-                        int next = nextY * width + nextX;
-                        if (mask[next] && !visited[next]) {
-                            visited[next] = true;
-                            queue[tail++] = next;
-                        }
-                    }
-                }
-            }
-
-            if (tail > largest.length) {
-                largest = Arrays.copyOf(queue, tail);
-            }
-        }
-
-        Arrays.fill(mask, false);
-        for (int index : largest) {
-            mask[index] = true;
-        }
+        return new ComponentMap(result, labels);
     }
 
     private static Rect addMargin(
@@ -964,16 +1141,6 @@ public final class ImageToMeshGenerator {
                 Math.min(width, source.right + marginX),
                 Math.min(height, source.bottom + marginY)
         );
-    }
-
-    private static void closeSmallGaps(
-            boolean[] mask,
-            int width,
-            int height,
-            int iterations
-    ) {
-        dilate(mask, width, height, iterations);
-        erode(mask, width, height, iterations);
     }
 
     private static void dilate(
@@ -1142,6 +1309,8 @@ public final class ImageToMeshGenerator {
         private final String qualityLabel;
         private final int processorCount;
         private final int voxelCount;
+        private final boolean hasBackView;
+        private final boolean hasSideView;
 
         Result(
                 MeshData mesh,
@@ -1149,7 +1318,9 @@ public final class ImageToMeshGenerator {
                 int detectedViewCount,
                 String qualityLabel,
                 int processorCount,
-                int voxelCount
+                int voxelCount,
+                boolean hasBackView,
+                boolean hasSideView
         ) {
             this.mesh = mesh;
             this.texture = texture;
@@ -1157,6 +1328,8 @@ public final class ImageToMeshGenerator {
             this.qualityLabel = qualityLabel;
             this.processorCount = processorCount;
             this.voxelCount = voxelCount;
+            this.hasBackView = hasBackView;
+            this.hasSideView = hasSideView;
         }
 
         public MeshData getMesh() { return mesh; }
@@ -1165,6 +1338,8 @@ public final class ImageToMeshGenerator {
         public String getQualityLabel() { return qualityLabel; }
         public int getProcessorCount() { return processorCount; }
         public int getVoxelCount() { return voxelCount; }
+        public boolean hasBackView() { return hasBackView; }
+        public boolean hasSideView() { return hasSideView; }
     }
 
     private static final class PerformanceProfile {
@@ -1212,15 +1387,15 @@ public final class ImageToMeshGenerator {
     }
 
     private static final class ViewSelection {
-        final Component front;
-        final Component back;
-        final Component side;
+        final ViewCandidateGrouper.Group front;
+        final ViewCandidateGrouper.Group back;
+        final ViewCandidateGrouper.Group side;
         final int detectedViewCount;
 
         ViewSelection(
-                Component front,
-                Component back,
-                Component side,
+                ViewCandidateGrouper.Group front,
+                ViewCandidateGrouper.Group back,
+                ViewCandidateGrouper.Group side,
                 int detectedViewCount
         ) {
             this.front = front;
@@ -1272,8 +1447,15 @@ public final class ImageToMeshGenerator {
             this.bounds = bounds;
         }
 
-        float aspectRatio() {
-            return bounds.width() / (float) Math.max(1, bounds.height());
+    }
+
+    private static final class ComponentMap {
+        final List<Component> components;
+        final int[] labels;
+
+        ComponentMap(List<Component> components, int[] labels) {
+            this.components = components;
+            this.labels = labels;
         }
     }
 }

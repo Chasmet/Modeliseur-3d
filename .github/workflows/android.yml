@@ -26,13 +26,13 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Mettre en cache les réseaux V4.1.2
+      - name: Mettre en cache les réseaux V4.2
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
             app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v412-depth-afb6a5c2-isnet-fp32-6a92a19a
+          key: modeliseur-v42-depth-afb6a5c2-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -62,7 +62,17 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Compiler et vérifier la V4.1.2 neuronale
+      - name: Tester le regroupement des silhouettes
+        run: |
+          mkdir -p build/view-grouping-tests
+          javac -encoding UTF-8 \
+            -d build/view-grouping-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouper.java \
+            validation/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouperSelfTest.java
+          java -cp build/view-grouping-tests \
+            com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
+
+      - name: Compiler et vérifier la V4.2 neuronale
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
       - name: Vérifier la taille et le SHA-256 de l'APK
@@ -70,10 +80,10 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publier l'APK V4.1.2
+      - name: Publier l'APK V4.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.1.2-Neural-debug
+          name: Modeliseur3D-V4.2-Neural-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

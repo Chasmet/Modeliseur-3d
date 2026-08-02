@@ -9,5 +9,7 @@ captures/
 .externalNativeBuild/
 .cxx/
 .gradle-dist/
+.gradle-user/
+.build-cacerts-*
 /app/src/main/assets/models/*.onnx
 /app/src/main/assets/models/*.onnx.part

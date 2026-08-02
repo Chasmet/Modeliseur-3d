@@ -5,7 +5,8 @@ import android.graphics.Bitmap;
 import android.os.SystemClock;
 
 /**
- * Pipeline V4.1.2 robuste : segmentation anime FP32, coque lissée, puis relief.
+ * Pipeline V4.2 robuste : segmentation anime FP32, regroupement intelligent,
+ * coque adaptée au nombre de vues, puis relief neuronal.
  *
  * Chaque étape neuronale possède désormais un repli local. Une incompatibilité
  * de pilote, un manque de mémoire ou un modèle non pris en charge ne doit plus
@@ -14,7 +15,7 @@ import android.os.SystemClock;
 public final class NeuralReconstructionEngine implements AutoCloseable {
     private final Context context;
     private final ImageToMeshGenerator geometry = new ImageToMeshGenerator();
-    private volatile String backend = "Réseaux V4.1.2 chargés à la demande";
+    private volatile String backend = "Réseaux V4.2 chargés à la demande";
 
     public NeuralReconstructionEngine(Context context) {
         this.context = context.getApplicationContext();
@@ -71,7 +72,7 @@ public final class NeuralReconstructionEngine implements AutoCloseable {
 
         MeshData smooth;
         try {
-            smooth = MeshSurfaceOptimizer.optimize(base.getMesh(), 3);
+            smooth = MeshSurfaceOptimizer.optimize(base.getMesh(), 2);
         } catch (RuntimeException optimizationError) {
             smooth = base.getMesh();
             segmentationBackend += " • lissage simple";
@@ -83,16 +84,30 @@ public final class NeuralReconstructionEngine implements AutoCloseable {
         MeshData finalMesh = smooth;
         String depthBackend;
         boolean depthUsed = false;
+        int depthPasses = 0;
         long neuralStarted = SystemClock.elapsedRealtime();
 
         try (NeuralMeshRefiner.Views views = NeuralMeshRefiner.cropViews(atlas);
              NeuralDepthEngine depth = new NeuralDepthEngine(context)) {
             depthBackend = depth.getBackend();
             NeuralDepthEngine.DepthMap front = depth.estimate(views.front);
-            NeuralDepthEngine.DepthMap back = depth.estimate(views.back);
-            NeuralDepthEngine.DepthMap side = depth.estimate(views.side);
+            depthPasses++;
+            NeuralDepthEngine.DepthMap back;
+            if (base.hasBackView()) {
+                back = depth.estimate(views.back);
+                depthPasses++;
+            } else {
+                back = front;
+            }
+            NeuralDepthEngine.DepthMap side = null;
+            if (base.hasSideView()) {
+                side = depth.estimate(views.side);
+                depthPasses++;
+            }
             finalMesh = NeuralMeshRefiner.refine(smooth, front, back, side);
             depthUsed = true;
+            depthBackend += " • " + depthPasses
+                    + (depthPasses > 1 ? " passes utiles" : " passe utile");
         } catch (Exception | OutOfMemoryError depthError) {
             depthBackend = "Relief géométrique de secours : "
                     + shortError(depthError);
@@ -109,9 +124,18 @@ public final class NeuralReconstructionEngine implements AutoCloseable {
             quality.append(" + détourage de secours");
         }
         if (depthUsed) {
-            quality.append(" + relief neuronal");
+            quality.append(" + relief neuronal ")
+                    .append(depthPasses)
+                    .append(depthPasses > 1 ? " vues" : " vue");
         } else {
             quality.append(" + relief stable");
+        }
+        if (base.hasSideView()) {
+            quality.append(" + coque multivue calibrée");
+        } else if (base.getDetectedViewCount() == 1) {
+            quality.append(" + volume image unique arrondi");
+        } else {
+            quality.append(" + volume sans profil arrondi");
         }
 
         return new Result(
