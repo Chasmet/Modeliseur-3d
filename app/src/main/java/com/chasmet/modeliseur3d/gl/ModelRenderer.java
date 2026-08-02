@@ -80,7 +80,6 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
                                  javax.microedition.khronos.egl.EGLConfig config) {
         GLES30.glClearColor(0.055f, 0.066f, 0.092f, 1.0f);
         GLES30.glEnable(GLES30.GL_DEPTH_TEST);
-        GLES30.glEnable(GLES30.GL_MULTISAMPLE);
         GLES30.glDisable(GLES30.GL_CULL_FACE);
         program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
         uploadPendingModelIfNeeded();
