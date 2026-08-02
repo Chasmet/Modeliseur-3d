@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 3D V2</string>
-    <string name="title">Modéliseur 3D V2 multivue</string>
-    <string name="subtitle">Importe une planche de rotation comme ton exemple : grande vue de face, dos et profil. Le téléphone utilise ses cœurs CPU et sa mémoire pour reconstruire le volume entièrement en local.</string>
+    <string name="app_name">Modéliseur 3D V3</string>
+    <string name="title">Modéliseur 3D V3 ultra propre</string>
+    <string name="subtitle">Importe une planche comme ton exemple : grande face, dos et profil. La V3 utilise les cœurs CPU du téléphone, lisse la surface et reconstruit le personnage entièrement en local.</string>
     <string name="select_image">Choisir la planche</string>
     <string name="reset_view">Recentrer</string>
     <string name="export_obj">Exporter GLB + OBJ</string>
-    <string name="empty_message">Le modèle 3D apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
+    <string name="empty_message">Le modèle 3D propre apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
     <string name="status_ready">Prêt — calcul 100 % local, aucun envoi sur Internet.</string>
     <string name="status_loading">Lecture haute résolution de la planche…</string>
-    <string name="status_generating">Création du maillage 3D…</string>
-    <string name="status_generating_multiview">Détection des vues puis reconstruction multi-cœurs…</string>
-    <string name="status_done">Modèle V2 prêt.</string>
-    <string name="status_done_details">%1$d vues détectées • qualité %2$s • %3$d cœurs disponibles • %4$d triangles</string>
+    <string name="status_generating">Création du maillage 3D lissé…</string>
+    <string name="status_generating_multiview">Détection des vues, volume multivue puis lissage multi-cœurs…</string>
+    <string name="status_done">Modèle V3 prêt.</string>
+    <string name="status_done_details">%1$d vues détectées • qualité %2$s • %3$d cœurs disponibles • %4$d triangles lissés</string>
     <string name="status_exporting">Création du GLB autonome et des fichiers OBJ…</string>
-    <string name="status_exported">GLB, OBJ, MTL et texture PNG créés.</string>
-    <string name="share_model">Partager ou enregistrer le modèle 3D</string>
+    <string name="status_exported">GLB, OBJ, MTL et texture multivue créés.</string>
+    <string name="share_model">Partager ou enregistrer le modèle 3D V3</string>
     <string name="error_image">Impossible de lire cette image.</string>
-    <string name="error_generation">La reconstruction multivue a échoué.</string>
+    <string name="error_generation">La reconstruction V3 a échoué.</string>
     <string name="error_export">L’export GLB a échoué.</string>
 </resources>
