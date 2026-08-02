@@ -39,13 +39,11 @@ La création du volume et l’extraction du maillage utilisent plusieurs tâches
 
 ## Formats exportés
 
-- `personnage_v2.glb` : maillage, normales, UV et texture intégrée ;
-- `personnage_v2.obj` : géométrie OBJ ;
-- `personnage_v2.mtl` : matériau ;
-- `texture_multivue.png` : atlas de textures ;
+- `personnage_v3.glb` : maillage, normales, UV et texture intégrée ;
+- `personnage_v3.obj` : géométrie OBJ ;
+- `personnage_v3.mtl` : matériau ;
+- `texture_multivue_v3.png` : atlas de textures ;
 - `informations.txt` : détails techniques.
-
-Le nom historique `personnage_v2.glb` reste conservé pour la compatibilité avec les projets déjà créés.
 
 ## Configuration Android
 
