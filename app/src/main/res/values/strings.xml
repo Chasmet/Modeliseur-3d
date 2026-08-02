@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Modéliseur 3D</string>
+    <string name="title">Modéliseur 3D local</string>
+    <string name="subtitle">Choisis une image. Le téléphone isole le plus grand personnage et crée un volume 3D localement.</string>
+    <string name="select_image">Choisir une image</string>
+    <string name="reset_view">Recentrer</string>
+    <string name="export_obj">Exporter OBJ + texture</string>
+    <string name="empty_message">Le modèle apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
+    <string name="status_ready">Prêt — aucun envoi sur Internet.</string>
+    <string name="status_loading">Lecture et analyse de l’image…</string>
+    <string name="status_generating">Création du maillage 3D…</string>
+    <string name="status_done">Modèle prêt. Glisse pour le faire tourner.</string>
+    <string name="status_exporting">Export du modèle…</string>
+    <string name="status_exported">Fichiers OBJ, MTL et PNG créés.</string>
+    <string name="error_image">Impossible de lire cette image.</string>
+    <string name="error_generation">La génération du modèle a échoué.</string>
+    <string name="error_export">L’export a échoué.</string>
+</resources>
