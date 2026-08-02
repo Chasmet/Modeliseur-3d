@@ -519,49 +519,83 @@ public final class ImageToMeshGenerator {
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
 
-        long rSum = 0;
-        long gSum = 0;
-        long bSum = 0;
-        int count = 0;
-        int border = Math.max(3, Math.min(width, height) / 35);
+        // La planche type possède souvent un fond gris en dégradé. On estime donc le fond
+        // séparément pour chaque ligne à partir des bords gauche et droit, puis on interpole.
+        int sampleWidth = Math.max(4, width / 45);
+        int[] leftR = new int[height];
+        int[] leftG = new int[height];
+        int[] leftB = new int[height];
+        int[] rightR = new int[height];
+        int[] rightG = new int[height];
+        int[] rightB = new int[height];
         for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (x < border || y < border || x >= width - border || y >= height - border) {
-                    int color = pixels[y * width + x];
-                    if (Color.alpha(color) > 20) {
-                        rSum += Color.red(color);
-                        gSum += Color.green(color);
-                        bSum += Color.blue(color);
-                        count++;
-                    }
+            long lr = 0;
+            long lg = 0;
+            long lb = 0;
+            long rr = 0;
+            long rg = 0;
+            long rb = 0;
+            int leftCount = 0;
+            int rightCount = 0;
+            for (int x = 0; x < sampleWidth; x++) {
+                int color = pixels[y * width + x];
+                if (Color.alpha(color) > 20) {
+                    lr += Color.red(color);
+                    lg += Color.green(color);
+                    lb += Color.blue(color);
+                    leftCount++;
                 }
             }
+            for (int x = width - sampleWidth; x < width; x++) {
+                int color = pixels[y * width + x];
+                if (Color.alpha(color) > 20) {
+                    rr += Color.red(color);
+                    rg += Color.green(color);
+                    rb += Color.blue(color);
+                    rightCount++;
+                }
+            }
+            leftCount = Math.max(1, leftCount);
+            rightCount = Math.max(1, rightCount);
+            leftR[y] = (int) (lr / leftCount);
+            leftG[y] = (int) (lg / leftCount);
+            leftB[y] = (int) (lb / leftCount);
+            rightR[y] = (int) (rr / rightCount);
+            rightG[y] = (int) (rg / rightCount);
+            rightB[y] = (int) (rb / rightCount);
         }
-        int bgR = count == 0 ? 245 : (int) (rSum / count);
-        int bgG = count == 0 ? 245 : (int) (gSum / count);
-        int bgB = count == 0 ? 245 : (int) (bSum / count);
-        int bgLum = (bgR * 299 + bgG * 587 + bgB * 114) / 1000;
 
         boolean[] mask = new boolean[pixels.length];
-        for (int i = 0; i < pixels.length; i++) {
-            int color = pixels[i];
-            if (Color.alpha(color) < 24) {
-                continue;
+        float denominator = Math.max(1.0f, width - 1.0f);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int index = y * width + x;
+                int color = pixels[index];
+                if (Color.alpha(color) < 24) {
+                    continue;
+                }
+                float t = x / denominator;
+                int bgR = Math.round(leftR[y] + (rightR[y] - leftR[y]) * t);
+                int bgG = Math.round(leftG[y] + (rightG[y] - leftG[y]) * t);
+                int bgB = Math.round(leftB[y] + (rightB[y] - leftB[y]) * t);
+
+                int r = Color.red(color);
+                int g = Color.green(color);
+                int b = Color.blue(color);
+                int dr = r - bgR;
+                int dg = g - bgG;
+                int db = b - bgB;
+                int distanceSquared = dr * dr + dg * dg + db * db;
+                int lum = (r * 299 + g * 587 + b * 114) / 1000;
+                int bgLum = (bgR * 299 + bgG * 587 + bgB * 114) / 1000;
+                int maximum = Math.max(r, Math.max(g, b));
+                int minimum = Math.min(r, Math.min(g, b));
+                int saturation = maximum - minimum;
+
+                mask[index] = distanceSquared > 30 * 30
+                        || Math.abs(lum - bgLum) > 20
+                        || saturation > 30;
             }
-            int r = Color.red(color);
-            int g = Color.green(color);
-            int b = Color.blue(color);
-            int dr = r - bgR;
-            int dg = g - bgG;
-            int db = b - bgB;
-            int distanceSquared = dr * dr + dg * dg + db * db;
-            int lum = (r * 299 + g * 587 + b * 114) / 1000;
-            int max = Math.max(r, Math.max(g, b));
-            int min = Math.min(r, Math.min(g, b));
-            int saturation = max - min;
-            mask[i] = distanceSquared > 31 * 31
-                    || Math.abs(lum - bgLum) > 22
-                    || saturation > 31;
         }
         dilate(mask, width, height, 1);
         erode(mask, width, height, 1);
