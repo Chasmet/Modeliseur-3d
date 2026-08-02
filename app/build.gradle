@@ -18,14 +18,15 @@ def depthModelSha256 =
         'afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c'
 
 def segmentationModelFile = file(
-        'src/main/assets/models/isnet_anime.onnx'
+        'src/main/assets/models/isnet_anime_int8.onnx'
 )
 def segmentationModelTemporary = file(
-        'src/main/assets/models/isnet_anime.onnx.part'
+        'src/main/assets/models/isnet_anime_int8.onnx.part'
 )
 def segmentationModelUrl =
-        'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-anime.onnx'
-def segmentationModelMd5 = '6f184e756bb3bd901c8849220a83e38e'
+        'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model_int8.onnx?download=true'
+def segmentationModelSha256 =
+        'a6832786351b9a1283bb1cd4a2b9a77f1fe0330ad5e7324a6c4603db478b034e'
 
 def fileDigest = { File target, String algorithm ->
     MessageDigest digest = MessageDigest.getInstance(algorithm)
@@ -82,19 +83,19 @@ tasks.register('downloadDepthModel') {
 
 tasks.register('downloadAnimeSegmentationModel') {
     group = 'machine learning'
-    description = 'Télécharge IS-Net Anime pour détourer précisément les personnages.'
+    description = 'Télécharge IS-Net Anime INT8 optimisé pour Android.'
     outputs.file(segmentationModelFile)
 
     doLast {
         if (segmentationModelFile.isFile()
-                && fileDigest(segmentationModelFile, 'MD5') == segmentationModelMd5) {
-            println 'IS-Net Anime déjà présent et vérifié.'
+                && fileDigest(segmentationModelFile, 'SHA-256') == segmentationModelSha256) {
+            println 'IS-Net Anime INT8 déjà présent et vérifié.'
             return
         }
 
         segmentationModelFile.parentFile.mkdirs()
         segmentationModelTemporary.delete()
-        println 'Téléchargement du réseau IS-Net Anime…'
+        println 'Téléchargement du réseau IS-Net Anime INT8 mobile…'
         ant.get(
                 src: segmentationModelUrl,
                 dest: segmentationModelTemporary,
@@ -102,11 +103,12 @@ tasks.register('downloadAnimeSegmentationModel') {
                 skipexisting: false
         )
 
-        String downloaded = fileDigest(segmentationModelTemporary, 'MD5')
-        if (downloaded != segmentationModelMd5) {
+        String downloaded = fileDigest(segmentationModelTemporary, 'SHA-256')
+        if (downloaded != segmentationModelSha256) {
             segmentationModelTemporary.delete()
             throw new GradleException(
-                    'IS-Net Anime est incomplet ou corrompu. MD5 : ' + downloaded
+                    'IS-Net Anime INT8 est incomplet ou corrompu. SHA-256 : '
+                            + downloaded
             )
         }
         Files.move(
@@ -114,7 +116,7 @@ tasks.register('downloadAnimeSegmentationModel') {
                 segmentationModelFile.toPath(),
                 StandardCopyOption.REPLACE_EXISTING
         )
-        println 'IS-Net Anime vérifié : '
+        println 'IS-Net Anime INT8 vérifié : '
                 + segmentationModelFile.length() + ' octets.'
     }
 }
@@ -127,8 +129,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 5
-        versionName '4.1.0'
+        versionCode 6
+        versionName '4.1.1'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
