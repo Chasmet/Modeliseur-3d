@@ -1,54 +1,68 @@
-# Modéliseur 3D local Android
+# Modéliseur 3D V3 local Android
 
-Application Android Java qui transforme une image en un **maillage 3D local**, affichable et manipulable directement sur le téléphone.
+Application Android Java spécialisée pour les **planches de rotation multivues** contenant le même personnage de face, de dos et de profil.
 
-## Fonctionnement actuel — version 1.0
+## Pipeline V3 ultra propre
 
-1. L'utilisateur choisit une image dans sa galerie.
-2. L'application estime la couleur du fond.
-3. Elle détecte et conserve le plus grand sujet de l'image.
-4. Elle crée une silhouette extrudée avec un relief calculé à partir de la distance aux contours.
-5. Le modèle est affiché dans un moteur OpenGL ES 3.0.
-6. L'utilisateur peut tourner le modèle au doigt, zoomer avec deux doigts et recentrer avec un double appui.
-7. Le résultat peut être exporté au format `OBJ + MTL + PNG`.
+1. Lecture de la planche jusqu’à 3072 px sur son plus grand côté.
+2. Détection automatique des cinq silhouettes principales.
+3. Sélection de la grande vue de face, du dos et du profil.
+4. Nettoyage des masques et suppression des éléments parasites.
+5. Construction locale d’une enveloppe volumique à partir des vues face et profil.
+6. Fermeture des petits défauts et conservation du volume principal.
+7. Lissage du champ volumique.
+8. Extraction d’une surface triangulée lisse par tétraèdres.
+9. Calcul de normales continues pour éviter l’effet cubique de la V2.
+10. Projection des textures face, dos, côté gauche et côté droit.
+11. Extension des couleurs autour des silhouettes afin d’éviter les trous transparents.
+12. Affichage OpenGL ES 3 avec éclairage doux et rotation tactile.
+13. Export en `GLB 2.0`, `OBJ`, `MTL` et `PNG`.
 
-Tout le traitement est réalisé **sans serveur et sans connexion Internet**.
+Tout le traitement est effectué **sur le téléphone**, sans serveur et sans transfert de l’image.
 
-## Limite importante
+## Utilisation de la puissance du téléphone
 
-Cette première version génère un vrai maillage 3D, mais il s'agit d'un relief volumique estimé. Une image unique ne contient pas les informations exactes sur les parties invisibles. Le dos est donc approximé à partir de l'image avant.
+La résolution est adaptée automatiquement au nombre de cœurs CPU et à la mémoire disponible :
 
-Pour obtenir une reconstruction complète et plus réaliste à 360°, la prochaine étape sera l'intégration d'un modèle IA mobile converti en ONNX ou ORT. Ce type de modèle est volumineux et doit être optimisé pour la mémoire et la puissance du téléphone.
+- Ultra propre : 112 × 224 × 84 voxels ;
+- Haute précision : 96 × 192 × 72 ;
+- Équilibrée : 80 × 160 × 60 ;
+- Compatible : 64 × 128 × 48.
+
+La création du volume et l’extraction du maillage utilisent plusieurs tâches en parallèle, jusqu’à dix travailleurs.
 
 ## Gestes
 
-- Glisser avec un doigt : rotation.
+- Glisser avec un doigt : rotation 360°.
 - Pincer avec deux doigts : zoom.
-- Double appui : réinitialisation de la caméra.
+- Double appui ou bouton Recentrer : retour à la vue initiale.
 
 ## Formats exportés
 
-- `modele.obj` : géométrie.
-- `modele.mtl` : matériau.
-- `texture.png` : texture avec fond transparent.
-- `informations.txt` : détails du maillage et limites de la reconstruction.
+- `personnage_v2.glb` : maillage, normales, UV et texture intégrée ;
+- `personnage_v2.obj` : géométrie OBJ ;
+- `personnage_v2.mtl` : matériau ;
+- `texture_multivue.png` : atlas de textures ;
+- `informations.txt` : détails techniques.
+
+Le nom historique `personnage_v2.glb` reste conservé pour la compatibilité avec les projets déjà créés.
 
 ## Configuration Android
 
-- Langage : Java.
-- `minSdkVersion 21`.
-- `targetSdkVersion 34`.
-- `compileSdkVersion 34`.
-- OpenGL ES 3.0 obligatoire.
-- Java 17.
-- Android Gradle Plugin 8.10.1.
+- Java uniquement ;
+- `minSdkVersion 21` ;
+- `targetSdkVersion 34` ;
+- `compileSdkVersion 34` ;
+- OpenGL ES 3.0 ;
+- Java 17 ;
+- Android Gradle Plugin 8.10.1 ;
 - Gradle 8.11.1.
 
-## Compilation locale
+## Compilation
 
 ```bash
 chmod +x gradlew
-./gradlew assembleDebug
+./gradlew --no-daemon clean lintDebug assembleDebug
 ```
 
 APK généré :
@@ -57,9 +71,7 @@ APK généré :
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Compilation GitHub Actions
-
-Le workflow `.github/workflows/android.yml` compile automatiquement l'APK et le publie dans l'onglet **Actions > Artifacts** sous le nom `Modeliseur3D-debug`.
+Le workflow `.github/workflows/android.yml` compile automatiquement l’APK et le publie dans **Actions > Artifacts** sous le nom `Modeliseur3D-debug`.
 
 ## Structure principale
 
@@ -70,18 +82,15 @@ app/src/main/java/com/chasmet/modeliseur3d/
 │   ├── ModelGLSurfaceView.java
 │   └── ModelRenderer.java
 ├── model/
+│   ├── GlbExporter.java
 │   ├── ImageToMeshGenerator.java
 │   ├── MeshData.java
-│   └── ObjExporter.java
+│   ├── ObjExporter.java
+│   └── SmoothHullMesher.java
 └── util/
     └── BitmapUtils.java
 ```
 
-## Roadmap
+## Limite actuelle
 
-- Sélection manuelle des vues avant, profil et arrière sur une planche de référence.
-- Fusion de plusieurs vues pour améliorer les côtés et le dos.
-- Modèle IA ONNX entièrement local.
-- Export GLB compatible Godot, Unity et Blender.
-- Réduction automatique du nombre de polygones.
-- Génération d'un squelette pour l'animation.
+La V3 produit un modèle beaucoup plus propre et continu que la V2, mais elle reconstruit toujours une enveloppe visuelle. Les détails totalement invisibles sur la planche, l’intérieur des vêtements et les espaces très fins entre les doigts restent estimés. Aucun squelette d’animation n’est encore généré.
