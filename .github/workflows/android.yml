@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Récupérer le dépôt
@@ -26,11 +26,13 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Mettre en cache le modèle neuronal
+      - name: Mettre en cache les réseaux V4.1
         uses: actions/cache@v4
         with:
-          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
-          key: depth-anything-v2-small-fp32-afb6a5c28f3b6bf1
+          path: |
+            app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+            app/src/main/assets/models/isnet_anime.onnx
+          key: modeliseur-v41-depth-afb6a5c2-isnet-6f184e75
 
       - name: Installer le SDK Android
         uses: android-actions/setup-android@v3
@@ -41,16 +43,16 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Compiler et vérifier la V4 neuronale
+      - name: Compiler et vérifier la V4.1 neuronale
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
       - name: Vérifier la taille de l'APK
         run: ls -lh app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publier l'APK V4
+      - name: Publier l'APK V4.1
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4-Neural-debug
+          name: Modeliseur3D-V4.1-Neural-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
