@@ -29,7 +29,9 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
     private static final int REQUEST_IMAGE = 2001;
+    private static final int MAX_INPUT_SIDE = 2048;
 
+    // Un coordinateur en arrière-plan. Le moteur V2 répartit lui-même la reconstruction sur les cœurs CPU.
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ImageToMeshGenerator generator = new ImageToMeshGenerator();
 
@@ -101,8 +103,12 @@ public final class MainActivity extends AppCompatActivity {
         worker.execute(() -> {
             Bitmap source = null;
             try {
-                source = BitmapUtils.decodeBitmapFromUri(getContentResolver(), imageUri, 1200);
-                runOnUiThread(() -> statusText.setText(R.string.status_generating));
+                source = BitmapUtils.decodeBitmapFromUri(
+                        getContentResolver(),
+                        imageUri,
+                        MAX_INPUT_SIDE
+                );
+                runOnUiThread(() -> statusText.setText(R.string.status_generating_multiview));
                 ImageToMeshGenerator.Result result = generator.generate(source);
 
                 currentMesh = result.getMesh();
@@ -110,8 +116,14 @@ public final class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     viewer.setModel(currentMesh, currentTexture);
                     emptyText.setVisibility(View.GONE);
-                    exportButton.setEnabled(true);
                     setBusy(false, R.string.status_done);
+                    statusText.setText(getString(
+                            R.string.status_done_details,
+                            result.getDetectedViewCount(),
+                            result.getQualityLabel(),
+                            result.getProcessorCount(),
+                            currentMesh.getTriangleCount()
+                    ));
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
@@ -167,17 +179,17 @@ public final class MainActivity extends AppCompatActivity {
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D OBJ");
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V2 — GLB + OBJ");
         share.putExtra(Intent.EXTRA_TEXT,
-                "Modèle exporté dans : " + result.getDirectory().getAbsolutePath());
+                "GLB autonome et fichiers OBJ créés dans : " + result.getDirectory().getAbsolutePath());
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-        ClipData clipData = ClipData.newRawUri("Modèle 3D", uris.get(0));
+        ClipData clipData = ClipData.newRawUri("Modèle 3D V2", uris.get(0));
         for (int i = 1; i < uris.size(); i++) {
             clipData.addItem(new ClipData.Item(uris.get(i)));
         }
         share.setClipData(clipData);
-        startActivity(Intent.createChooser(share, "Partager ou enregistrer le modèle"));
+        startActivity(Intent.createChooser(share, getString(R.string.share_model)));
     }
 
     private void setBusy(boolean busy, int messageRes) {
