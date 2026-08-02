@@ -26,7 +26,8 @@ Le pipeline est hybride afin de rester utilisable sur Android :
 - Modèle : Depth Anything V2 Small FP32 ;
 - taille du modèle : environ 99 Mo ;
 - licence du modèle Small : Apache-2.0 ;
-- runtime : ONNX Runtime Android 1.26.0, licence MIT ;
+- runtime : ONNX Runtime Android 1.20.0, licence MIT ;
+- version du runtime choisie pour conserver `minSdkVersion 21` ;
 - accélération : NNAPI quand Android et le modèle le permettent ;
 - repli : CPU multi-cœurs avec optimisations ONNX ;
 - entrée du réseau : 518 × 518, normalisation ImageNet ;
