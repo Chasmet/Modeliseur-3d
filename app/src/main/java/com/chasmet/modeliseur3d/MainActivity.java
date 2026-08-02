@@ -17,8 +17,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceView;
-import com.chasmet.modeliseur3d.model.ImageToMeshGenerator;
 import com.chasmet.modeliseur3d.model.MeshData;
+import com.chasmet.modeliseur3d.model.NeuralReconstructionEngine;
 import com.chasmet.modeliseur3d.model.ObjExporter;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
 
@@ -31,10 +31,9 @@ public final class MainActivity extends AppCompatActivity {
     private static final int REQUEST_IMAGE = 2001;
     private static final int MAX_INPUT_SIDE = 3072;
 
-    // Le coordinateur reste léger. Le moteur V3 répartit la reconstruction sur les cœurs CPU.
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final ImageToMeshGenerator generator = new ImageToMeshGenerator();
 
+    private NeuralReconstructionEngine generator;
     private ModelGLSurfaceView viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -64,9 +63,9 @@ public final class MainActivity extends AppCompatActivity {
         exportButton = findViewById(R.id.exportButton);
         Button resetButton = findViewById(R.id.resetButton);
 
-        selectButton.setOnClickListener(v -> chooseImage());
-        resetButton.setOnClickListener(v -> viewer.resetView());
-        exportButton.setOnClickListener(v -> exportCurrentModel());
+        selectButton.setOnClickListener(view -> chooseImage());
+        resetButton.setOnClickListener(view -> viewer.resetView());
+        exportButton.setOnClickListener(view -> exportCurrentModel());
     }
 
     private void chooseImage() {
@@ -116,10 +115,21 @@ public final class MainActivity extends AppCompatActivity {
                         imageUri,
                         MAX_INPUT_SIDE
                 );
+
+                if (generator == null) {
+                    runOnUiThread(() -> statusText.setText(
+                            R.string.status_loading_neural_engine
+                    ));
+                    generator = new NeuralReconstructionEngine(
+                            getApplicationContext()
+                    );
+                }
+
                 runOnUiThread(() -> statusText.setText(
-                        R.string.status_generating_multiview
+                        R.string.status_generating_neural
                 ));
-                ImageToMeshGenerator.Result result = generator.generate(source);
+                NeuralReconstructionEngine.Result result =
+                        generator.generate(source);
 
                 currentMesh = result.getMesh();
                 currentTexture = result.getTexture();
@@ -132,7 +142,10 @@ public final class MainActivity extends AppCompatActivity {
                             result.getDetectedViewCount(),
                             result.getQualityLabel(),
                             result.getProcessorCount(),
-                            currentMesh.getTriangleCount()
+                            currentMesh.getTriangleCount(),
+                            result.getNeuralBackend(),
+                            result.getNeuralDurationMs() / 1000.0,
+                            result.getTotalDurationMs() / 1000.0
                     ));
                 });
             } catch (Exception error) {
@@ -201,17 +214,20 @@ public final class MainActivity extends AppCompatActivity {
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V3 — GLB + OBJ");
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V4 neuronal — GLB + OBJ");
         share.putExtra(
                 Intent.EXTRA_TEXT,
-                "GLB V3 autonome et fichiers OBJ créés dans : "
+                "GLB V4 neuronal et fichiers OBJ créés dans : "
                         + result.getDirectory().getAbsolutePath()
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-        ClipData clipData = ClipData.newRawUri("Modèle 3D V3", uris.get(0));
-        for (int i = 1; i < uris.size(); i++) {
-            clipData.addItem(new ClipData.Item(uris.get(i)));
+        ClipData clipData = ClipData.newRawUri(
+                "Modèle 3D V4 neuronal",
+                uris.get(0)
+        );
+        for (int index = 1; index < uris.size(); index++) {
+            clipData.addItem(new ClipData.Item(uris.get(index)));
         }
         share.setClipData(clipData);
         startActivity(Intent.createChooser(
@@ -249,6 +265,9 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         worker.shutdownNow();
+        if (generator != null) {
+            generator.close();
+        }
         super.onDestroy();
     }
 }

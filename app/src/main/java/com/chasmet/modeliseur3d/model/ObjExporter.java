@@ -38,16 +38,16 @@ public final class ObjExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Modele_V3_" + stamp
+                "Modeliseur3D/Modele_V4_Neural_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier d'export");
         }
 
-        File glbFile = new File(directory, "personnage_v3.glb");
-        File objFile = new File(directory, "personnage_v3.obj");
-        File mtlFile = new File(directory, "personnage_v3.mtl");
-        File textureFile = new File(directory, "texture_multivue_v3.png");
+        File glbFile = new File(directory, "personnage_v4_neural.glb");
+        File objFile = new File(directory, "personnage_v4_neural.obj");
+        File mtlFile = new File(directory, "personnage_v4_neural.mtl");
+        File textureFile = new File(directory, "texture_multivue_v4.png");
         File infoFile = new File(directory, "informations.txt");
 
         GlbExporter.write(glbFile, mesh, texture);
@@ -76,42 +76,42 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("# Modèle lissé généré localement par Modéliseur 3D V3\n");
-            writer.write("mtllib personnage_v3.mtl\n");
-            writer.write("o personnage_v3\n");
+            writer.write("# Modèle neuronal généré localement par Modéliseur 3D V4\n");
+            writer.write("mtllib personnage_v4_neural.mtl\n");
+            writer.write("o personnage_v4_neural\n");
 
-            for (int i = 0; i < positions.length; i += 3) {
+            for (int index = 0; index < positions.length; index += 3) {
                 writer.write(String.format(
                         Locale.US,
                         "v %.6f %.6f %.6f\n",
-                        positions[i],
-                        positions[i + 1],
-                        positions[i + 2]
+                        positions[index],
+                        positions[index + 1],
+                        positions[index + 2]
                 ));
             }
-            for (int i = 0; i < texCoords.length; i += 2) {
+            for (int index = 0; index < texCoords.length; index += 2) {
                 writer.write(String.format(
                         Locale.US,
                         "vt %.6f %.6f\n",
-                        texCoords[i],
-                        texCoords[i + 1]
+                        texCoords[index],
+                        texCoords[index + 1]
                 ));
             }
-            for (int i = 0; i < normals.length; i += 3) {
+            for (int index = 0; index < normals.length; index += 3) {
                 writer.write(String.format(
                         Locale.US,
                         "vn %.6f %.6f %.6f\n",
-                        normals[i],
-                        normals[i + 1],
-                        normals[i + 2]
+                        normals[index],
+                        normals[index + 1],
+                        normals[index + 2]
                 ));
             }
 
-            writer.write("usemtl personnage_texture_v3\n");
-            for (int i = 0; i < indices.length; i += 3) {
-                int a = indices[i] + 1;
-                int b = indices[i + 1] + 1;
-                int c = indices[i + 2] + 1;
+            writer.write("usemtl personnage_texture_v4\n");
+            for (int index = 0; index < indices.length; index += 3) {
+                int a = indices[index] + 1;
+                int b = indices[index + 1] + 1;
+                int c = indices[index + 2] + 1;
                 writer.write("f " + a + "/" + a + "/" + a + " "
                         + b + "/" + b + "/" + b + " "
                         + c + "/" + c + "/" + c + "\n");
@@ -125,14 +125,14 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("newmtl personnage_texture_v3\n");
+            writer.write("newmtl personnage_texture_v4\n");
             writer.write("Ka 0.400000 0.400000 0.400000\n");
             writer.write("Kd 1.000000 1.000000 1.000000\n");
-            writer.write("Ks 0.060000 0.060000 0.060000\n");
-            writer.write("Ns 10.000000\n");
+            writer.write("Ks 0.080000 0.080000 0.080000\n");
+            writer.write("Ns 14.000000\n");
             writer.write("d 1.000000\n");
             writer.write("illum 2\n");
-            writer.write("map_Kd texture_multivue_v3.png\n");
+            writer.write("map_Kd texture_multivue_v4.png\n");
         }
     }
 
@@ -155,15 +155,16 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("Version : Modéliseur 3D V3 ultra propre\n");
+            writer.write("Version : Modéliseur 3D V4 Neural\n");
             writer.write("Format principal : GLB 2.0 autonome\n");
             writer.write("Formats secondaires : OBJ + MTL + PNG\n");
             writer.write("Sommets : " + mesh.getVertexCount() + "\n");
             writer.write("Triangles : " + mesh.getTriangleCount() + "\n");
             writer.write("Taille GLB : " + glbSize + " octets\n");
-            writer.write("Méthode : enveloppe multivue, champ lissé et extraction de surface par tétraèdres.\n");
-            writer.write("Normales : gradient volumique lissé.\n");
-            writer.write("Texture : atlas face, dos et profils avec extension des couleurs.\n");
+            writer.write("Réseau : Depth Anything V2 Small FP32, licence Apache-2.0.\n");
+            writer.write("Runtime : ONNX Runtime Android, licence MIT.\n");
+            writer.write("Méthode : enveloppe multivue fermée, trois inférences de profondeur et fusion neuronale orientée par les normales.\n");
+            writer.write("Calcul : entièrement local, NNAPI si disponible avec repli CPU multi-cœurs.\n");
             writer.write("Le GLB peut être importé directement dans Godot, Blender ou Unity.\n");
         }
     }
