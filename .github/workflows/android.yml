@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Récupérer le dépôt
@@ -26,25 +26,25 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Mettre en cache les réseaux V4.1.1
+      - name: Mettre en cache les réseaux V4.1.2
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
-            app/src/main/assets/models/isnet_anime_int8.onnx
-          key: modeliseur-v411-depth-afb6a5c2-isnet-int8-a6832786
+            app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v412-depth-afb6a5c2-isnet-fp32-6a92a19a
 
-      - name: Télécharger et vérifier IS-Net Anime INT8
+      - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
         run: |
           set -euo pipefail
-          MODEL="app/src/main/assets/models/isnet_anime_int8.onnx"
+          MODEL="app/src/main/assets/models/isnet_anime_fp32.onnx"
           PART="${MODEL}.part"
-          SHA="a6832786351b9a1283bb1cd4a2b9a77f1fe0330ad5e7324a6c4603db478b034e"
-          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model_int8.onnx?download=true"
+          SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
           if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime INT8 déjà présent dans le cache et vérifié."
+            echo "IS-Net Anime FP32 déjà présent dans le cache et vérifié."
           else
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
@@ -62,7 +62,7 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Compiler et vérifier la V4.1.1 neuronale
+      - name: Compiler et vérifier la V4.1.2 neuronale
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
       - name: Vérifier la taille et le SHA-256 de l'APK
@@ -70,10 +70,10 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publier l'APK V4.1.1
+      - name: Publier l'APK V4.1.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.1.1-Neural-debug
+          name: Modeliseur3D-V4.1.2-Neural-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

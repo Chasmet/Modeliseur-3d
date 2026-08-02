@@ -1,4 +1,4 @@
-# Modéliseur 3D V4 Neural — Android local
+# Modéliseur 3D V4.1.2 Neural — Android local
 
 Application Android Java spécialisée pour les **planches de rotation multivues** contenant le même personnage de face, de dos et de profil.
 
@@ -23,17 +23,27 @@ Le pipeline est hybride afin de rester utilisable sur Android :
 
 ## Intelligence artificielle embarquée
 
+Segmentation :
+
+- modèle : IS-Net Anime FP32 (176 068 431 octets) ;
+- graphe FP32 sans `ConvInteger` ;
+- exécution CPU pure, sans NNAPI ;
+- entrée RGB 1024 × 1024 dans l'intervalle `[0, 1]`, avec conservation du ratio et fond noir ;
+- arrière-plan du masque rendu transparent avant la détection des vues.
+
+Relief :
+
 - Modèle : Depth Anything V2 Small FP32 ;
 - taille du modèle : environ 99 Mo ;
 - licence du modèle Small : Apache-2.0 ;
 - runtime : ONNX Runtime Android 1.20.0, licence MIT ;
 - version du runtime choisie pour conserver `minSdkVersion 21` ;
-- accélération : NNAPI quand Android et le modèle le permettent ;
+- accélération : NNAPI quand Android et le modèle le permettent, uniquement pour Depth Anything V2 ;
 - repli : CPU multi-cœurs avec optimisations ONNX ;
 - entrée du réseau : 518 × 518, normalisation ImageNet ;
 - aucune API distante et aucun serveur.
 
-Le modèle est téléchargé pendant la compilation, vérifié par SHA-256 puis inclus dans les assets de l’APK. Au premier lancement, il est copié dans le stockage privé de l’application pour permettre un chargement efficace par ONNX Runtime.
+Les deux modèles sont téléchargés pendant la compilation, vérifiés par SHA-256 puis inclus dans les assets de l’APK. Au premier lancement, ils sont copiés dans le stockage privé de l’application pour permettre un chargement efficace par ONNX Runtime.
 
 ## Puissance du téléphone
 
@@ -74,10 +84,11 @@ chmod +x gradlew
 ./gradlew --no-daemon clean lintDebug assembleDebug
 ```
 
-Le premier build télécharge automatiquement le modèle neuronal et vérifie son SHA-256 :
+Le premier build télécharge automatiquement les modèles neuronaux et vérifie leurs SHA-256 :
 
 ```text
 afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
+6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
 ```
 
 APK généré :
@@ -86,7 +97,7 @@ APK généré :
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4-Neural-debug`.
+Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4.1.2-Neural-debug`.
 
 ## Structure principale
 
@@ -99,6 +110,7 @@ app/src/main/java/com/chasmet/modeliseur3d/
 ├── model/
 │   ├── GlbExporter.java
 │   ├── ImageToMeshGenerator.java
+│   ├── AnimeSegmentationEngine.java
 │   ├── MeshData.java
 │   ├── NeuralDepthEngine.java
 │   ├── NeuralReconstructionEngine.java
@@ -110,6 +122,8 @@ app/src/main/java/com/chasmet/modeliseur3d/
 
 ## Limites réelles
 
-Cette V4 utilise bien un réseau neuronal, mais elle ne prétend pas exécuter sur téléphone un grand modèle génératif 3D de plusieurs milliards de paramètres. Elle combine une enveloppe multivue fiable et une profondeur neuronale détaillée.
+Cette V4 utilise bien deux réseaux neuronaux, mais elle ne prétend pas exécuter sur téléphone un grand modèle génératif 3D de plusieurs milliards de paramètres. Elle combine un détourage anime, une enveloppe multivue et une profondeur neuronale détaillée.
+
+La V4.1.2 accepte aussi une seule silhouette en dernier recours : elle réutilise cette vue pour estimer la profondeur latérale au lieu d'arrêter la génération. Une planche face/dos/profil reste fortement recommandée pour obtenir une forme correcte.
 
 Les zones absentes de toutes les vues restent estimées. Les espaces très fins entre les doigts, l’intérieur des vêtements et les éléments cachés ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est encore généré.

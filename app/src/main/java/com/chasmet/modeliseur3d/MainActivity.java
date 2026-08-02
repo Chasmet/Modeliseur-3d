@@ -151,7 +151,7 @@ public final class MainActivity extends AppCompatActivity {
                     ));
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec de reconstruction V4.1.1", error);
+                Log.e(TAG, "Échec de reconstruction V4.1.2", error);
                 String details = safeMessage(error);
                 Runtime.getRuntime().gc();
                 runOnUiThread(() -> {
@@ -225,16 +225,16 @@ public final class MainActivity extends AppCompatActivity {
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V4.1.1 — GLB + OBJ");
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V4.1.2 — GLB + OBJ");
         share.putExtra(
                 Intent.EXTRA_TEXT,
-                "GLB V4.1.1 et fichiers OBJ créés dans : "
+                "GLB V4.1.2 et fichiers OBJ créés dans : "
                         + result.getDirectory().getAbsolutePath()
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.1.1",
+                "Modèle 3D V4.1.2",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {

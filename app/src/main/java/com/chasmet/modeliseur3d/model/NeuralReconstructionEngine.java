@@ -5,7 +5,7 @@ import android.graphics.Bitmap;
 import android.os.SystemClock;
 
 /**
- * Pipeline V4.1.1 robuste : segmentation anime INT8, coque lissée, puis relief.
+ * Pipeline V4.1.2 robuste : segmentation anime FP32, coque lissée, puis relief.
  *
  * Chaque étape neuronale possède désormais un repli local. Une incompatibilité
  * de pilote, un manque de mémoire ou un modèle non pris en charge ne doit plus
@@ -14,7 +14,7 @@ import android.os.SystemClock;
 public final class NeuralReconstructionEngine implements AutoCloseable {
     private final Context context;
     private final ImageToMeshGenerator geometry = new ImageToMeshGenerator();
-    private volatile String backend = "Réseaux V4.1.1 chargés à la demande";
+    private volatile String backend = "Réseaux V4.1.2 chargés à la demande";
 
     public NeuralReconstructionEngine(Context context) {
         this.context = context.getApplicationContext();
@@ -37,6 +37,10 @@ public final class NeuralReconstructionEngine implements AutoCloseable {
         } catch (Exception | OutOfMemoryError segmentationError) {
             segmentationBackend = "Détourage classique de secours : "
                     + shortError(segmentationError);
+            releaseMemory();
+        }
+        if (segmentationUsed) {
+            // Libère le graphe FP32 avant la construction volumique.
             releaseMemory();
         }
 
@@ -100,7 +104,7 @@ public final class NeuralReconstructionEngine implements AutoCloseable {
 
         StringBuilder quality = new StringBuilder(base.getQualityLabel());
         if (segmentationUsed) {
-            quality.append(" + détourage anime INT8");
+            quality.append(" + détourage anime FP32");
         } else {
             quality.append(" + détourage de secours");
         }

@@ -27,7 +27,10 @@ import java.util.concurrent.Future;
  */
 public final class ImageToMeshGenerator {
     private static final int ATLAS_HEIGHT = 1024;
-    private static final float COMPONENT_MIN_HEIGHT = 0.27f;
+    private static final float COMPONENT_MIN_HEIGHT = 0.18f;
+    private static final float COMPONENT_MIN_WIDTH = 0.018f;
+    private static final float RELAXED_COMPONENT_MIN_HEIGHT = 0.10f;
+    private static final float RELAXED_COMPONENT_MIN_WIDTH = 0.008f;
 
     public Result generate(Bitmap source) throws Exception {
         if (source == null || source.isRecycled()) {
@@ -46,9 +49,9 @@ public final class ImageToMeshGenerator {
                 source.getWidth(),
                 source.getHeight()
         );
-        if (selection.front == null || selection.side == null) {
+        if (selection.front == null) {
             throw new IllegalArgumentException(
-                    "La V3 attend une planche avec une grande vue de face, un dos et un profil"
+                    "Aucune silhouette exploitable n'a été détectée dans la planche"
             );
         }
 
@@ -129,14 +132,24 @@ public final class ImageToMeshGenerator {
             int imageWidth,
             int imageHeight
     ) {
-        List<Component> usable = new ArrayList<>();
         int minPixels = Math.max(220, imageWidth * imageHeight / 1800);
-        for (Component component : components) {
-            if (component.pixelCount >= minPixels
-                    && component.bounds.height() >= imageHeight * COMPONENT_MIN_HEIGHT
-                    && component.bounds.width() >= imageWidth * 0.035f) {
-                usable.add(component);
-            }
+        List<Component> usable = filterComponents(
+                components,
+                minPixels,
+                imageWidth,
+                imageHeight,
+                COMPONENT_MIN_WIDTH,
+                COMPONENT_MIN_HEIGHT
+        );
+        if (usable.size() < 2) {
+            usable = filterComponents(
+                    components,
+                    Math.max(80, minPixels / 3),
+                    imageWidth,
+                    imageHeight,
+                    RELAXED_COMPONENT_MIN_WIDTH,
+                    RELAXED_COMPONENT_MIN_HEIGHT
+            );
         }
 
         Collections.sort(usable, new Comparator<Component>() {
@@ -145,7 +158,7 @@ public final class ImageToMeshGenerator {
                 return Integer.compare(first.bounds.left, second.bounds.left);
             }
         });
-        if (usable.size() < 2) {
+        if (usable.isEmpty()) {
             return new ViewSelection(null, null, null, usable.size());
         }
 
@@ -154,6 +167,12 @@ public final class ImageToMeshGenerator {
             if (component.pixelCount > front.pixelCount) {
                 front = component;
             }
+        }
+
+        // Une image avec une seule silhouette reste générable : la même vue
+        // sert d'estimation latérale, au lieu de bloquer toute la reconstruction.
+        if (usable.size() == 1) {
+            return new ViewSelection(front, null, front, 1);
         }
 
         List<Component> candidates = new ArrayList<>();
@@ -193,6 +212,27 @@ public final class ImageToMeshGenerator {
             back = nonSide.get(0);
         }
         return new ViewSelection(front, back, side, usable.size());
+    }
+
+    private static List<Component> filterComponents(
+            List<Component> components,
+            int minimumPixels,
+            int imageWidth,
+            int imageHeight,
+            float minimumWidthFraction,
+            float minimumHeightFraction
+    ) {
+        List<Component> usable = new ArrayList<>();
+        for (Component component : components) {
+            if (component.pixelCount >= minimumPixels
+                    && component.bounds.height()
+                    >= imageHeight * minimumHeightFraction
+                    && component.bounds.width()
+                    >= imageWidth * minimumWidthFraction) {
+                usable.add(component);
+            }
+        }
+        return usable;
     }
 
     private static ViewData createView(
@@ -694,6 +734,23 @@ public final class ImageToMeshGenerator {
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
 
+        boolean hasTransparentBackground = false;
+        for (int color : pixels) {
+            if (Color.alpha(color) < 24) {
+                hasTransparentBackground = true;
+                break;
+            }
+        }
+        if (hasTransparentBackground) {
+            boolean[] alphaMask = new boolean[pixels.length];
+            for (int i = 0; i < pixels.length; i++) {
+                alphaMask[i] = Color.alpha(pixels[i]) >= 24;
+            }
+            dilate(alphaMask, width, height, 1);
+            erode(alphaMask, width, height, 1);
+            return alphaMask;
+        }
+
         int sampleWidth = Math.max(4, width / 45);
         int[] leftR = new int[height];
         int[] leftG = new int[height];
@@ -772,7 +829,7 @@ public final class ImageToMeshGenerator {
 
                 mask[index] = distanceSquared > 30 * 30
                         || Math.abs(luminance - backgroundLuminance) > 20
-                        || saturation > 30;
+                        || (saturation > 30 && distanceSquared > 20 * 20);
             }
         }
 
