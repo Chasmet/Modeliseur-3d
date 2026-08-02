@@ -27,6 +27,9 @@ def segmentationModelUrl =
         'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true'
 def segmentationModelSha256 =
         '6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba'
+def ciDebugKeystorePath = System.getenv('MODELISEUR_DEBUG_KEYSTORE')
+def hasCiDebugKeystore = ciDebugKeystorePath != null
+        && !ciDebugKeystorePath.trim().isEmpty()
 
 def fileDigest = { File target, String algorithm ->
     MessageDigest digest = MessageDigest.getInstance(algorithm)
@@ -125,6 +128,17 @@ android {
     namespace 'com.chasmet.modeliseur3d'
     compileSdk 34
 
+    signingConfigs {
+        if (hasCiDebugKeystore) {
+            ciDebug {
+                storeFile file(ciDebugKeystorePath)
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
+
     defaultConfig {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
@@ -140,6 +154,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (hasCiDebugKeystore) {
+                signingConfig signingConfigs.ciDebug
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile(

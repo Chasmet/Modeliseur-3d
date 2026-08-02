@@ -14,6 +14,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      MODELISEUR_DEBUG_KEYSTORE: ${{ github.workspace }}/.ci-signing/debug.keystore
 
     steps:
       - name: Récupérer le dépôt
@@ -29,8 +31,25 @@ jobs:
       - name: Conserver la signature APK de test
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
+          path: .ci-signing/debug.keystore
           key: modeliseur-debug-keystore-v1
+
+      - name: Préparer la signature APK de test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$MODELISEUR_DEBUG_KEYSTORE" ]; then
+            mkdir -p "$(dirname "$MODELISEUR_DEBUG_KEYSTORE")"
+            keytool -genkeypair -noprompt \
+              -keystore "$MODELISEUR_DEBUG_KEYSTORE" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10950
+          fi
 
       - name: Mettre en cache les réseaux V4.2
         uses: actions/cache@v4
@@ -92,6 +111,7 @@ jobs:
 
           ls -lh "$APK"
           sha256sum "$APK"
+          test -f "$MODELISEUR_DEBUG_KEYSTORE"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
 
