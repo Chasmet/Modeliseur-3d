@@ -153,11 +153,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                     nnapi ? "IS-Net NNAPI + CPU" : "IS-Net CPU multi-cœurs"
             );
         } catch (Exception firstError) {
-            try {
-                accelerated.close();
-            } catch (OrtException ignored) {
-                // Rien à faire.
-            }
+            accelerated.close();
 
             OrtSession.SessionOptions cpu = new OrtSession.SessionOptions();
             cpu.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
@@ -170,11 +166,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 );
                 return new SessionBundle(created, "IS-Net CPU multi-cœurs");
             } finally {
-                try {
-                    cpu.close();
-                } catch (OrtException ignored) {
-                    // Rien à faire.
-                }
+                cpu.close();
             }
         }
     }
