@@ -1,23 +1,30 @@
-MODÉLISEUR 3D V4 NEURAL — COMPOSANTS OPEN SOURCE
+MODÉLISEUR 3D V4.1 NEURAL — COMPOSANTS OPEN SOURCE
 
-1. Depth Anything V2 Small
+1. IS-Net Anime / Anime Segmentation
+Projet : SkyTNT/anime-segmentation
+Modèle embarqué : isnet-anime.onnx distribué par danielgatis/rembg
+Licence du projet et du modèle : Apache License 2.0
+
+Le réseau est utilisé localement pour détourer précisément les personnages dessinés, y compris les parties blanches, noires et fines sur fond clair. La distribution du modèle est récupérée depuis les versions officielles de rembg, projet sous licence MIT.
+
+2. Depth Anything V2 Small
 Projet : DepthAnything/Depth-Anything-V2
 Modèle embarqué : Depth Anything V2 Small FP32
 Licence du modèle Small : Apache License 2.0
 Copyright : auteurs et contributeurs de Depth Anything V2
 Article : Depth Anything V2: A More Capable Foundation Model for Monocular Depth Estimation
 
-Le modèle est utilisé localement pour estimer trois cartes de profondeur : face, dos et profil. Aucun contenu utilisateur n'est envoyé à un serveur.
+Le modèle est utilisé localement pour estimer les cartes de profondeur de face, de dos et de profil après la reconstruction géométrique.
 
-2. ONNX Runtime Android
+3. ONNX Runtime Android
 Projet : microsoft/onnxruntime
 Licence : MIT License
 Copyright (c) Microsoft Corporation et contributeurs
 
-ONNX Runtime exécute le réseau sur Android. La V4 demande NNAPI lorsque l'appareil le permet, puis utilise le processeur en repli pour les opérations non prises en charge.
+ONNX Runtime exécute les deux réseaux sur Android. La V4.1 demande NNAPI lorsque l'appareil le permet, puis utilise le processeur multi-cœurs en repli. Les réseaux sont chargés l'un après l'autre afin de limiter la mémoire utilisée.
 
-3. AndroidX
+4. AndroidX
 Projets : Android Open Source Project et AndroidX
 Licences : Apache License 2.0 selon chaque composant
 
-Les textes de licence et les avis des bibliothèques empaquetées restent également présents dans leurs distributions originales.
+Aucune image utilisateur n'est envoyée vers un serveur. Les textes de licence et les avis des bibliothèques empaquetées restent présents dans leurs distributions originales.

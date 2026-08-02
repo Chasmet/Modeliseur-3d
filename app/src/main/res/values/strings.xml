@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 3D V4 Neural</string>
-    <string name="title">Modéliseur 3D V4 neuronal</string>
-    <string name="subtitle">Importe une planche avec face, dos et profil. La V4 combine une reconstruction multivue avec Depth Anything V2 exécuté localement par ONNX Runtime et NNAPI.</string>
+    <string name="app_name">Modéliseur 3D V4.1 Neural</string>
+    <string name="title">Modéliseur 3D V4.1 neuronal</string>
+    <string name="subtitle">Importe une planche avec face, dos et profil. IS-Net Anime détoure précisément le personnage, la surface est soudée et lissée, puis Depth Anything V2 ajoute le relief.</string>
     <string name="select_image">Choisir la planche</string>
     <string name="reset_view">Recentrer</string>
     <string name="export_obj">Exporter GLB + OBJ</string>
     <string name="empty_message">Le modèle 3D neuronal apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
-    <string name="status_ready">Prêt — moteur neuronal embarqué, aucun envoi sur Internet.</string>
+    <string name="status_ready">Prêt — deux réseaux neuronaux locaux, aucun envoi sur Internet.</string>
     <string name="status_loading">Lecture haute résolution de la planche…</string>
-    <string name="status_loading_neural_engine">Installation puis chargement du réseau neuronal local de 99 Mo…</string>
-    <string name="status_generating">Création du maillage 3D…</string>
-    <string name="status_generating_multiview">Reconstruction multivue en cours…</string>
-    <string name="status_generating_neural">Volume multivue, trois cartes de profondeur neuronales puis fusion 3D…</string>
-    <string name="status_done">Modèle V4 neuronal prêt.</string>
+    <string name="status_loading_neural_engine">Installation puis chargement séquentiel des réseaux neuronaux V4.1…</string>
+    <string name="status_generating">Création du maillage 3D V4.1…</string>
+    <string name="status_generating_multiview">Détourage anime précis et reconstruction multivue…</string>
+    <string name="status_generating_neural">IS-Net Anime, coque 3D soudée et lissée, puis relief Depth Anything V2…</string>
+    <string name="status_done">Modèle V4.1 neuronal prêt.</string>
     <string name="status_done_details">%1$d vues • qualité %2$s • %3$d cœurs • %4$d triangles • %5$s • réseau %6$.1f s • total %7$.1f s</string>
-    <string name="status_exporting">Création du GLB V4 autonome et des fichiers OBJ…</string>
-    <string name="status_exported">GLB, OBJ, MTL et texture multivue V4 créés.</string>
-    <string name="share_model">Partager ou enregistrer le modèle 3D V4</string>
+    <string name="status_exporting">Création du GLB V4.1 autonome et des fichiers OBJ…</string>
+    <string name="status_exported">GLB, OBJ, MTL et texture multivue V4.1 créés.</string>
+    <string name="share_model">Partager ou enregistrer le modèle 3D V4.1</string>
     <string name="error_image">Impossible de lire cette image.</string>
-    <string name="error_generation">La reconstruction neuronale V4 a échoué.</string>
+    <string name="error_generation">La reconstruction neuronale V4.1 a échoué.</string>
     <string name="error_export">L’export GLB a échoué.</string>
 </resources>
