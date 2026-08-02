@@ -6,19 +6,29 @@ plugins {
     id 'com.android.application'
 }
 
-def neuralModelFile = file(
+def depthModelFile = file(
         'src/main/assets/models/depth_anything_v2_small_fp32.onnx'
 )
-def neuralModelTemporary = file(
+def depthModelTemporary = file(
         'src/main/assets/models/depth_anything_v2_small_fp32.onnx.part'
 )
-def neuralModelUrl =
+def depthModelUrl =
         'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx?download=true'
-def neuralModelSha256 =
+def depthModelSha256 =
         'afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c'
 
-def fileSha256 = { File target ->
-    MessageDigest digest = MessageDigest.getInstance('SHA-256')
+def segmentationModelFile = file(
+        'src/main/assets/models/isnet_anime.onnx'
+)
+def segmentationModelTemporary = file(
+        'src/main/assets/models/isnet_anime.onnx.part'
+)
+def segmentationModelUrl =
+        'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-anime.onnx'
+def segmentationModelMd5 = '6f184e756bb3bd901c8849220a83e38e'
+
+def fileDigest = { File target, String algorithm ->
+    MessageDigest digest = MessageDigest.getInstance(algorithm)
     target.withInputStream { input ->
         byte[] buffer = new byte[1024 * 1024]
         int read
@@ -31,43 +41,81 @@ def fileSha256 = { File target ->
     }.join()
 }
 
-tasks.register('downloadNeuralModel') {
+tasks.register('downloadDepthModel') {
     group = 'machine learning'
-    description = 'Télécharge le modèle libre Depth Anything V2 Small dans l’APK.'
-    outputs.file(neuralModelFile)
+    description = 'Télécharge Depth Anything V2 Small pour le relief local.'
+    outputs.file(depthModelFile)
 
     doLast {
-        if (neuralModelFile.isFile()
-                && fileSha256(neuralModelFile) == neuralModelSha256) {
-            println 'Modèle neuronal V4 déjà présent et vérifié.'
+        if (depthModelFile.isFile()
+                && fileDigest(depthModelFile, 'SHA-256') == depthModelSha256) {
+            println 'Depth Anything V2 déjà présent et vérifié.'
             return
         }
 
-        neuralModelFile.parentFile.mkdirs()
-        neuralModelTemporary.delete()
-        println 'Téléchargement du moteur neuronal Depth Anything V2 Small FP32…'
+        depthModelFile.parentFile.mkdirs()
+        depthModelTemporary.delete()
+        println 'Téléchargement de Depth Anything V2 Small FP32…'
         ant.get(
-                src: neuralModelUrl,
-                dest: neuralModelTemporary,
+                src: depthModelUrl,
+                dest: depthModelTemporary,
                 verbose: true,
                 skipexisting: false
         )
 
-        String downloadedSha256 = fileSha256(neuralModelTemporary)
-        if (downloadedSha256 != neuralModelSha256) {
-            neuralModelTemporary.delete()
+        String downloaded = fileDigest(depthModelTemporary, 'SHA-256')
+        if (downloaded != depthModelSha256) {
+            depthModelTemporary.delete()
             throw new GradleException(
-                    'Le modèle neuronal téléchargé est incomplet ou corrompu. '
-                            + 'SHA-256 reçu : ' + downloadedSha256
+                    'Depth Anything V2 est incomplet ou corrompu. SHA-256 : '
+                            + downloaded
             )
         }
-
         Files.move(
-                neuralModelTemporary.toPath(),
-                neuralModelFile.toPath(),
+                depthModelTemporary.toPath(),
+                depthModelFile.toPath(),
                 StandardCopyOption.REPLACE_EXISTING
         )
-        println 'Modèle neuronal V4 vérifié : ' + neuralModelFile.length() + ' octets.'
+        println 'Depth Anything V2 vérifié : ' + depthModelFile.length() + ' octets.'
+    }
+}
+
+tasks.register('downloadAnimeSegmentationModel') {
+    group = 'machine learning'
+    description = 'Télécharge IS-Net Anime pour détourer précisément les personnages.'
+    outputs.file(segmentationModelFile)
+
+    doLast {
+        if (segmentationModelFile.isFile()
+                && fileDigest(segmentationModelFile, 'MD5') == segmentationModelMd5) {
+            println 'IS-Net Anime déjà présent et vérifié.'
+            return
+        }
+
+        segmentationModelFile.parentFile.mkdirs()
+        segmentationModelTemporary.delete()
+        println 'Téléchargement du réseau IS-Net Anime…'
+        ant.get(
+                src: segmentationModelUrl,
+                dest: segmentationModelTemporary,
+                verbose: true,
+                skipexisting: false
+        )
+
+        String downloaded = fileDigest(segmentationModelTemporary, 'MD5')
+        if (downloaded != segmentationModelMd5) {
+            segmentationModelTemporary.delete()
+            throw new GradleException(
+                    'IS-Net Anime est incomplet ou corrompu. MD5 : ' + downloaded
+            )
+        }
+        Files.move(
+                segmentationModelTemporary.toPath(),
+                segmentationModelFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING
+        )
+        println 'IS-Net Anime vérifié : '
+                + segmentationModelFile.length() + ' octets.'
     }
 }
 
@@ -79,14 +127,12 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 4
-        versionName '4.0.0'
+        versionCode 5
+        versionName '4.1.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
         ndk {
-            // La V4 cible les téléphones Android modernes 64 bits afin de limiter
-            // la taille des bibliothèques natives ONNX Runtime dans l'APK.
             abiFilters 'arm64-v8a'
         }
     }
@@ -107,7 +153,6 @@ android {
     }
 
     androidResources {
-        // Le modèle est copié directement vers le stockage privé du téléphone.
         noCompress += ['onnx']
     }
 
@@ -119,7 +164,8 @@ android {
 }
 
 tasks.named('preBuild').configure {
-    dependsOn tasks.named('downloadNeuralModel')
+    dependsOn tasks.named('downloadDepthModel')
+    dependsOn tasks.named('downloadAnimeSegmentationModel')
 }
 
 configurations.configureEach {
@@ -131,8 +177,5 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
-
-    // Version officielle publiée sur Maven Central et compatible avec minSdk 21.
-    // Elle inclut NNAPI, XNNPACK et le runtime Java complet.
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }
