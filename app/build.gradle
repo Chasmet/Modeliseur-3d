@@ -132,6 +132,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
 
-    // Moteur d'inférence libre MIT avec NNAPI et repli CPU.
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.26.0'
+    // Version officielle encore compatible avec minSdk 21.
+    // Elle inclut NNAPI, XNNPACK et le runtime Java complet.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.1'
 }
