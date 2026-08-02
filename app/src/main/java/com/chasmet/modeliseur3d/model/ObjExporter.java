@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -27,22 +27,30 @@ public final class ObjExporter {
         }
 
         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.FRANCE).format(new Date());
-        File directory = new File(documents, "Modeliseur3D/Modele_" + stamp);
+        File directory = new File(documents, "Modeliseur3D/Modele_V2_" + stamp);
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier d'export");
         }
 
-        File objFile = new File(directory, "modele.obj");
-        File mtlFile = new File(directory, "modele.mtl");
-        File textureFile = new File(directory, "texture.png");
+        File glbFile = new File(directory, "personnage_v2.glb");
+        File objFile = new File(directory, "personnage_v2.obj");
+        File mtlFile = new File(directory, "personnage_v2.mtl");
+        File textureFile = new File(directory, "texture_multivue.png");
         File infoFile = new File(directory, "informations.txt");
 
+        GlbExporter.write(glbFile, mesh, texture);
         writeObj(objFile, mesh);
         writeMtl(mtlFile);
         writeTexture(textureFile, texture);
-        writeInfo(infoFile, mesh);
+        writeInfo(infoFile, mesh, glbFile.length());
 
-        return new ExportResult(directory, Arrays.asList(objFile, mtlFile, textureFile, infoFile));
+        List<File> files = new ArrayList<>();
+        files.add(glbFile);
+        files.add(objFile);
+        files.add(mtlFile);
+        files.add(textureFile);
+        files.add(infoFile);
+        return new ExportResult(directory, files);
     }
 
     private static void writeObj(File file, MeshData mesh) throws IOException {
@@ -53,8 +61,8 @@ public final class ObjExporter {
 
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
                 new FileOutputStream(file), StandardCharsets.UTF_8))) {
-            writer.write("# Modèle généré localement par Modéliseur 3D\n");
-            writer.write("mtllib modele.mtl\n");
+            writer.write("# Modèle multivue généré localement par Modéliseur 3D V2\n");
+            writer.write("mtllib personnage_v2.mtl\n");
             writer.write("o personnage\n");
 
             for (int i = 0; i < positions.length; i += 3) {
@@ -88,11 +96,11 @@ public final class ObjExporter {
             writer.write("newmtl personnage_texture\n");
             writer.write("Ka 0.400000 0.400000 0.400000\n");
             writer.write("Kd 1.000000 1.000000 1.000000\n");
-            writer.write("Ks 0.120000 0.120000 0.120000\n");
-            writer.write("Ns 18.000000\n");
+            writer.write("Ks 0.080000 0.080000 0.080000\n");
+            writer.write("Ns 12.000000\n");
             writer.write("d 1.000000\n");
             writer.write("illum 2\n");
-            writer.write("map_Kd texture.png\n");
+            writer.write("map_Kd texture_multivue.png\n");
         }
     }
 
@@ -104,14 +112,17 @@ public final class ObjExporter {
         }
     }
 
-    private static void writeInfo(File file, MeshData mesh) throws IOException {
+    private static void writeInfo(File file, MeshData mesh, long glbSize) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
                 new FileOutputStream(file), StandardCharsets.UTF_8))) {
-            writer.write("Format : OBJ + MTL + PNG\n");
+            writer.write("Version : Modéliseur 3D V2 multivue\n");
+            writer.write("Format principal : GLB 2.0 autonome\n");
+            writer.write("Formats secondaires : OBJ + MTL + PNG\n");
             writer.write("Sommets : " + mesh.getVertexCount() + "\n");
             writer.write("Triangles : " + mesh.getTriangleCount() + "\n");
-            writer.write("Méthode : extrusion locale de silhouette et relief estimé.\n");
-            writer.write("Limite : ce modèle n'invente pas fidèlement les parties invisibles de l'image.\n");
+            writer.write("Taille GLB : " + glbSize + " octets\n");
+            writer.write("Méthode : enveloppe visuelle locale créée à partir des vues face, dos et profil.\n");
+            writer.write("Le GLB peut être importé directement dans Godot, Blender ou Unity.\n");
         }
     }
 
