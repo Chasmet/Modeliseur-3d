@@ -163,7 +163,7 @@ public final class ObjExporter {
             writer.write("Taille GLB : " + glbSize + " octets\n");
             writer.write("Réseau : Depth Anything V2 Small FP32, licence Apache-2.0.\n");
             writer.write("Runtime : ONNX Runtime Android, licence MIT.\n");
-            writer.write("Méthode : enveloppe multivue fermée, trois inférences de profondeur et fusion neuronale orientée par les normales.\n");
+            writer.write("Méthode V4.2 : volume image unique ou enveloppe multivue, une à trois inférences utiles et fusion neuronale orientée par les normales.\n");
             writer.write("Calcul : entièrement local, NNAPI si disponible avec repli CPU multi-cœurs.\n");
             writer.write("Le GLB peut être importé directement dans Godot, Blender ou Unity.\n");
         }

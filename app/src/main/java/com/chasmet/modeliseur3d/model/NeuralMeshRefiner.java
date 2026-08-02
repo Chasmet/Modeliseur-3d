@@ -22,7 +22,7 @@ final class NeuralMeshRefiner {
         int backStart = frontStart + frontWidth + GAP;
         int sideStart = backStart + frontWidth + GAP;
         if (sideStart + sideWidth > atlas.getWidth()) {
-            throw new IllegalArgumentException("Atlas V4.1 incompatible");
+            throw new IllegalArgumentException("Atlas V4.2 incompatible");
         }
         return new Views(
                 Bitmap.createBitmap(atlas, frontStart, 0, frontWidth, height),

@@ -8,7 +8,7 @@
     <string name="export_obj">Exporter GLB + OBJ</string>
     <string name="empty_message">Le modèle 3D neuronal apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
     <string name="status_ready">Prêt — réseaux locaux optimisés et replis automatiques.</string>
-    <string name="status_loading">Lecture optimisée de la planche…</string>
+    <string name="status_loading">Lecture optimisée de l’image…</string>
     <string name="status_loading_neural_engine">Préparation des moteurs neuronaux V4.2…</string>
     <string name="status_generating">Création du maillage 3D V4.2…</string>
     <string name="status_generating_multiview">Regroupement des morceaux et calibration des vues…</string>

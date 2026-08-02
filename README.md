@@ -48,7 +48,7 @@ Les deux modèles sont téléchargés pendant la compilation, vérifiés par SHA
 La V4 utilise deux niveaux de calcul :
 
 - le moteur géométrique répartit la création du volume et du maillage sur plusieurs cœurs ;
-- ONNX Runtime utilise NNAPI ou le CPU optimisé pour les trois inférences neuronales.
+- ONNX Runtime utilise NNAPI ou le CPU optimisé pour une à trois inférences utiles.
 
 Résolution géométrique adaptative :
 

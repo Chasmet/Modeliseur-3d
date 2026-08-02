@@ -236,6 +236,11 @@ public final class ImageToMeshGenerator {
                 back = candidate;
             }
         }
+        if (back != null
+                && (back.height() < front.height() * 0.25f
+                || back.pixelCount < front.pixelCount * 0.02f)) {
+            back = null;
+        }
         return new ViewSelection(front, back, side, usable.size());
     }
 

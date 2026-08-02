@@ -26,6 +26,12 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Conserver la signature APK de test
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: modeliseur-debug-keystore-v1
+
       - name: Mettre en cache les réseaux V4.2
         uses: actions/cache@v4
         with:
@@ -75,10 +81,22 @@ jobs:
       - name: Compiler et vérifier la V4.2 neuronale
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier la taille et le SHA-256 de l'APK
+      - name: Vérifier l'APK, sa signature et ses modèles
+        shell: bash
         run: |
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          DEPTH_SHA="afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
+          ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+
+          ls -lh "$APK"
+          sha256sum "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
+
+          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
+          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
       - name: Publier l'APK V4.2
         uses: actions/upload-artifact@v4
