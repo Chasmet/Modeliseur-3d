@@ -26,7 +26,7 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Mettre en cache les réseaux V4.2
+      - name: Mettre en cache les réseaux locaux V4.3
         uses: actions/cache@v4
         with:
           path: |
@@ -72,7 +72,27 @@ jobs:
           java -cp build/view-grouping-tests \
             com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
 
-      - name: Compiler et vérifier la V4.2 neuronale
+      - name: Tester la cible GLB mobile 200 Ko
+        run: |
+          mkdir -p build/mobile-plan-tests
+          javac -encoding UTF-8 \
+            -d build/mobile-plan-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/cloud/MobileOptimizationPlan.java \
+            validation/java/com/chasmet/modeliseur3d/cloud/MobileOptimizationPlanSelfTest.java
+          java -cp build/mobile-plan-tests \
+            com.chasmet.modeliseur3d.cloud.MobileOptimizationPlanSelfTest
+
+      - name: Tester l'association des vues vidéo
+        run: |
+          mkdir -p build/video-view-tests
+          javac -encoding UTF-8 \
+            -d build/video-view-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/media/VideoViewPlan.java \
+            validation/java/com/chasmet/modeliseur3d/media/VideoViewPlanSelfTest.java
+          java -cp build/video-view-tests \
+            com.chasmet.modeliseur3d.media.VideoViewPlanSelfTest
+
+      - name: Compiler et vérifier la V4.3 hybride
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
       - name: Vérifier la taille et le SHA-256 de l'APK
@@ -80,10 +100,10 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
           sha256sum app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Publier l'APK V4.2
+      - name: Publier l'APK V4.3
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.2-Neural-debug
+          name: Modeliseur3D-V4.3-Video-Cloud-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

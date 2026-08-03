@@ -165,6 +165,78 @@ public final class ImageToMeshGenerator {
         }
     }
 
+    /**
+     * Extrait les vraies silhouettes d'une planche pour un moteur 3D cloud.
+     * Les bitmaps retournés ont un fond transparent et appartiennent au
+     * résultat, qui doit être fermé après l'envoi.
+     */
+    public ExtractedViews extractViews(Bitmap source) {
+        if (source == null || source.isRecycled()) {
+            throw new IllegalArgumentException("Image absente");
+        }
+
+        boolean[] foreground = estimateForeground(source);
+        ComponentMap componentMap = findComponents(
+                foreground,
+                source.getWidth(),
+                source.getHeight()
+        );
+        ViewSelection selection = selectViews(
+                componentMap,
+                source.getWidth(),
+                source.getHeight()
+        );
+        if (selection.front == null) {
+            throw new IllegalArgumentException(
+                    "Aucune silhouette exploitable n'a été détectée"
+            );
+        }
+
+        ViewData frontView = null;
+        ViewData leftView = null;
+        ViewData backView = null;
+        ViewData rightView = null;
+        Bitmap front = null;
+        Bitmap left = null;
+        Bitmap back = null;
+        Bitmap right = null;
+        try {
+            frontView = createView(source, componentMap, selection.front);
+            if (selection.side != null) {
+                leftView = createView(source, componentMap, selection.side);
+            }
+            if (selection.back != null) {
+                backView = createView(source, componentMap, selection.back);
+            }
+            if (selection.right != null) {
+                rightView = createView(source, componentMap, selection.right);
+            }
+
+            front = frontView.transparentBitmap();
+            left = leftView == null ? null : leftView.transparentBitmap();
+            back = backView == null ? null : backView.transparentBitmap();
+            right = rightView == null ? null : rightView.transparentBitmap();
+            return new ExtractedViews(
+                    front,
+                    left,
+                    back,
+                    right,
+                    selection.detectedViewCount
+            );
+        } catch (RuntimeException | OutOfMemoryError error) {
+            recycle(front);
+            recycle(left);
+            recycle(back);
+            recycle(right);
+            throw error;
+        } finally {
+            if (frontView != null) frontView.recycleOwned();
+            if (leftView != null) leftView.recycleOwned();
+            if (backView != null) backView.recycleOwned();
+            if (rightView != null) rightView.recycleOwned();
+        }
+    }
+
     private static ViewSelection selectViews(
             ComponentMap componentMap,
             int imageWidth,
@@ -185,7 +257,9 @@ public final class ImageToMeshGenerator {
         List<ViewCandidateGrouper.Group> usable =
                 ViewCandidateGrouper.group(pieces, imageWidth, imageHeight);
         if (usable.isEmpty()) {
-            return new ViewSelection(null, null, null, usable.size());
+            return new ViewSelection(
+                    null, null, null, null, usable.size()
+            );
         }
 
         ViewCandidateGrouper.Group front = usable.get(0);
@@ -196,7 +270,7 @@ public final class ImageToMeshGenerator {
         }
 
         if (usable.size() == 1) {
-            return new ViewSelection(front, null, null, 1);
+            return new ViewSelection(front, null, null, null, 1);
         }
 
         List<ViewCandidateGrouper.Group> candidates = new ArrayList<>();
@@ -214,12 +288,13 @@ public final class ImageToMeshGenerator {
         }
         float frontAspect = Math.max(0.05f, front.aspectRatio());
         float medianAspect = medianAspect(usable);
-        boolean sideLargeEnough = side.height() >= front.height() * 0.35f
-                && side.pixelCount >= front.pixelCount * 0.035f;
-        boolean sideReliable = sideLargeEnough
-                && (side.aspectRatio() <= frontAspect * RELIABLE_SIDE_RATIO
-                || (usable.size() >= 3
-                && side.aspectRatio() <= medianAspect * 0.84f));
+        boolean sideReliable = isReliableSide(
+                front,
+                side,
+                frontAspect,
+                medianAspect,
+                usable.size()
+        );
         if (!sideReliable) {
             side = null;
         }
@@ -236,7 +311,47 @@ public final class ImageToMeshGenerator {
                 back = candidate;
             }
         }
-        return new ViewSelection(front, back, side, usable.size());
+
+        ViewCandidateGrouper.Group right = null;
+        float bestRightSimilarity = Float.POSITIVE_INFINITY;
+        for (ViewCandidateGrouper.Group candidate : candidates) {
+            if (candidate == side || candidate == back) {
+                continue;
+            }
+            if (!isReliableSide(
+                    front,
+                    candidate,
+                    frontAspect,
+                    medianAspect,
+                    usable.size()
+            )) {
+                continue;
+            }
+            float score = side == null
+                    ? candidate.aspectRatio()
+                    : Math.abs(candidate.aspectRatio() - side.aspectRatio());
+            if (score < bestRightSimilarity) {
+                bestRightSimilarity = score;
+                right = candidate;
+            }
+        }
+        return new ViewSelection(front, back, side, right, usable.size());
+    }
+
+    private static boolean isReliableSide(
+            ViewCandidateGrouper.Group front,
+            ViewCandidateGrouper.Group candidate,
+            float frontAspect,
+            float medianAspect,
+            int viewCount
+    ) {
+        boolean largeEnough = candidate.height() >= front.height() * 0.35f
+                && candidate.pixelCount >= front.pixelCount * 0.035f;
+        return largeEnough
+                && (candidate.aspectRatio()
+                <= frontAspect * RELIABLE_SIDE_RATIO
+                || (viewCount >= 3
+                && candidate.aspectRatio() <= medianAspect * 0.84f));
     }
 
     private static float frontScore(
@@ -1390,18 +1505,109 @@ public final class ImageToMeshGenerator {
         final ViewCandidateGrouper.Group front;
         final ViewCandidateGrouper.Group back;
         final ViewCandidateGrouper.Group side;
+        final ViewCandidateGrouper.Group right;
         final int detectedViewCount;
 
         ViewSelection(
                 ViewCandidateGrouper.Group front,
                 ViewCandidateGrouper.Group back,
                 ViewCandidateGrouper.Group side,
+                ViewCandidateGrouper.Group right,
                 int detectedViewCount
         ) {
             this.front = front;
             this.back = back;
             this.side = side;
+            this.right = right;
             this.detectedViewCount = detectedViewCount;
+        }
+    }
+
+    public static final class ExtractedViews implements AutoCloseable {
+        private Bitmap front;
+        private Bitmap left;
+        private Bitmap back;
+        private Bitmap right;
+        private final int detectedViewCount;
+
+        ExtractedViews(
+                Bitmap front,
+                Bitmap left,
+                Bitmap back,
+                Bitmap right,
+                int detectedViewCount
+        ) {
+            this.front = front;
+            this.left = left;
+            this.back = back;
+            this.right = right;
+            this.detectedViewCount = detectedViewCount;
+        }
+
+        public Bitmap getFront() {
+            return front;
+        }
+
+        public Bitmap getLeft() {
+            return left;
+        }
+
+        public Bitmap getBack() {
+            return back;
+        }
+
+        public Bitmap getRight() {
+            return right;
+        }
+
+        public int getDetectedViewCount() {
+            return detectedViewCount;
+        }
+
+        public int getUsableViewCount() {
+            int count = front == null ? 0 : 1;
+            if (left != null) count++;
+            if (back != null) count++;
+            if (right != null) count++;
+            return count;
+        }
+
+        Bitmap takeFront() {
+            Bitmap result = front;
+            front = null;
+            return result;
+        }
+
+        Bitmap takeLeft() {
+            Bitmap result = left;
+            left = null;
+            return result;
+        }
+
+        Bitmap takeBack() {
+            Bitmap result = back;
+            back = null;
+            return result;
+        }
+
+        Bitmap takeRight() {
+            Bitmap result = right;
+            right = null;
+            return result;
+        }
+
+        @Override
+        public void close() {
+            recycle(front);
+            recycle(left);
+            recycle(back);
+            recycle(right);
+        }
+    }
+
+    private static void recycle(Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            bitmap.recycle();
         }
     }
 

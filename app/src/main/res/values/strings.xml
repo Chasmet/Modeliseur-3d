@@ -1,24 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 3D V4.2 Neural</string>
-    <string name="title">Modéliseur 3D V4.2 neuronal</string>
-    <string name="subtitle">Importe une image unique ou une planche multivue. La V4.2 regroupe les morceaux du personnage, reconnaît les vraies vues et adapte automatiquement le volume 3D.</string>
+    <string name="app_name">Modéliseur 3D V4.3 Cloud</string>
+    <string name="title">Modéliseur 3D V4.3 haute fidélité</string>
+    <string name="subtitle">Transforme une image, une planche ou une vidéo 360° en vrai GLB texturé. La vidéo est analysée sur le téléphone.</string>
+    <string name="cloud_notice">Qualité H3.1 : les vues préparées sont envoyées à Tripo et peuvent consommer des crédits ; le MP4 reste sur le téléphone. L’application conserve le GLB HD et crée une copie mobile de 200 Ko maximum.</string>
+
     <string name="select_image">Choisir une image</string>
+    <string name="select_images">1 à 4 images</string>
+    <string name="select_video">Vidéo 360°</string>
+    <string name="cloud_settings">Clé API Tripo</string>
     <string name="reset_view">Recentrer</string>
+    <string name="back">Retour</string>
+    <string name="preview_mobile_model">Voir le GLB mobile en 3D</string>
     <string name="export_obj">Exporter GLB + OBJ</string>
-    <string name="empty_message">Le modèle 3D neuronal apparaîtra ici.\nGlisse pour tourner, pince pour zoomer.</string>
-    <string name="status_ready">Prêt — réseaux locaux optimisés et replis automatiques.</string>
-    <string name="status_loading">Lecture optimisée de la planche…</string>
-    <string name="status_loading_neural_engine">Préparation des moteurs neuronaux V4.2…</string>
-    <string name="status_generating">Création du maillage 3D V4.2…</string>
+    <string name="export_model">Enregistrer / partager le GLB</string>
+    <string name="export_mobile_model">Enregistrer le GLB mobile ≤ 200 Ko</string>
+    <string name="export_hd_model">Enregistrer le GLB HD</string>
+    <string name="export_local_model">Exporter le GLB local</string>
+    <string name="local_fallback">Mode local hors connexion (secours)</string>
+
+    <string name="empty_message">Choisis une vidéo 360°, une image ou plusieurs vues.
+Le résultat cloud pourra être ouvert ici en 3D.</string>
+    <string name="cloud_ready_message">Les deux GLB sont prêts.
+Ouvre l’aperçu mobile ou enregistre le fichier souhaité.</string>
+
+    <string name="status_ready">Prêt — ajoute ta clé Tripo puis choisis tes vues ou ta vidéo.</string>
+    <string name="status_input_selected">Entrée sélectionnée — préparation de la génération.</string>
+    <string name="status_loading">Lecture optimisée des images…</string>
+    <string name="status_reading_images">Lecture de l’image %1$d sur %2$d…</string>
+    <string name="status_extracting_video">Analyse de la rotation 360°…</string>
+    <string name="status_extracting_video_progress">Sélection de la vue vidéo %1$d sur %2$d…</string>
+    <string name="status_preparing_cloud">Détourage et préparation des vues…</string>
+    <string name="status_preparing_cloud_progress">Préparation de la vue %1$d sur %2$d…</string>
+    <string name="status_uploading_cloud">Envoi sécurisé des vues… %1$d %%</string>
+    <string name="status_cloud_waiting">Génération Tripo H3.1 haute fidélité… %1$d %%</string>
+    <string name="status_cloud_downloading">Téléchargement immédiat du GLB HD… %1$d %%</string>
+    <string name="status_cloud_optimizing">Création du GLB mobile ≤ 200 Ko… %1$d %%</string>
+    <string name="status_mobile_downloading">Vérification de la taille du GLB mobile… %1$d %%</string>
+    <string name="status_cloud_ready">GLB HD et mobile prêts.</string>
+    <string name="status_cloud_done">H3.1 terminé • %1$d vues • mobile %2$.1f Ko • HD %3$.1f Mio • %4$.1f s • %5$d crédits • %6$s</string>
+
+    <string name="status_loading_neural_engine">Préparation des moteurs neuronaux locaux V4.2…</string>
+    <string name="status_generating">Création du maillage 3D local…</string>
     <string name="status_generating_multiview">Regroupement des morceaux et calibration des vues…</string>
-    <string name="status_generating_neural">Détourage FP32, analyse image unique ou multivue, volume préservant les éléments fins, puis relief neuronal…</string>
-    <string name="status_done">Modèle V4.2 prêt.</string>
+    <string name="status_generating_neural">Détourage FP32, analyse multivue et relief neuronal local…</string>
+    <string name="status_done">Modèle local V4.2 prêt.</string>
     <string name="status_done_details">%1$d vues • qualité %2$s • %3$d cœurs • %4$d triangles • %5$s • réseau %6$.1f s • total %7$.1f s</string>
-    <string name="status_exporting">Création du GLB V4.2 autonome et des fichiers OBJ…</string>
-    <string name="status_exported">GLB, OBJ, MTL et texture V4.2 créés.</string>
-    <string name="share_model">Partager ou enregistrer le modèle 3D V4.2</string>
+    <string name="status_exporting">Création du GLB local autonome et des fichiers OBJ…</string>
+    <string name="status_exported">GLB, OBJ, MTL et texture locale créés.</string>
+
+    <string name="share_model">Partager ou enregistrer le modèle 3D local</string>
+    <string name="share_cloud_model">Partager ou enregistrer le GLB V4.3</string>
+    <string name="share_mobile_model">Enregistrer le GLB mobile ≤ 200 Ko</string>
+    <string name="share_hd_model">Enregistrer le GLB H3.1 haute définition</string>
+    <string name="share_file_details">%1$s • %2$s • généré par Modéliseur 3D V4.3</string>
+
+    <string name="api_dialog_title">Clé API Tripo</string>
+    <string name="api_dialog_message">Ta clé n’est jamais ajoutée au dépôt ni à l’APK. Elle est chiffrée par le coffre sécurisé Android. Les vues seront envoyées à Tripo et l’API peut consommer tes crédits. Ne partage ta clé avec personne.</string>
+    <string name="api_key_hint">Colle ta clé API Tripo</string>
+    <string name="api_key_saved">Clé API enregistrée de façon sécurisée.</string>
+    <string name="api_key_required">Ajoute d’abord une clé API Tripo.</string>
+    <string name="api_key_open_site">Créer / gérer la clé</string>
+    <string name="api_key_replace">Remplacer la clé enregistrée</string>
+    <string name="api_key_delete">Supprimer la clé du téléphone</string>
+    <string name="api_key_deleted">Clé API supprimée du téléphone.</string>
+    <string name="api_key_save_error">Impossible d’enregistrer la clé : %1$s</string>
+    <string name="save">Enregistrer</string>
+    <string name="cancel">Annuler</string>
+
+    <string name="video_front_title">Repère la vue de face</string>
+    <string name="video_front_message">À quel moment le personnage regarde-t-il le plus directement la caméra ? L’application prendra quatre vues régulièrement espacées.</string>
+    <string name="video_front_start">Au début</string>
+    <string name="video_front_quarter">Vers un quart</string>
+    <string name="video_front_middle">Vers le milieu</string>
+    <string name="video_front_three_quarters">Vers les trois quarts</string>
+    <string name="video_direction_title">Sens de la rotation</string>
+    <string name="video_direction_message">Après cette vue de face, quel profil arrive ensuite pendant la rotation ?</string>
+    <string name="video_left_profile">Profil gauche</string>
+    <string name="video_right_profile">Profil droit</string>
+    <string name="selection_order">Pour plusieurs images : face, gauche, dos, droite. Une planche unique est aussi détectée automatiquement.</string>
+
+    <string name="cloud_viewer_loading">Chargement du GLB mobile…</string>
+    <string name="cloud_viewer_ready">GLB mobile prêt — glisse pour tourner et pince pour zoomer.</string>
+    <string name="cloud_viewer_label">GLB mobile %1$.1f Ko — glisse pour tourner</string>
+    <string name="cloud_viewer_error">Aperçu impossible : %1$s</string>
+
+    <string name="error_too_many_images">Choisis quatre images au maximum.</string>
+    <string name="error_cloud_generation">La génération cloud a échoué. Le mode local reste disponible.</string>
+    <string name="error_cloud_generation_details">Échec cloud : %1$s</string>
+    <string name="error_cloud_preview">Le GLB a été téléchargé, mais son aperçu n’a pas pu être ouvert.</string>
     <string name="error_image">Impossible de lire cette image.</string>
-    <string name="error_generation">La reconstruction V4.2 a échoué. Le détail est affiché ci-dessous.</string>
+    <string name="error_generation">La reconstruction locale a échoué.</string>
+    <string name="error_generation_details">Échec local : %1$s</string>
     <string name="error_export">L’export GLB a échoué.</string>
+    <string name="error_export_details">Échec de l’export : %1$s</string>
 </resources>

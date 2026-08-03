@@ -13,3 +13,9 @@ captures/
 .build-cacerts-*
 /app/src/main/assets/models/*.onnx
 /app/src/main/assets/models/*.onnx.part
+*.apk
+*.aab
+*.glb
+*.gltf
+*.bin
+/exports/

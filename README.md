@@ -1,79 +1,93 @@
-# Modéliseur 3D V4.2 Neural — Android local
+# Modéliseur 3D V4.3 — vidéo 360°, multivue et GLB mobile
 
-Application Android Java pour une **image unique** ou une **planche de rotation multivue** d'un personnage, animal, monstre ou objet détourable.
+Application Android Java qui transforme une image, une planche, deux à quatre
+vues ou une vidéo de rotation déjà découpée en GLB texturé.
 
-La V4 ajoute un véritable réseau neuronal embarqué à la reconstruction géométrique. L’image reste sur le téléphone.
+La V4.3 propose deux moteurs :
 
-## Moteur V4
+- **haute fidélité en ligne** avec Tripo H3.1 ;
+- **secours local V4.2** avec IS-Net Anime, Depth Anything V2 et la
+  reconstruction géométrique Android existante.
 
-Le pipeline est hybride afin de rester utilisable sur Android :
+## Vidéo 360° vers GLB
 
-1. lecture de l'image jusqu’à 2048 px ;
-2. détourage neuronal puis regroupement des morceaux appartenant au même sujet ;
-3. distinction automatique entre image unique et vraies vues face/dos/profil ;
-4. volume monoculaire arrondi ou enveloppe 3D multivue selon l'entrée ;
-5. préservation des membres, pattes et accessoires séparés ;
-6. extraction d’une surface triangulée lisse ;
-7. création d'un atlas face, dos et profil synthétique ou réel ;
-8. une à trois inférences utiles avec **Depth Anything V2 Small FP32** ;
-9. fusion bornée du relief puis recalcul des normales ;
-10. affichage OpenGL ES 3 et export GLB 2.0, OBJ, MTL et PNG.
+Le MP4 sélectionné reste sur le téléphone. L’application :
 
-## Intelligence artificielle embarquée
+1. prélève quatre zones régulièrement espacées autour de 0, 25, 50 et 75 % ;
+2. compare cinq trames dans chaque zone et conserve la plus nette ;
+3. demande où se trouve la face et quel profil arrive ensuite ;
+4. détoure, centre et prépare les quatre vues ;
+5. envoie uniquement ces images JPEG préparées à Tripo ;
+6. télécharge immédiatement le GLB H3.1 texturé.
 
-Segmentation :
+Le clip doit contenir un seul sujet, une pose stable et une rotation complète.
+La durée acceptée est comprise entre 1,2 seconde et 2 minutes. Une vidéo 1080p
+sur fond propre donne de meilleurs résultats qu’un enregistrement compressé.
 
-- modèle : IS-Net Anime FP32 (176 068 431 octets) ;
-- graphe FP32 sans `ConvInteger` ;
-- exécution CPU pure, sans NNAPI ;
-- entrée RGB 1024 × 1024 dans l'intervalle `[0, 1]`, avec conservation du ratio et fond noir ;
-- arrière-plan du masque rendu transparent avant la détection des vues.
+## Génération cloud
 
-Relief :
+Le moteur utilise les API Tripo v3 :
 
-- Modèle : Depth Anything V2 Small FP32 ;
-- taille du modèle : environ 99 Mo ;
-- licence du modèle Small : Apache-2.0 ;
-- runtime : ONNX Runtime Android 1.20.0, licence MIT ;
-- version du runtime choisie pour conserver `minSdkVersion 21` ;
-- accélération : NNAPI quand Android et le modèle le permettent, uniquement pour Depth Anything V2 ;
-- repli : CPU multi-cœurs avec optimisations ONNX ;
-- entrée du réseau : 518 × 518, normalisation ImageNet ;
-- aucune API distante et aucun serveur.
+- modèle `v3.1-20260211` ;
+- géométrie et textures détaillées, PBR activé ;
+- jusqu’à 100 000 faces pour le GLB haute définition ;
+- multivue nommée `front`, `left`, `back`, `right` ;
+- téléchargement HTTPS borné à 350 Mo et validation de l’en-tête GLB 2.0.
 
-Les deux modèles sont téléchargés pendant la compilation, vérifiés par SHA-256 puis inclus dans les assets de l’APK. Au premier lancement, ils sont copiés dans le stockage privé de l’application pour permettre un chargement efficace par ONNX Runtime.
+Une clé API personnelle est nécessaire. Elle n’est jamais inscrite dans le
+code, le dépôt ou l’APK. Sur Android 6 et plus, elle est chiffrée par AES-GCM
+avec une clé non exportable de l’Android Keystore. Sur Android 5, elle reste
+uniquement en mémoire jusqu’à la fermeture de l’application.
 
-## Puissance du téléphone
+L’API peut consommer des crédits Tripo. La V4.3 affiche le total déclaré par les
+tâches de génération et de conversion.
 
-La V4 utilise deux niveaux de calcul :
+## Deux GLB complémentaires
 
-- le moteur géométrique répartit la création du volume et du maillage sur plusieurs cœurs ;
-- ONNX Runtime utilise NNAPI ou le CPU optimisé pour les trois inférences neuronales.
+Chaque génération réussie conserve :
 
-Résolution géométrique adaptative :
+- `personnage_v43_h31_hd.glb` : original haute définition, non simplifié ;
+- `personnage_v43_mobile_200ko.glb` : copie destinée au jeu, au plus
+  **200 000 octets**.
 
-- Ultra propre : 112 × 224 × 84 voxels ;
-- Haute précision : 96 × 192 × 72 ;
-- Équilibrée : 80 × 160 × 60 ;
-- Compatible : 64 × 128 × 48.
+La copie mobile est créée par simplification adaptative. L’application essaie
+successivement des budgets de 1 600, 900, 450 puis 180 faces et des textures
+JPEG de 256 ou 128 px. Chaque résultat est téléchargé et validé ; il n’est
+accepté que si sa taille réelle est inférieure ou égale à 200 000 octets.
 
-La V4 est actuellement compilée pour `arm64-v8a`, adapté aux téléphones Android modernes 64 bits et permettant de ne pas multiplier inutilement la taille des bibliothèques natives.
+Une limite aussi basse ne peut pas être obtenue sans perte sur un modèle 3D
+détaillé. La qualité intégrale reste donc disponible dans le GLB HD, tandis que
+la copie mobile minimise la perte sous la contrainte de taille.
 
-## Gestes
+L’aperçu mobile repose sur Google Filament et accepte la compression géométrique
+meshopt produite par Tripo.
 
-- glisser avec un doigt : rotation 360° ;
-- pincer avec deux doigts : zoom ;
-- double appui ou bouton Recentrer : vue initiale.
+## Mode local V4.2
 
-## Exports
+Le bouton de secours hors connexion conserve le pipeline déjà validé :
 
-- `personnage_v4_neural.glb` ;
-- `personnage_v4_neural.obj` ;
-- `personnage_v4_neural.mtl` ;
-- `texture_multivue_v4.png` ;
-- `informations.txt`.
+- IS-Net Anime FP32 sur CPU, sans l’opérateur `ConvInteger` ;
+- regroupement des morceaux d’une même silhouette ;
+- enveloppe multivue ou volume monoculaire arrondi ;
+- Depth Anything V2 Small avec NNAPI quand il est disponible ;
+- export GLB 2.0, OBJ, MTL et texture PNG.
 
-Le GLB contient la géométrie, les normales, les UV et la texture intégrée. Il est importable dans Godot, Blender et Unity.
+Les deux modèles ONNX sont téléchargés pendant le build, vérifiés par SHA-256
+et intégrés à l’APK :
+
+```text
+afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
+6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
+```
+
+## Confidentialité
+
+- mode cloud : les images choisies ou les quatre trames extraites sont envoyées
+  à Tripo pour exécuter la génération ; le MP4 complet n’est pas envoyé ;
+- mode local : aucune image n’est envoyée ;
+- les fichiers GLB sont stockés dans le dossier privé Documents de
+  l’application puis partagés uniquement à la demande de l’utilisateur ;
+- Android refuse le trafic HTTP non chiffré.
 
 ## Compilation
 
@@ -82,47 +96,19 @@ chmod +x gradlew
 ./gradlew --no-daemon clean lintDebug assembleDebug
 ```
 
-Le premier build télécharge automatiquement les modèles neuronaux et vérifie leurs SHA-256 :
-
-```text
-afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
-6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
-```
-
 APK généré :
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4.2-Neural-debug`.
-
-## Structure principale
-
-```text
-app/src/main/java/com/chasmet/modeliseur3d/
-├── MainActivity.java
-├── gl/
-│   ├── ModelGLSurfaceView.java
-│   └── ModelRenderer.java
-├── model/
-│   ├── GlbExporter.java
-│   ├── ImageToMeshGenerator.java
-│   ├── AnimeSegmentationEngine.java
-│   ├── MeshData.java
-│   ├── NeuralDepthEngine.java
-│   ├── NeuralReconstructionEngine.java
-│   ├── ViewCandidateGrouper.java
-│   ├── ObjExporter.java
-│   └── SmoothHullMesher.java
-└── util/
-    └── BitmapUtils.java
-```
+Le workflow `.github/workflows/android.yml` exécute les tests purs Java, le lint
+Android et la compilation, puis publie l’artefact
+`Modeliseur3D-V4.3-Video-Cloud-debug`.
 
 ## Limites réelles
 
-Cette V4 utilise bien deux réseaux neuronaux, mais elle ne prétend pas exécuter sur téléphone un grand modèle génératif 3D de plusieurs milliards de paramètres. Elle combine un détourage anime, une enveloppe multivue et une profondeur neuronale détaillée.
-
-La V4.2 ne réutilise plus une vue de face comme faux profil. Avec une image unique, l'épaisseur dépend de la distance au bord : les membres restent plus fins et le corps gagne un volume progressif. Avec une planche, les morceaux proches sont d'abord regroupés puis seules les vraies silhouettes sont comparées.
-
-Les zones absentes de toutes les vues restent estimées. Les espaces très fins entre les doigts, l’intérieur des vêtements et les éléments cachés ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est encore généré.
+Une vidéo dont le personnage change de pose ou de forme entre les angles ne peut
+pas produire une géométrie parfaitement cohérente. Les objets transparents,
+réfléchissants ou fortement occultés restent difficiles. La qualité dépend aussi
+du service Tripo, du nombre de crédits disponibles et de la connexion réseau.

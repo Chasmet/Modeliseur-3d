@@ -129,8 +129,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 8
-        versionName '4.2.0'
+        versionCode 9
+        versionName '4.3.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -179,5 +179,7 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
+    implementation 'com.google.android.filament:filament-utils-android:1.74.1'
+    implementation 'com.google.android.filament:gltfio-android:1.74.1'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }

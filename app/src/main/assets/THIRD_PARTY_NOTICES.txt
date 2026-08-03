@@ -1,4 +1,4 @@
-MODÉLISEUR 3D V4.2 NEURAL — COMPOSANTS OPEN SOURCE
+MODÉLISEUR 3D V4.3 — COMPOSANTS ET SERVICES
 
 1. IS-Net Anime / Anime Segmentation
 Projet d'origine : SkyTNT/anime-segmentation
@@ -6,26 +6,47 @@ Modèle embarqué : variante ONNX FP32 publiée par onnx-community/anime-seg-ONN
 Taille du modèle embarqué : 176 068 431 octets
 Licence du projet et du modèle d'origine : Apache License 2.0
 
-Le réseau est utilisé localement pour détourer les personnages dessinés. La variante FP32 remplace la variante INT8 dont l'opérateur ConvInteger n'était pas disponible sur certains téléphones Android.
+Le réseau est utilisé localement pour détourer les personnages dessinés. La
+variante FP32 remplace la variante INT8 dont l'opérateur ConvInteger n'était pas
+disponible sur certains téléphones Android.
 
 2. Depth Anything V2 Small
 Projet : DepthAnything/Depth-Anything-V2
 Modèle embarqué : Depth Anything V2 Small FP32
 Licence du modèle Small : Apache License 2.0
 Copyright : auteurs et contributeurs de Depth Anything V2
-Article : Depth Anything V2: A More Capable Foundation Model for Monocular Depth Estimation
 
-Le modèle est utilisé localement pour estimer les cartes de profondeur utiles après la reconstruction géométrique. Si le téléphone ne peut pas charger ce réseau, la V4.2 conserve automatiquement le maillage géométrique lissé.
+Le modèle est utilisé dans le mode de reconstruction locale pour estimer le
+relief. Si le téléphone ne peut pas le charger, le maillage géométrique lissé
+reste disponible.
 
 3. ONNX Runtime Android
 Projet : microsoft/onnxruntime
 Licence : MIT License
 Copyright (c) Microsoft Corporation et contributeurs
 
-ONNX Runtime exécute les réseaux sur Android. IS-Net Anime FP32 utilise exclusivement le CPU multi-cœurs pour maximiser la compatibilité. Depth Anything V2 peut demander NNAPI quand l'appareil le permet. Les sessions sont chargées l'une après l'autre pour limiter le pic de mémoire.
+ONNX Runtime exécute les réseaux locaux. IS-Net Anime FP32 utilise le CPU ;
+Depth Anything V2 peut demander NNAPI quand l'appareil le permet.
 
-4. AndroidX
+4. Google Filament
+Projet : google/filament
+Licence : Apache License 2.0
+Copyright (c) Google LLC et contributeurs
+
+Filament et gltfio affichent les GLB PBR et décodent notamment la compression
+géométrique meshopt dans l'aperçu V4.3.
+
+5. AndroidX
 Projets : Android Open Source Project et AndroidX
 Licences : Apache License 2.0 selon chaque composant
 
-Aucune image utilisateur n'est envoyée vers un serveur. Les textes de licence et les avis des bibliothèques empaquetées restent également présents dans leurs distributions originales.
+6. Service Tripo 3D
+API : https://developers.tripo3d.ai/
+
+Tripo n'est pas embarqué dans l'APK. En mode haute fidélité, les images choisies
+ou les quatre trames extraites d'une vidéo sont envoyées au service par HTTPS.
+Le MP4 complet n'est pas envoyé. La clé API appartient à l'utilisateur et n'est
+jamais codée dans l'application. Le mode local n'envoie aucune image.
+
+Les textes de licence et les avis fournis par les bibliothèques empaquetées
+restent présents dans leurs distributions originales.
