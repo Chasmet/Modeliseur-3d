@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 2.5D V5.1</string>
-    <string name="title">Modéliseur 2.5D V5.1 — Face + Dos</string>
-    <string name="subtitle">Importe une image de face et une image de dos pour obtenir un relief 2.5D plus réaliste. Le bouton Rotation effectue un tour complet à 360° et le sens manuel a été corrigé. Export GLB compatible Godot, Unity et Blender.</string>
+    <string name="app_name">Modéliseur 2.5D V5.2</string>
+    <string name="title">Modéliseur 2.5D V5.2 — Face + Dos réel</string>
+    <string name="subtitle">Importe une image de face et une image de dos. La V5.2 aligne les deux silhouettes, garde les vraies textures avant et arrière, reconstruit les côtés depuis les bords réels et corrige définitivement le personnage affiché à l’envers.</string>
 
     <string name="select_image">Choisir une image</string>
     <string name="select_front">Image face</string>
@@ -18,13 +18,13 @@
     <string name="export_obj">Exporter GLB</string>
 
     <string name="empty_message">Le personnage 2.5D apparaîtra ici.\nSélectionne la face, puis le dos, et appuie sur Générer Face + Dos.</string>
-    <string name="status_ready">Prêt — moteur 2.5D V5.1 Face + Dos.</string>
-    <string name="status_ready_profile">Prêt — moteur 2.5D Face + Dos • %1$s</string>
-    <string name="status_front_selected">Image de face sélectionnée. Ajoute le dos pour un résultat plus réaliste, ou génère avec la face seule.</string>
+    <string name="status_ready">Prêt — moteur 2.5D V5.2 Face + Dos réel.</string>
+    <string name="status_ready_profile">Prêt — moteur Face + Dos V5.2 • %1$s</string>
+    <string name="status_front_selected">Image de face sélectionnée. Ajoute le dos pour un meilleur résultat.</string>
     <string name="status_back_selected_first">Image de dos sélectionnée. Sélectionne maintenant l’image de face.</string>
     <string name="status_front_back_selected">Face et dos sélectionnés. Appuie sur Générer Face + Dos.</string>
     <string name="status_loading">Lecture de l’image et préparation du relief 2.5D…</string>
-    <string name="status_loading_pair">Lecture des images face et dos…</string>
+    <string name="status_loading_pair">Lecture et alignement des vraies images face et dos…</string>
     <string name="status_generating_front">Détourage et création de la face 2.5D…</string>
     <string name="status_generating_back">Détourage et intégration du vrai dos…</string>
     <string name="status_copying_video">Copie sécurisée de la vidéo dans le cache privé…</string>
@@ -32,8 +32,11 @@
     <string name="status_extracting_video_progress">Décodage de la vue vidéo %1$d/%2$d…</string>
     <string name="status_25d_segmenting">Détourage du personnage %1$d/%2$d…</string>
     <string name="status_25d_aligning">Sélection des vues avant, arrière, gauche et droite…</string>
+    <string name="status_25d_aligning_v52">Alignement précis des silhouettes face et dos…</string>
     <string name="status_25d_meshing">Création de la face, du dos et de l’épaisseur 2.5D…</string>
+    <string name="status_25d_meshing_v52">Création du nouveau volume Face/Dos plus épais et plus stable…</string>
     <string name="status_25d_texturing">Création de l’atlas transparent avant–arrière–profils…</string>
+    <string name="status_25d_texturing_v52">Création des vraies textures face, dos et côtés calculés depuis les bords…</string>
     <string name="status_loading_video_engine">Préparation du moteur vidéo 2.5D…</string>
     <string name="status_video_segmenting">Détourage de la vue %1$d/%2$d…</string>
     <string name="status_video_hull">Calcul du relief 2.5D…</string>
@@ -46,11 +49,11 @@
     <string name="status_generating_image_v46">Détourage et création du relief 2.5D…</string>
     <string name="status_generating_image_v47">Détourage et création du relief 2.5D…</string>
 
-    <string name="status_done">Personnage image 2.5D prêt.</string>
-    <string name="status_done_video">Personnage vidéo 2.5D prêt.</string>
-    <string name="status_done_pair">Personnage Face + Dos 2.5D prêt.</string>
-    <string name="quality_front_back">Face + Dos réels 2.5D</string>
-    <string name="backend_front_back">Deux détourages IS-Net • vraie texture avant • vraie texture arrière • côtés fusionnés • rotation 360°</string>
+    <string name="status_done">Personnage image 2.5D V5.2 prêt.</string>
+    <string name="status_done_video">Personnage vidéo 2.5D V5.2 prêt.</string>
+    <string name="status_done_pair">Personnage Face + Dos V5.2 prêt.</string>
+    <string name="quality_front_back">Face + Dos réels V5.2</string>
+    <string name="backend_front_back">Deux détourages IS-Net • silhouette commune • vraies textures avant/arrière • profils depuis les bords • UV corrigés</string>
     <string name="status_done_25d_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • grille %5$d×%6$d • %7$d vue(s) source • %8$s • total %9$.1f s</string>
     <string name="status_done_details">%1$d personnage final • %2$d sujets détectés • %3$s • %4$d cœurs • %5$d triangles • %6$d sommets • grille %7$d×%8$d • %9$s • total %10$.1f s</string>
     <string name="status_done_video_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • %5$d couches • %6$s • total %7$.1f s</string>
@@ -58,7 +61,7 @@
     <string name="status_exporting">Création du GLB 2.5D HD puis de la copie mobile transparente à 1 000 000 octets maximum…</string>
     <string name="status_exported">GLB 2.5D HD et mobile créés.</string>
     <string name="status_exported_details">Export terminé • GLB mobile %1$.3f Mo • %2$d triangles • limite 1 Mo vérifiée.</string>
-    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.1</string>
+    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.2</string>
 
     <string name="error_select_front">Sélectionne d’abord une image de face.</string>
     <string name="error_image">Impossible de lire cette image.</string>
