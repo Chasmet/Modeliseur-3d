@@ -23,10 +23,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceViewV52;
-import com.chasmet.modeliseur3d.model.FaceBackAutoViewSynthesizer;
+import com.chasmet.modeliseur3d.model.FaceBack25DEngine;
 import com.chasmet.modeliseur3d.model.MeshData;
+import com.chasmet.modeliseur3d.model.MeshDepthScaler;
 import com.chasmet.modeliseur3d.model.ObjExporter;
-import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV48;
+import com.chasmet.modeliseur3d.model.Relief25DEngine;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
@@ -37,33 +38,38 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** V5.5 : reconstruction 3D assistée avec seulement une face et un dos. */
+/**
+ * V5.6 : volume Face + Dos stable.
+ *
+ * Le moteur n'invente plus six vues et n'utilise plus de texture cylindrique.
+ * Il conserve les deux textures réelles, crée des côtés depuis leurs bords et
+ * ajuste seulement la profondeur du maillage déjà stable du mode Face/Dos.
+ */
 public final class Manual3DActivity extends AppCompatActivity {
-    private static final String TAG = "Modeliseur3DAutoV55";
-    private static final int REQUEST_FRONT = 5501;
-    private static final int REQUEST_BACK = 5502;
-    private static final int MAXIMUM_DECODE_SIDE = 1280;
+    private static final String TAG = "ModeliseurVolumeV56";
+    private static final int REQUEST_FRONT = 5601;
+    private static final int REQUEST_BACK = 5602;
+    private static final int MAXIMUM_DECODE_SIDE = 1600;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
     private DevicePerformanceProfile performanceProfile;
     private ProcessingPowerLock processingPowerLock;
-    private FaceBackAutoViewSynthesizer synthesizer;
-    private VideoReconstructionEngineV48 reconstructionEngine;
+    private FaceBack25DEngine faceBackEngine;
     private ModelGLSurfaceViewV52 viewer;
 
     private ScrollView capturePanel;
     private View viewerPanel;
-    private ProgressBar progressBar;
-    private TextView statusText;
+    private ImageView frontPreview;
+    private ImageView backPreview;
     private TextView frontLabel;
     private TextView backLabel;
     private TextView depthValueText;
-    private ImageView frontPreview;
-    private ImageView backPreview;
+    private TextView statusText;
+    private ProgressBar progressBar;
     private SeekBar depthSeekBar;
-    private Button generateButton;
     private Button clearButton;
+    private Button generateButton;
     private Button editButton;
     private Button resetButton;
     private Button rotationButton;
@@ -71,8 +77,6 @@ public final class Manual3DActivity extends AppCompatActivity {
 
     private Uri frontUri;
     private Uri backUri;
-    private Bitmap frontPreviewBitmap;
-    private Bitmap backPreviewBitmap;
     private MeshData currentMesh;
     private Bitmap currentTexture;
     private boolean busy;
@@ -85,16 +89,16 @@ public final class Manual3DActivity extends AppCompatActivity {
         performanceProfile = DevicePerformanceProfile.detect(this);
         capturePanel = findViewById(R.id.capturePanel);
         viewerPanel = findViewById(R.id.viewer3dPanel);
-        progressBar = findViewById(R.id.manualProgressBar);
-        statusText = findViewById(R.id.manualStatusText);
+        frontPreview = findViewById(R.id.frontPreview);
+        backPreview = findViewById(R.id.backPreview);
         frontLabel = findViewById(R.id.frontLabel);
         backLabel = findViewById(R.id.backLabel);
         depthValueText = findViewById(R.id.depthValueText);
-        frontPreview = findViewById(R.id.frontPreview);
-        backPreview = findViewById(R.id.backPreview);
+        statusText = findViewById(R.id.manualStatusText);
+        progressBar = findViewById(R.id.manualProgressBar);
         depthSeekBar = findViewById(R.id.depthSeekBar);
-        generateButton = findViewById(R.id.generate3dButton);
         clearButton = findViewById(R.id.clearViewsButton);
+        generateButton = findViewById(R.id.generate3dButton);
         editButton = findViewById(R.id.editViewsButton);
         resetButton = findViewById(R.id.reset3dButton);
         rotationButton = findViewById(R.id.rotation3dButton);
@@ -110,20 +114,23 @@ public final class Manual3DActivity extends AppCompatActivity {
 
         findViewById(R.id.frontCard).setOnClickListener(view -> chooseImage(true));
         findViewById(R.id.backCard).setOnClickListener(view -> chooseImage(false));
-        generateButton.setOnClickListener(view -> generateAutomaticModel());
-        clearButton.setOnClickListener(view -> clearInputs());
+        clearButton.setOnClickListener(view -> clearImages());
+        generateButton.setOnClickListener(view -> generateStableVolume());
         editButton.setOnClickListener(view -> showCapturePanel());
         resetButton.setOnClickListener(view -> {
             viewer.stopAutoRotation();
             viewer.resetView();
             rotationButton.setText(R.string.rotation_start);
         });
-        rotationButton.setOnClickListener(view -> toggleAutomaticRotation());
+        rotationButton.setOnClickListener(view -> toggleRotation());
         exportButton.setOnClickListener(view -> exportCurrentModel());
+
+        depthSeekBar.setMax(150);
+        depthSeekBar.setProgress(50);
         depthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateDepthText();
+                updateDepthLabel();
             }
 
             @Override
@@ -135,9 +142,9 @@ public final class Manual3DActivity extends AppCompatActivity {
             }
         });
 
-        updateDepthText();
-        updateInputState();
-        statusText.setText("Prêt — Face + Dos vers six vues automatiques • "
+        updateDepthLabel();
+        updateSelectionState();
+        statusText.setText("V5.6 prête — volume Face + Dos stable • "
                 + performanceProfile.describe());
     }
 
@@ -167,8 +174,8 @@ public final class Manual3DActivity extends AppCompatActivity {
             return;
         }
         Uri uri = data.getData();
-        String type = getContentResolver().getType(uri);
-        if (type != null && !type.startsWith("image/")) {
+        String mimeType = getContentResolver().getType(uri);
+        if (mimeType != null && !mimeType.startsWith("image/")) {
             Toast.makeText(this, "Le fichier choisi n’est pas une image.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -178,187 +185,176 @@ public final class Manual3DActivity extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
+            // Une permission temporaire reste suffisante avec certains fournisseurs.
         }
-        boolean front = requestCode == REQUEST_FRONT;
-        if (front) {
+
+        if (requestCode == REQUEST_FRONT) {
             frontUri = uri;
-        } else {
-            backUri = uri;
-        }
-        loadPreview(front, uri);
-    }
-
-    private void loadPreview(boolean front, Uri uri) {
-        setBusy(true, front ? "Lecture de la face…" : "Lecture du dos…");
-        worker.execute(() -> {
-            Bitmap bitmap = null;
-            try {
-                bitmap = BitmapUtils.decodeBitmapFromUri(
-                        getContentResolver(),
-                        uri,
-                        720
-                );
-                Bitmap finalBitmap = bitmap;
-                runOnUiThread(() -> {
-                    replacePreview(front, finalBitmap);
-                    setBusy(false, front
-                            ? "Face sélectionnée. Ajoute maintenant le dos."
-                            : "Dos sélectionné. Les deux images sont prêtes.");
-                    updateInputState();
-                });
-                bitmap = null;
-            } catch (Exception | OutOfMemoryError error) {
-                Bitmap failed = bitmap;
-                runOnUiThread(() -> {
-                    recycle(failed);
-                    if (front) {
-                        frontUri = null;
-                    } else {
-                        backUri = null;
-                    }
-                    setBusy(false, "Impossible de lire cette image : " + safeMessage(error));
-                    updateInputState();
-                });
-            }
-        });
-    }
-
-    private void replacePreview(boolean front, Bitmap bitmap) {
-        if (front) {
-            recycle(frontPreviewBitmap);
-            frontPreviewBitmap = bitmap;
-            frontPreview.setImageBitmap(bitmap);
+            frontPreview.setImageURI(uri);
             frontLabel.setText("FACE ✓ — Appuyer pour remplacer");
         } else {
-            recycle(backPreviewBitmap);
-            backPreviewBitmap = bitmap;
-            backPreview.setImageBitmap(bitmap);
+            backUri = uri;
+            backPreview.setImageURI(uri);
             backLabel.setText("DOS ✓ — Appuyer pour remplacer");
+        }
+        updateSelectionState();
+    }
+
+    private void updateSelectionState() {
+        boolean complete = frontUri != null && backUri != null;
+        generateButton.setEnabled(!busy && complete);
+        if (!busy) {
+            if (complete) {
+                statusText.setText("Face et dos prêts. Le moteur gardera leurs textures réelles.");
+            } else if (frontUri != null) {
+                statusText.setText("Face sélectionnée. Ajoute maintenant le dos.");
+            } else if (backUri != null) {
+                statusText.setText("Dos sélectionné. Ajoute maintenant la face.");
+            } else {
+                statusText.setText("Sélectionne une image de face et une image de dos.");
+            }
         }
     }
 
-    private void updateInputState() {
-        generateButton.setEnabled(!busy && frontUri != null && backUri != null);
-        clearButton.setEnabled(!busy && (frontUri != null || backUri != null));
+    private void clearImages() {
+        if (busy) {
+            return;
+        }
+        frontUri = null;
+        backUri = null;
+        frontPreview.setImageDrawable(null);
+        backPreview.setImageDrawable(null);
+        frontLabel.setText("FACE — Appuyer pour choisir");
+        backLabel.setText("DOS — Appuyer pour choisir");
+        updateSelectionState();
     }
 
-    private void updateDepthText() {
-        int progress = depthSeekBar.getProgress();
-        int percent = 80 + Math.round(progress * 0.4f);
-        String label = percent < 94 ? "Fin" : (percent > 108 ? "Large" : "Normal");
+    private float getDepthMultiplier() {
+        return 0.50f + depthSeekBar.getProgress() / 100.0f;
+    }
+
+    private void updateDepthLabel() {
+        int percent = Math.round(getDepthMultiplier() * 100.0f);
+        String label;
+        if (percent < 85) {
+            label = "Fin";
+        } else if (percent <= 125) {
+            label = "Normal";
+        } else {
+            label = "Large";
+        }
         depthValueText.setText(label + " — " + percent + " %");
     }
 
-    private float depthMultiplier() {
-        return 0.80f + depthSeekBar.getProgress() * 0.004f;
-    }
-
-    private void generateAutomaticModel() {
+    private void generateStableVolume() {
         if (frontUri == null || backUri == null) {
-            Toast.makeText(this, "Ajoute obligatoirement la face et le dos.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "La face et le dos sont obligatoires.", Toast.LENGTH_LONG).show();
             return;
         }
-        setBusy(true, "Préparation des deux vraies images…");
+        setBusy(true, "Lecture des deux vraies images…");
         viewer.stopAutoRotation();
         rotationButton.setText(R.string.rotation_start);
+
+        Uri selectedFront = frontUri;
+        Uri selectedBack = backUri;
+        float depthMultiplier = getDepthMultiplier();
 
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
             Bitmap front = null;
             Bitmap back = null;
-            List<Bitmap> generatedViews = null;
             try {
                 int maximumSide = Math.min(
                         MAXIMUM_DECODE_SIDE,
                         performanceProfile.getMaximumInputSide()
                 );
                 front = BitmapUtils.decodeBitmapFromUri(
-                        getContentResolver(), frontUri, maximumSide
+                        getContentResolver(),
+                        selectedFront,
+                        maximumSide
                 );
                 back = BitmapUtils.decodeBitmapFromUri(
-                        getContentResolver(), backUri, maximumSide
+                        getContentResolver(),
+                        selectedBack,
+                        maximumSide
                 );
-                if (synthesizer == null) {
-                    synthesizer = new FaceBackAutoViewSynthesizer(
+                if (faceBackEngine == null) {
+                    faceBackEngine = new FaceBack25DEngine(
                             getApplicationContext(),
                             performanceProfile
                     );
                 }
-                FaceBackAutoViewSynthesizer.Result synthesized = synthesizer.synthesize(
+                Relief25DEngine.Result result = faceBackEngine.generate(
                         front,
                         back,
-                        depthMultiplier(),
-                        (current, total, message) -> postStatus(message)
+                        this::postFaceBackProgress
                 );
-                generatedViews = synthesized.getViews();
-                postStatus("Reconstruction du volume à partir des huit vues cohérentes…");
-                if (reconstructionEngine == null) {
-                    reconstructionEngine = new VideoReconstructionEngineV48(
-                            getApplicationContext(),
-                            performanceProfile
-                    );
-                }
-                VideoReconstructionEngineV48.Result result = reconstructionEngine.generate(
-                        generatedViews,
-                        FaceBackAutoViewSynthesizer.VIEW_COUNT,
-                        this::postReconstructionProgress
+                MeshData scaled = MeshDepthScaler.scaleDepth(
+                        result.getMesh(),
+                        depthMultiplier
                 );
-                showResult(result, synthesized.getBackend());
+                showResult(result, scaled, depthMultiplier);
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, "La génération 3D Face + Dos a échoué.", true);
+                handleFailure(error, "La création du volume Face + Dos a échoué.");
             } finally {
                 recycle(front);
                 recycle(back);
-                recycleBitmaps(generatedViews);
             }
         });
     }
 
-    private void postReconstructionProgress(
-            VideoReconstructionEngineV48.Stage stage,
+    private void postFaceBackProgress(
+            Relief25DEngine.Stage stage,
             int current,
             int total
     ) {
+        String message;
         switch (stage) {
             case SEGMENTING:
-                postStatus("Contrôle de la vue automatique " + current + "/" + total + "…");
+                message = "Détourage réel Face/Dos " + current + "/" + total + "…";
                 break;
-            case BUILDING_HULL:
-                postStatus("Calcul du volume 360° stable…");
+            case ALIGNING:
+                message = "Alignement de la tête, du corps et des pieds…";
+                break;
+            case TEXTURING:
+                message = "Conservation des textures avant, arrière et des bords…";
                 break;
             case MESHING:
-                postStatus("Création du maillage fermé…");
-                break;
-            case DEPTH:
             default:
-                postStatus("Application des textures face, dos et transitions…");
+                message = "Création du volume fermé sans six fausses vues…";
                 break;
         }
+        postStatus(message);
     }
 
     private void showResult(
-            VideoReconstructionEngineV48.Result result,
-            String synthesisBackend
+            Relief25DEngine.Result result,
+            MeshData scaledMesh,
+            float depthMultiplier
     ) {
         runOnUiThread(() -> {
-            Bitmap previous = currentTexture;
-            currentMesh = result.getMesh();
+            Bitmap previousTexture = currentTexture;
+            currentMesh = scaledMesh;
             currentTexture = result.getTexture();
             viewer.setModel(currentMesh, currentTexture);
             viewer.resetView();
             viewer.setVisibility(View.VISIBLE);
-            if (previous != null && previous != currentTexture && !previous.isRecycled()) {
-                previous.recycle();
+            if (previousTexture != null
+                    && previousTexture != currentTexture
+                    && !previousTexture.isRecycled()) {
+                previousTexture.recycle();
             }
-            setBusy(false, "Modèle 3D V5.5 prêt.");
             capturePanel.setVisibility(View.GONE);
             viewerPanel.setVisibility(View.VISIBLE);
+            setBusy(false, "Volume Face + Dos V5.6 prêt.");
             statusText.setText(
-                    "V5.5 Face + Dos • 6 vues automatiques • "
+                    "V5.6 Volume Face + Dos stable • "
                             + currentMesh.getTriangleCount() + " triangles • "
-                            + currentMesh.getVertexCount() + " sommets • "
-                            + String.format(java.util.Locale.FRANCE, "%.1f s", result.getTotalDurationMs() / 1000.0)
-                            + " • " + synthesisBackend
+                            + currentMesh.getVertexCount() + " sommets • profondeur "
+                            + Math.round(depthMultiplier * 100.0f) + "% • "
+                            + result.getProcessorCount() + " cœurs • total "
+                            + String.format(java.util.Locale.FRANCE, "%.1f s",
+                            result.getTotalDurationMs() / 1000.0)
             );
         });
     }
@@ -371,35 +367,44 @@ public final class Manual3DActivity extends AppCompatActivity {
         rotationButton.setText(R.string.rotation_start);
         viewerPanel.setVisibility(View.GONE);
         capturePanel.setVisibility(View.VISIBLE);
-        statusText.setText("Modifie la face, le dos ou l’épaisseur puis relance la génération.");
+        statusText.setText("Modifie la face, le dos ou la profondeur puis régénère.");
     }
 
-    private void toggleAutomaticRotation() {
+    private void toggleRotation() {
         boolean running = viewer.toggleAutoRotation();
-        rotationButton.setText(running ? R.string.rotation_stop : R.string.rotation_start);
+        rotationButton.setText(running
+                ? R.string.rotation_stop
+                : R.string.rotation_start);
     }
 
     private void exportCurrentModel() {
-        if (currentMesh == null || currentTexture == null || busy) {
+        MeshData mesh = currentMesh;
+        Bitmap texture = currentTexture;
+        if (mesh == null || texture == null || busy) {
             return;
         }
         setBusy(true, "Création du GLB HD et de la copie mobile 200 ko…");
         worker.execute(() -> {
+            ProcessingPowerLock.favorCurrentThread();
             try {
                 ObjExporter.ExportResult result = ObjExporter.export(
                         this,
-                        currentMesh,
-                        currentTexture
+                        mesh,
+                        texture
                 );
                 runOnUiThread(() -> {
                     setBusy(false, "Export GLB terminé.");
-                    statusText.setText("GLB mobile : "
-                            + result.getMobileSizeBytes() + " octets • "
-                            + result.getMobileTriangleCount() + " triangles");
+                    statusText.setText(
+                            "GLB mobile "
+                                    + String.format(java.util.Locale.FRANCE, "%.3f Mo",
+                                    result.getMobileSizeBytes() / 1_000_000.0)
+                                    + " • " + result.getMobileTriangleCount()
+                                    + " triangles • limite 200 ko vérifiée."
+                    );
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, "L’export GLB a échoué.", false);
+                handleFailure(error, "L’export GLB a échoué.");
             }
         });
     }
@@ -410,57 +415,60 @@ public final class Manual3DActivity extends AppCompatActivity {
         for (File file : result.getFiles()) {
             uris.add(FileProvider.getUriForFile(this, authority, file));
         }
+        if (uris.isEmpty()) {
+            return;
+        }
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V5.5 Face + Dos");
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle V5.6 Face + Dos stable");
+        share.putExtra(Intent.EXTRA_TEXT,
+                "GLB créé localement dans : "
+                        + result.getDirectory().getAbsolutePath());
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        if (!uris.isEmpty()) {
-            ClipData clip = ClipData.newRawUri("Modèle 3D V5.5", uris.get(0));
-            for (int index = 1; index < uris.size(); index++) {
-                clip.addItem(new ClipData.Item(uris.get(index)));
-            }
-            share.setClipData(clip);
+        ClipData clipData = ClipData.newRawUri("Modèle V5.6", uris.get(0));
+        for (int index = 1; index < uris.size(); index++) {
+            clipData.addItem(new ClipData.Item(uris.get(index)));
         }
-        startActivity(Intent.createChooser(share, "Partager ou enregistrer le modèle 3D"));
+        share.setClipData(clipData);
+        startActivity(Intent.createChooser(share, "Partager ou enregistrer le GLB"));
     }
 
-    private void clearInputs() {
-        if (busy) {
-            return;
-        }
-        frontUri = null;
-        backUri = null;
-        frontPreview.setImageDrawable(null);
-        backPreview.setImageDrawable(null);
-        recycle(frontPreviewBitmap);
-        recycle(backPreviewBitmap);
-        frontPreviewBitmap = null;
-        backPreviewBitmap = null;
-        frontLabel.setText("FACE — Appuyer pour choisir");
-        backLabel.setText("DOS — Appuyer pour choisir");
-        updateInputState();
-        statusText.setText("Sélectionne la face et le dos.");
+    private void handleFailure(Throwable error, String prefix) {
+        Log.e(TAG, prefix, error);
+        String message = prefix + " " + safeMessage(error);
+        Runtime.getRuntime().gc();
+        runOnUiThread(() -> {
+            setBusy(false, message);
+            capturePanel.setVisibility(View.VISIBLE);
+            viewerPanel.setVisibility(View.GONE);
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        });
     }
 
     private void setBusy(boolean value, String message) {
         busy = value;
-        progressBar.setVisibility(value ? View.VISIBLE : View.GONE);
-        generateButton.setEnabled(!value && frontUri != null && backUri != null);
-        clearButton.setEnabled(!value && (frontUri != null || backUri != null));
-        editButton.setEnabled(!value);
-        resetButton.setEnabled(!value && currentMesh != null);
-        rotationButton.setEnabled(!value && currentMesh != null);
-        exportButton.setEnabled(!value && currentMesh != null);
-        depthSeekBar.setEnabled(!value);
+        progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
+        clearButton.setEnabled(!busy);
+        generateButton.setEnabled(!busy && frontUri != null && backUri != null);
+        editButton.setEnabled(!busy);
+        resetButton.setEnabled(!busy && currentMesh != null);
+        rotationButton.setEnabled(!busy && currentMesh != null);
+        exportButton.setEnabled(!busy && currentMesh != null);
+        depthSeekBar.setEnabled(!busy);
+        findViewById(R.id.frontCard).setEnabled(!busy);
+        findViewById(R.id.backCard).setEnabled(!busy);
         statusText.setText(message);
-        configurePerformanceMode(value);
+        configurePerformanceMode(busy);
     }
 
     private void configurePerformanceMode(boolean enabled) {
         if (enabled) {
             if (processingPowerLock == null) {
-                processingPowerLock = ProcessingPowerLock.acquire(this, "face-back-auto-v55");
+                processingPowerLock = ProcessingPowerLock.acquire(
+                        this,
+                        "face-back-stable-volume-v56"
+                );
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
@@ -476,35 +484,13 @@ public final class Manual3DActivity extends AppCompatActivity {
             try {
                 getWindow().setSustainedPerformanceMode(enabled);
             } catch (RuntimeException ignored) {
+                // Certaines surcouches refusent ce mode.
             }
         }
-    }
-
-    private void handleFailure(Throwable error, String prefix, boolean showCapture) {
-        Log.e(TAG, prefix, error);
-        String message = prefix + " " + safeMessage(error);
-        runOnUiThread(() -> {
-            setBusy(false, message);
-            if (showCapture) {
-                capturePanel.setVisibility(View.VISIBLE);
-                viewerPanel.setVisibility(View.GONE);
-            }
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-        });
     }
 
     private void postStatus(String message) {
         runOnUiThread(() -> statusText.setText(message));
-    }
-
-    private static void recycleBitmaps(List<Bitmap> bitmaps) {
-        if (bitmaps == null) {
-            return;
-        }
-        for (Bitmap bitmap : bitmaps) {
-            recycle(bitmap);
-        }
-        bitmaps.clear();
     }
 
     private static void recycle(Bitmap bitmap) {
@@ -515,13 +501,27 @@ public final class Manual3DActivity extends AppCompatActivity {
 
     private static String safeMessage(Throwable error) {
         if (error instanceof OutOfMemoryError) {
-            return "Mémoire Android saturée : ferme les autres applications puis réessaie.";
+            return "(mémoire Android saturée ; ferme les autres applications puis réessaie)";
         }
-        String message = error.getMessage();
-        if (message == null || message.trim().isEmpty()) {
-            return error.getClass().getSimpleName();
+        Throwable current = error;
+        String message = null;
+        while (current != null) {
+            if (current.getMessage() != null
+                    && !current.getMessage().trim().isEmpty()) {
+                message = current.getMessage().trim();
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
         }
-        return message.length() > 180 ? message.substring(0, 177) + "…" : message;
+        if (message == null) {
+            return "(" + error.getClass().getSimpleName() + ")";
+        }
+        if (message.length() > 180) {
+            message = message.substring(0, 177) + "…";
+        }
+        return "(" + message + ")";
     }
 
     @Override
@@ -540,17 +540,12 @@ public final class Manual3DActivity extends AppCompatActivity {
     protected void onDestroy() {
         worker.shutdownNow();
         configurePerformanceMode(false);
-        if (synthesizer != null) {
-            synthesizer.close();
+        if (faceBackEngine != null) {
+            faceBackEngine.close();
         }
-        if (reconstructionEngine != null) {
-            reconstructionEngine.close();
+        if (currentTexture != null && !currentTexture.isRecycled()) {
+            currentTexture.recycle();
         }
-        frontPreview.setImageDrawable(null);
-        backPreview.setImageDrawable(null);
-        recycle(frontPreviewBitmap);
-        recycle(backPreviewBitmap);
-        recycle(currentTexture);
         super.onDestroy();
     }
 }
