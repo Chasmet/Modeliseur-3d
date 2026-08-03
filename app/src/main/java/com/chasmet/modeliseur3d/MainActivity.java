@@ -143,6 +143,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void generateImageModel(Uri imageUri) {
+        prepareForNewGeneration();
         setBusy(true, R.string.status_loading);
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
@@ -163,6 +164,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void generateVideoModel(Uri videoUri) {
+        prepareForNewGeneration();
         setBusy(true, R.string.status_copying_video);
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
@@ -270,11 +272,17 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void prepareForNewGeneration() {
+        viewer.setVisibility(View.INVISIBLE);
+        emptyText.setVisibility(View.VISIBLE);
+    }
+
     private void replaceCurrentModel(MeshData mesh, Bitmap texture) {
         Bitmap previousTexture = currentTexture;
         currentMesh = mesh;
         currentTexture = texture;
         viewer.setModel(mesh, texture);
+        viewer.setVisibility(View.VISIBLE);
         if (previousTexture != null
                 && previousTexture != texture
                 && !previousTexture.isRecycled()) {
@@ -286,11 +294,14 @@ public final class MainActivity extends AppCompatActivity {
             Throwable error,
             int messageResource
     ) {
-        Log.e(TAG, "Échec de reconstruction V4.7 locale", error);
+        Log.e(TAG, "Échec de reconstruction V4.8 mobile", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
             setBusy(false, messageResource);
+            boolean hasPreviousModel = currentMesh != null && currentTexture != null;
+            viewer.setVisibility(hasPreviousModel ? View.VISIBLE : View.INVISIBLE);
+            emptyText.setVisibility(hasPreviousModel ? View.GONE : View.VISIBLE);
             String message = getString(messageResource) + " " + details;
             statusText.setText(message);
             Toast.makeText(this, message, Toast.LENGTH_LONG).show();
@@ -322,7 +333,7 @@ public final class MainActivity extends AppCompatActivity {
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export V4.7", error);
+                Log.e(TAG, "Échec d'export V4.8", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -353,7 +364,7 @@ public final class MainActivity extends AppCompatActivity {
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Modèle 3D V4.7 Turbo local — GLB HD + GLB mobile 1 Mo"
+                "Modèle 3D V4.8 Multivue mobile — GLB HD + GLB mobile 1 Mo"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
@@ -365,7 +376,7 @@ public final class MainActivity extends AppCompatActivity {
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.7",
+                "Modèle 3D V4.8",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
