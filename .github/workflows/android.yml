@@ -93,7 +93,12 @@ jobs:
             com.chasmet.modeliseur3d.media.VideoViewPlanSelfTest
 
       - name: Compiler et vérifier la V4.3 hybride
-        run: ./gradlew --no-daemon clean lintDebug assembleDebug
+        run: |
+          ./gradlew --no-daemon clean lintDebug assembleDebug || {
+            find app/build/reports -name 'lint-results-debug.txt' \
+              -print -exec cat {} \; 2>/dev/null || true
+            exit 1
+          }
 
       - name: Vérifier la taille et le SHA-256 de l'APK
         run: |

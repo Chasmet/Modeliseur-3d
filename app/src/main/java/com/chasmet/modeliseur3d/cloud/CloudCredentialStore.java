@@ -7,6 +7,8 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
+import androidx.annotation.RequiresApi;
+
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 
@@ -129,6 +131,7 @@ public final class CloudCredentialStore {
                 .apply();
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private SecretKey getOrCreateSecretKey() throws Exception {
         KeyStore keyStore = KeyStore.getInstance(KEYSTORE);
         keyStore.load(null);
