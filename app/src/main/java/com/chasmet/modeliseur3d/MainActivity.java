@@ -4,7 +4,9 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -19,10 +21,10 @@ import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceView;
 import com.chasmet.modeliseur3d.media.VideoFrameExtractor;
-import com.chasmet.modeliseur3d.media.VideoSheetComposer;
 import com.chasmet.modeliseur3d.model.MeshData;
 import com.chasmet.modeliseur3d.model.NeuralReconstructionEngine;
 import com.chasmet.modeliseur3d.model.ObjExporter;
+import com.chasmet.modeliseur3d.model.VideoReconstructionEngine;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
 
 import java.io.File;
@@ -38,7 +40,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
-    private NeuralReconstructionEngine generator;
+    private NeuralReconstructionEngine imageGenerator;
+    private VideoReconstructionEngine videoGenerator;
     private ModelGLSurfaceView viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -86,11 +89,29 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void chooseVideo() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("video/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Le sélecteur système Android 13+ est forcé en mode vidéo.
+            intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
+            intent.setType("video/*");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+            // Sur les anciens Android, ouverture directe de la médiathèque vidéo.
+            intent = new Intent(
+                    Intent.ACTION_PICK,
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            );
+            intent.setType("video/*");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        }
+
+        if (intent.resolveActivity(getPackageManager()) == null) {
+            intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("video/*");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        }
         startActivityForResult(intent, REQUEST_VIDEO);
     }
 
@@ -112,6 +133,11 @@ public final class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_IMAGE) {
             generateImageModel(uri);
         } else if (requestCode == REQUEST_VIDEO) {
+            String mimeType = getContentResolver().getType(uri);
+            if (mimeType != null && !mimeType.startsWith("video/")) {
+                showToast(R.string.error_not_video);
+                return;
+            }
             generateVideoModel(uri);
         }
     }
@@ -123,7 +149,7 @@ public final class MainActivity extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
-            // Certains fournisseurs ne proposent pas de permission persistante.
+            // Le Photo Picker accorde une URI temporaire suffisante à la tâche.
         }
     }
 
@@ -149,7 +175,6 @@ public final class MainActivity extends AppCompatActivity {
     private void generateVideoModel(Uri videoUri) {
         setBusy(true, R.string.status_extracting_video);
         worker.execute(() -> {
-            Bitmap sheet = null;
             try (VideoFrameExtractor.Result extracted =
                          new VideoFrameExtractor(this).extract(
                                  videoUri,
@@ -159,25 +184,81 @@ public final class MainActivity extends AppCompatActivity {
                                          total
                                  ))
                          )) {
-                postStatus(getString(R.string.status_building_video_sheet));
-                sheet = VideoSheetComposer.compose(extracted.getFrames());
-                generateFromBitmap(sheet);
+                if (videoGenerator == null) {
+                    postStatus(getString(R.string.status_loading_video_engine));
+                    videoGenerator = new VideoReconstructionEngine(
+                            getApplicationContext()
+                    );
+                }
+                VideoReconstructionEngine.Result result =
+                        videoGenerator.generate(
+                                extracted.getFrames(),
+                                this::postVideoProgress
+                        );
+                currentMesh = result.getMesh();
+                currentTexture = result.getTexture();
+                runOnUiThread(() -> {
+                    viewer.setModel(currentMesh, currentTexture);
+                    emptyText.setVisibility(View.GONE);
+                    setBusy(false, R.string.status_done_video);
+                    statusText.setText(getString(
+                            R.string.status_done_video_details,
+                            result.getQualityLabel(),
+                            result.getProcessorCount(),
+                            currentMesh.getTriangleCount(),
+                            result.getOccupiedVoxels(),
+                            result.getBackend(),
+                            result.getNeuralDurationMs() / 1000.0,
+                            result.getTotalDurationMs() / 1000.0
+                    ));
+                });
             } catch (Exception | OutOfMemoryError error) {
                 handleGenerationFailure(error, R.string.error_video);
-            } finally {
-                recycleSource(sheet);
             }
         });
     }
 
+    private void postVideoProgress(
+            VideoReconstructionEngine.Stage stage,
+            int current,
+            int total
+    ) {
+        switch (stage) {
+            case SEGMENTING:
+                postStatus(getString(
+                        R.string.status_video_segmenting,
+                        current,
+                        total
+                ));
+                break;
+            case BUILDING_HULL:
+                postStatus(getString(R.string.status_video_hull));
+                break;
+            case MESHING:
+                postStatus(getString(R.string.status_video_meshing));
+                break;
+            case DEPTH:
+            default:
+                postStatus(getString(
+                        R.string.status_video_depth,
+                        current,
+                        total
+                ));
+                break;
+        }
+    }
+
     private void generateFromBitmap(Bitmap source) throws Exception {
-        if (generator == null) {
+        if (imageGenerator == null) {
             postStatus(getString(R.string.status_loading_neural_engine));
-            generator = new NeuralReconstructionEngine(getApplicationContext());
+            imageGenerator = new NeuralReconstructionEngine(
+                    getApplicationContext()
+            );
         }
 
         postStatus(getString(R.string.status_generating_neural));
-        NeuralReconstructionEngine.Result result = generator.generate(source);
+        NeuralReconstructionEngine.Result result =
+                imageGenerator.generate(source);
         currentMesh = result.getMesh();
         currentTexture = result.getTexture();
 
@@ -198,8 +279,11 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void handleGenerationFailure(Throwable error, int messageResource) {
-        Log.e(TAG, "Échec de reconstruction V4.4 locale", error);
+    private void handleGenerationFailure(
+            Throwable error,
+            int messageResource
+    ) {
+        Log.e(TAG, "Échec de reconstruction V4.5 locale", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
@@ -229,13 +313,13 @@ public final class MainActivity extends AppCompatActivity {
                     setBusy(false, R.string.status_exported);
                     statusText.setText(getString(
                             R.string.status_exported_details,
-                            result.getMobileSizeBytes() / 1000.0,
+                            result.getMobileSizeBytes() / 1_000_000.0,
                             result.getMobileTriangleCount()
                     ));
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export V4.4", error);
+                Log.e(TAG, "Échec d'export V4.5", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -267,7 +351,7 @@ public final class MainActivity extends AppCompatActivity {
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Modèle 3D V4.4 local — GLB HD + GLB mobile 200 Ko"
+                "Modèle 3D V4.5 local — GLB HD + GLB mobile 1 Mo"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
@@ -280,7 +364,7 @@ public final class MainActivity extends AppCompatActivity {
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.4",
+                "Modèle 3D V4.5",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -303,6 +387,10 @@ public final class MainActivity extends AppCompatActivity {
 
     private void postStatus(String message) {
         runOnUiThread(() -> statusText.setText(message));
+    }
+
+    private void showToast(int resource) {
+        Toast.makeText(this, resource, Toast.LENGTH_LONG).show();
     }
 
     private void recycleSource(Bitmap source) {
@@ -356,8 +444,11 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         worker.shutdownNow();
-        if (generator != null) {
-            generator.close();
+        if (imageGenerator != null) {
+            imageGenerator.close();
+        }
+        if (videoGenerator != null) {
+            videoGenerator.close();
         }
         if (currentTexture != null && !currentTexture.isRecycled()) {
             currentTexture.recycle();

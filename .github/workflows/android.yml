@@ -51,13 +51,13 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache les réseaux locaux V4.4
+      - name: Mettre en cache les réseaux locaux V4.5
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
             app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v44-depth-afb6a5c2-isnet-fp32-6a92a19a
+          key: modeliseur-v45-depth-afb6a5c2-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -93,11 +93,15 @@ jobs:
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai" \
-            app/src/main/java app/src/main/res || false
-          grep -q "versionName '4.4.0'" app/build.gradle
+            app/src/main/java app/src/main/res
+          grep -q "versionName '4.5.0'" app/build.gradle
           grep -q "VIEW_COUNT = 8" \
             app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
-          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" \
+          grep -q "MultiViewHullProjector.build" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngine.java
+          grep -q "MediaStore.ACTION_PICK_IMAGES" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
+          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
       - name: Tester le regroupement des silhouettes
@@ -110,6 +114,16 @@ jobs:
           java -cp build/view-grouping-tests \
             com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
 
+      - name: Tester la projection volumique huit vues
+        run: |
+          mkdir -p build/multiview-hull-tests
+          javac -encoding UTF-8 \
+            -d build/multiview-hull-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewHullProjector.java \
+            validation/java/com/chasmet/modeliseur3d/model/MultiViewHullProjectorSelfTest.java
+          java -cp build/multiview-hull-tests \
+            com.chasmet.modeliseur3d.model.MultiViewHullProjectorSelfTest
+
       - name: Tester la simplification du maillage mobile
         run: |
           mkdir -p build/mobile-mesh-tests
@@ -121,7 +135,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V4.4 locale
+      - name: Compiler et vérifier la V4.5 locale
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -147,10 +161,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V4.4
+      - name: Publier l'APK V4.5
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.4-Local-Video8-debug
+          name: Modeliseur3D-V4.5-Video8-GLB1Mo-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
