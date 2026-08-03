@@ -2,11 +2,8 @@ package com.chasmet.modeliseur3d.model;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.os.SystemClock;
 
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
@@ -15,15 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Moteur vidéo V4.8 entièrement mobile.
+ * Moteur vidéo V4.9 mobile fondé sur des coupes de silhouettes continues.
  *
- * Contrairement aux anciennes versions, les huit silhouettes conservent une
- * échelle commune. Le volume est nettoyé par composante connexe, puis chaque
- * triangle reçoit la texture de l'angle le plus proche parmi huit vues.
+ * Cette méthode n'utilise plus de volume voxel. Chaque hauteur du personnage
+ * est reconstruite par l'intersection des huit bandes observées, puis reliée
+ * en anneaux réguliers. La texture est cuite dans un dépliage cylindrique
+ * unique afin d'éviter les bandes et les changements de vue par triangle.
  */
 public final class VideoReconstructionEngineV48 implements AutoCloseable {
     private static final int VIEW_COUNT = 8;
-    private static final int[] CARDINAL_INDICES = {0, 4, 2, 6};
     private static final int ALPHA_THRESHOLD = 24;
 
     private final Context context;
@@ -45,10 +42,10 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
         validateFrames(frames);
         long started = SystemClock.elapsedRealtime();
         Profile profile = Profile.from(deviceProfile);
-        boolean[][] masks = new boolean[VIEW_COUNT][];
-        Bitmap[] textures = new Bitmap[VIEW_COUNT];
+        PreparedView[] preparedViews = new PreparedView[VIEW_COUNT];
         int repairedViews = 0;
         String segmentationBackend;
+        long neuralStarted = SystemClock.elapsedRealtime();
 
         try (AnimeSegmentationEngine segmentation =
                      new AnimeSegmentationEngine(
@@ -58,483 +55,530 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
             segmentationBackend = segmentation.getBackend();
             for (int index = 0; index < VIEW_COUNT; index++) {
                 notifyProgress(listener, Stage.SEGMENTING, index + 1, VIEW_COUNT);
-                PreparedView prepared = null;
-                try {
-                    prepared = prepareNeuralView(
-                            frames.get(index),
-                            segmentation,
-                            profile
-                    );
-                } catch (Exception | OutOfMemoryError ignored) {
-                    prepared = prepareFallbackView(frames.get(index), profile);
-                }
-
-                if (prepared == null) {
-                    int replacement = nearestPreparedIndex(masks, index);
-                    if (replacement < 0) {
-                        recycleAll(textures);
-                        throw new IllegalArgumentException(
-                                "Aucune silhouette vidéo stable n'a été détectée"
-                        );
-                    }
-                    repairedViews++;
-                    masks[index] = Arrays.copyOf(
-                            masks[replacement],
-                            masks[replacement].length
-                    );
-                    textures[index] = textures[replacement].copy(
-                            Bitmap.Config.ARGB_8888,
-                            false
-                    );
-                } else {
-                    masks[index] = prepared.mask;
-                    textures[index] = prepared.texture;
-                }
+                preparedViews[index] = prepareView(
+                        frames.get(index),
+                        segmentation,
+                        profile.sampleDimension
+                );
             }
         }
+        long neuralDuration = SystemClock.elapsedRealtime() - neuralStarted;
 
-        repairedViews += repairSevereOutliers(
-                masks,
-                textures,
-                profile.width,
-                profile.height
-        );
-        int phase = ViewPhaseEstimator.estimate(
-                masks,
-                profile.width,
-                profile.height
-        );
-        boolean[][] orderedMasks = ViewPhaseEstimator.rotate(masks, phase);
-        Bitmap[] orderedTextures = rotateTextures(textures, phase);
-
-        notifyProgress(listener, Stage.BUILDING_HULL, 0, 1);
-        int support = decodedFrameCount >= 7 ? 6 : 5;
-        boolean[] volume = MultiViewHullProjector.build(
-                orderedMasks,
-                profile.width,
-                profile.height,
-                profile.depth,
-                support
-        );
-        int occupied = MultiViewHullProjector.countOccupied(volume);
-        int minimumOccupied = Math.max(420, volume.length / 3200);
-        if (occupied < minimumOccupied && support > 4) {
-            support--;
-            volume = MultiViewHullProjector.build(
-                    orderedMasks,
-                    profile.width,
-                    profile.height,
-                    profile.depth,
-                    support
-            );
-        }
-        VolumeTopologyCleaner.bridgeSingleVoxelGaps(
-                volume,
-                profile.width,
-                profile.height,
-                profile.depth
-        );
-        occupied = VolumeTopologyCleaner.keepLargestComponent(
-                volume,
-                profile.width,
-                profile.height,
-                profile.depth
-        );
-        if (occupied < Math.max(300, volume.length / 4200)) {
-            recycleAll(textures);
-            throw new IllegalArgumentException(
-                    "Les huit angles ne forment pas un personnage 3D continu"
-            );
-        }
-
-        SmoothHullMesher.AtlasLayout depthLayout =
-                SmoothHullMesher.AtlasLayout.create(
-                        profile.width,
-                        profile.height,
-                        profile.depth,
-                        profile.depthAtlasHeight
+        for (int index = 0; index < VIEW_COUNT; index++) {
+            if (preparedViews[index] != null) {
+                continue;
+            }
+            int replacement = nearestPreparedIndex(preparedViews, index);
+            if (replacement < 0) {
+                recycleAll(preparedViews);
+                throw new IllegalArgumentException(
+                        "Aucune silhouette exploitable n'a été détectée dans la vidéo"
                 );
-        Bitmap depthAtlas = null;
-        Bitmap finalAtlas = null;
+            }
+            preparedViews[index] = preparedViews[replacement].copy();
+            repairedViews++;
+        }
+
         try {
-            depthAtlas = buildDepthAtlas(
-                    orderedTextures,
-                    depthLayout
-            );
-
-            notifyProgress(listener, Stage.MESHING, 0, 1);
-            MeshData mesh = SmoothHullMesher.build(
-                    volume,
-                    profile.width,
-                    profile.height,
-                    profile.depth,
-                    depthLayout,
-                    profile.processors
-            );
-            try {
-                mesh = MeshSurfaceOptimizer.optimize(mesh, 2);
-            } catch (RuntimeException ignored) {
-                // La surface extraite reste utilisable sans lissage secondaire.
-            }
-
-            releaseMemory();
-            long neuralStarted = SystemClock.elapsedRealtime();
-            MeshData refined = mesh;
-            String depthBackend;
-            int depthPasses = 0;
-            notifyProgress(listener, Stage.DEPTH, 0, 3);
-            try (NeuralMeshRefiner.Views views =
-                         NeuralMeshRefiner.cropViews(depthAtlas);
-                 NeuralDepthEngine depth = new NeuralDepthEngine(context)) {
-                NeuralDepthEngine.DepthMap front = depth.estimate(views.front);
-                depthPasses++;
-                notifyProgress(listener, Stage.DEPTH, depthPasses, 3);
-                NeuralDepthEngine.DepthMap back = depth.estimate(views.back);
-                depthPasses++;
-                notifyProgress(listener, Stage.DEPTH, depthPasses, 3);
-                NeuralDepthEngine.DepthMap side = depth.estimate(views.side);
-                depthPasses++;
-                notifyProgress(listener, Stage.DEPTH, depthPasses, 3);
-                refined = NeuralMeshRefiner.refine(
-                        mesh,
-                        front,
-                        back,
-                        side
+            VerticalRange verticalRange = findSharedVerticalRange(preparedViews);
+            float[][] left = new float[VIEW_COUNT][profile.rows];
+            float[][] right = new float[VIEW_COUNT][profile.rows];
+            for (int view = 0; view < VIEW_COUNT; view++) {
+                extractStrips(
+                        preparedViews[view].alpha,
+                        verticalRange,
+                        left[view],
+                        right[view]
                 );
-                depthBackend = depth.getBackend()
-                        + " • relief multivue borné";
-            } catch (Exception | OutOfMemoryError error) {
-                depthBackend = "coque multivue conservée • " + shortError(error);
-                releaseMemory();
+                repairStripRows(left[view], right[view]);
+                smoothStrips(left[view], right[view], 2);
             }
+            alignStripCenters(left, right);
+            repairedViews += repairWidthOutliers(left, right);
 
-            MultiViewTextureMapper.AtlasResult atlasResult =
-                    MultiViewTextureMapper.buildAtlas(
-                            orderedTextures,
-                            profile.textureCellHeight
-                    );
-            finalAtlas = atlasResult.getBitmap();
-            MeshData textured = MultiViewTextureMapper.remap(
-                    refined,
-                    profile.width,
-                    profile.height,
-                    profile.depth,
-                    atlasResult.getLayout()
+            notifyProgress(listener, Stage.BUILDING_HULL, 1, 1);
+            SilhouetteStripMesher.Sweep sweep = SilhouetteStripMesher.build(
+                    left,
+                    right,
+                    profile.sectors
             );
-            if (textured.getTriangleCount() > profile.triangleLimit) {
-                try {
-                    textured = MobileMeshOptimizer.simplify(
-                            textured,
-                            profile.triangleLimit
-                    );
-                } catch (RuntimeException ignored) {
-                    // L'exporteur effectuera encore sa propre réduction mobile.
-                }
-            }
 
+            notifyProgress(listener, Stage.MESHING, 1, 1);
+            MeshData mesh = sweep.getMesh();
+
+            notifyProgress(listener, Stage.DEPTH, 0, 1);
+            Bitmap texture = bakeCylindricalTexture(
+                    preparedViews,
+                    sweep,
+                    verticalRange,
+                    profile.textureWidth,
+                    profile.textureHeight
+            );
+            notifyProgress(listener, Stage.DEPTH, 1, 1);
+
+            String quality = profile.label
+                    + " • " + profile.rows + " coupes"
+                    + " • " + profile.sectors + " secteurs"
+                    + " • " + decodedFrameCount + " vues décodées";
             String backend = segmentationBackend
-                    + " • alignement global des huit vues"
-                    + " • composante volumique principale"
-                    + " • atlas huit angles"
+                    + " • intersection de bandes 8 vues"
+                    + " • surface annulaire étanche sans voxel"
+                    + " • texture cylindrique fusionnée"
                     + (repairedViews > 0
                     ? " • " + repairedViews + " vues réparées"
-                    : " • 8 vues originales")
-                    + " • " + depthBackend;
-            String quality = profile.label
-                    + " • phase " + phase
-                    + " • support " + support + "/8"
-                    + " • " + decodedFrameCount + " vues décodées"
-                    + " • texture 8 directions";
+                    : " • 8 vues originales");
 
-            Bitmap returnedAtlas = finalAtlas;
-            finalAtlas = null;
             return new Result(
-                    textured,
-                    returnedAtlas,
-                    occupied,
+                    mesh,
+                    texture,
+                    sweep.getSurfaceSampleCount(),
                     quality,
                     profile.processors,
                     backend,
-                    SystemClock.elapsedRealtime() - neuralStarted,
+                    neuralDuration,
                     SystemClock.elapsedRealtime() - started,
                     decodedFrameCount,
                     repairedViews
             );
         } finally {
-            if (depthAtlas != null && !depthAtlas.isRecycled()) {
-                depthAtlas.recycle();
-            }
-            if (finalAtlas != null && !finalAtlas.isRecycled()) {
-                finalAtlas.recycle();
-            }
-            recycleAll(textures);
+            recycleAll(preparedViews);
         }
     }
 
-    private static PreparedView prepareNeuralView(
+    private static PreparedView prepareView(
             Bitmap frame,
             AnimeSegmentationEngine segmentation,
-            Profile profile
-    ) throws Exception {
+            int sampleDimension
+    ) {
         Bitmap isolated = null;
+        Bitmap scaled = null;
         try {
-            AnimeSegmentationEngine.Mask neuralMask = segmentation.segment(frame);
-            isolated = NeuralSheetIsolator.isolate(frame, neuralMask);
-            Rect bounds = findForegroundBounds(isolated);
-            boolean[] mask = sampleWholeFrameMask(
-                    isolated,
-                    profile.width,
-                    profile.height
-            );
-            mask = selectMainSubject(mask, profile.width, profile.height);
-            closeMask(mask, profile.width, profile.height);
-            Bitmap texture = isolated.copy(Bitmap.Config.ARGB_8888, false);
-            if (texture == null) {
-                throw new IllegalStateException("Copie de texture impossible");
+            AnimeSegmentationEngine.Mask mask = segmentation.segment(frame);
+            isolated = NeuralSheetIsolator.isolate(frame, mask);
+            scaled = scaleForSampling(isolated, sampleDimension);
+            Rect bounds = findForegroundBounds(scaled);
+            Bitmap filled = fillTransparentNearest(scaled);
+            Bitmap alpha = scaled.copy(Bitmap.Config.ARGB_8888, false);
+            if (alpha == null) {
+                filled.recycle();
+                return null;
             }
-            return new PreparedView(mask, texture, bounds);
+            return new PreparedView(alpha, filled, bounds);
+        } catch (Exception | OutOfMemoryError ignored) {
+            if (scaled != null && !scaled.isRecycled()) {
+                scaled.recycle();
+                scaled = null;
+            }
+            if (isolated != null && !isolated.isRecycled()) {
+                isolated.recycle();
+                isolated = null;
+            }
+            Bitmap fallback = null;
+            Bitmap fallbackScaled = null;
+            try {
+                fallback = contrastIsolation(frame);
+                fallbackScaled = scaleForSampling(fallback, sampleDimension);
+                Rect bounds = findForegroundBounds(fallbackScaled);
+                Bitmap filled = fillTransparentNearest(fallbackScaled);
+                Bitmap alpha = fallbackScaled.copy(Bitmap.Config.ARGB_8888, false);
+                if (alpha == null) {
+                    filled.recycle();
+                    return null;
+                }
+                return new PreparedView(alpha, filled, bounds);
+            } catch (RuntimeException | OutOfMemoryError fallbackError) {
+                return null;
+            } finally {
+                if (fallbackScaled != null && !fallbackScaled.isRecycled()) {
+                    fallbackScaled.recycle();
+                }
+                if (fallback != null && !fallback.isRecycled()) {
+                    fallback.recycle();
+                }
+            }
         } finally {
+            if (scaled != null && !scaled.isRecycled()) {
+                scaled.recycle();
+            }
             if (isolated != null && !isolated.isRecycled()) {
                 isolated.recycle();
             }
         }
     }
 
-    private static PreparedView prepareFallbackView(
-            Bitmap frame,
-            Profile profile
-    ) {
-        Bitmap isolated = contrastIsolation(frame);
-        try {
-            Rect bounds = findForegroundBounds(isolated);
-            boolean[] mask = sampleWholeFrameMask(
-                    isolated,
-                    profile.width,
-                    profile.height
-            );
-            mask = selectMainSubject(mask, profile.width, profile.height);
-            closeMask(mask, profile.width, profile.height);
-            Bitmap texture = isolated.copy(Bitmap.Config.ARGB_8888, false);
-            return texture == null ? null : new PreparedView(mask, texture, bounds);
-        } catch (RuntimeException ignored) {
-            return null;
-        } finally {
-            if (!isolated.isRecycled()) {
-                isolated.recycle();
-            }
-        }
+    private static Bitmap scaleForSampling(Bitmap source, int maximumDimension) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        float scale = maximumDimension / (float) Math.max(width, height);
+        int targetWidth = Math.max(1, Math.round(width * scale));
+        int targetHeight = Math.max(1, Math.round(height * scale));
+        return Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);
     }
 
-    private static boolean[] selectMainSubject(
-            boolean[] mask,
-            int width,
-            int height
-    ) {
-        SingleSubjectSelector.Selection selection =
-                SingleSubjectSelector.select(mask, width, height);
-        return Arrays.copyOf(
-                selection.getMask(),
-                selection.getMask().length
-        );
-    }
-
-    private static boolean[] sampleWholeFrameMask(
-            Bitmap isolated,
-            int targetWidth,
-            int targetHeight
-    ) {
-        int sourceWidth = isolated.getWidth();
-        int sourceHeight = isolated.getHeight();
-        int[] pixels = new int[sourceWidth * sourceHeight];
-        isolated.getPixels(
-                pixels,
-                0,
-                sourceWidth,
-                0,
-                0,
-                sourceWidth,
-                sourceHeight
-        );
-        boolean[] output = new boolean[targetWidth * targetHeight];
-        for (int y = 0; y < targetHeight; y++) {
-            int sourceY = Math.min(
-                    sourceHeight - 1,
-                    Math.round((y + 0.5f) * sourceHeight / targetHeight - 0.5f)
-            );
-            for (int x = 0; x < targetWidth; x++) {
-                int sourceX = Math.min(
-                        sourceWidth - 1,
-                        Math.round((x + 0.5f) * sourceWidth / targetWidth - 0.5f)
-                );
-                output[y * targetWidth + x] = Color.alpha(
-                        pixels[sourceY * sourceWidth + sourceX]
-                ) > ALPHA_THRESHOLD;
+    private static Rect findForegroundBounds(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int[] pixels = new int[width * height];
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+        int left = width;
+        int top = height;
+        int right = -1;
+        int bottom = -1;
+        int foreground = 0;
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                if (Color.alpha(pixels[row + x]) > ALPHA_THRESHOLD) {
+                    foreground++;
+                    left = Math.min(left, x);
+                    top = Math.min(top, y);
+                    right = Math.max(right, x);
+                    bottom = Math.max(bottom, y);
+                }
             }
         }
+        int minimum = Math.max(48, width * height / 3000);
+        if (right < left || bottom < top || foreground < minimum) {
+            throw new IllegalArgumentException("Sujet vidéo trop petit");
+        }
+        return new Rect(left, top, right + 1, bottom + 1);
+    }
+
+    private static Bitmap fillTransparentNearest(Bitmap source) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        int count = width * height;
+        int[] colors = new int[count];
+        source.getPixels(colors, 0, width, 0, 0, width, height);
+        int[] queue = new int[count];
+        boolean[] visited = new boolean[count];
+        int head = 0;
+        int tail = 0;
+        for (int index = 0; index < count; index++) {
+            if (Color.alpha(colors[index]) > ALPHA_THRESHOLD) {
+                colors[index] = 0xFF000000 | (colors[index] & 0x00FFFFFF);
+                visited[index] = true;
+                queue[tail++] = index;
+            }
+        }
+        if (tail == 0) {
+            throw new IllegalArgumentException("Texture vidéo vide");
+        }
+        while (head < tail) {
+            int current = queue[head++];
+            int x = current % width;
+            int y = current / width;
+            tail = spread(colors, visited, queue, tail, current, x - 1, y, width, height);
+            tail = spread(colors, visited, queue, tail, current, x + 1, y, width, height);
+            tail = spread(colors, visited, queue, tail, current, x, y - 1, width, height);
+            tail = spread(colors, visited, queue, tail, current, x, y + 1, width, height);
+        }
+        Bitmap output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        output.setPixels(colors, 0, width, 0, 0, width, height);
         return output;
     }
 
-    private static int repairSevereOutliers(
-            boolean[][] masks,
-            Bitmap[] textures,
+    private static int spread(
+            int[] colors,
+            boolean[] visited,
+            int[] queue,
+            int tail,
+            int sourceIndex,
+            int x,
+            int y,
             int width,
             int height
     ) {
-        int[] areas = new int[VIEW_COUNT];
-        int[] spans = new int[VIEW_COUNT];
-        int[] sortedAreas = new int[VIEW_COUNT];
-        int[] sortedSpans = new int[VIEW_COUNT];
-        for (int index = 0; index < VIEW_COUNT; index++) {
-            areas[index] = countTrue(masks[index]);
-            spans[index] = verticalSpan(masks[index], width, height);
-            sortedAreas[index] = areas[index];
-            sortedSpans[index] = spans[index];
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+            return tail;
         }
-        Arrays.sort(sortedAreas);
-        Arrays.sort(sortedSpans);
-        float medianArea = (sortedAreas[3] + sortedAreas[4]) * 0.5f;
-        float medianSpan = (sortedSpans[3] + sortedSpans[4]) * 0.5f;
-        int repaired = 0;
+        int target = y * width + x;
+        if (visited[target]) {
+            return tail;
+        }
+        visited[target] = true;
+        colors[target] = colors[sourceIndex];
+        queue[tail++] = target;
+        return tail;
+    }
 
+    private static VerticalRange findSharedVerticalRange(PreparedView[] views) {
+        float[] tops = new float[VIEW_COUNT];
+        float[] bottoms = new float[VIEW_COUNT];
         for (int index = 0; index < VIEW_COUNT; index++) {
-            boolean healthy = areas[index] >= medianArea * 0.25f
-                    && areas[index] <= medianArea * 2.45f
-                    && spans[index] >= medianSpan * 0.62f;
-            if (healthy) {
+            PreparedView view = views[index];
+            tops[index] = view.bounds.top
+                    / (float) Math.max(1, view.alpha.getHeight() - 1);
+            bottoms[index] = (view.bounds.bottom - 1)
+                    / (float) Math.max(1, view.alpha.getHeight() - 1);
+        }
+        Arrays.sort(tops);
+        Arrays.sort(bottoms);
+        float top = (tops[2] + tops[3]) * 0.5f;
+        float bottom = (bottoms[4] + bottoms[5]) * 0.5f;
+        float margin = Math.max(0.008f, (bottom - top) * 0.018f);
+        top = clamp(top - margin, 0.0f, 0.96f);
+        bottom = clamp(bottom + margin, top + 0.04f, 1.0f);
+        return new VerticalRange(top, bottom);
+    }
+
+    private static void extractStrips(
+            Bitmap alpha,
+            VerticalRange verticalRange,
+            float[] left,
+            float[] right
+    ) {
+        int width = alpha.getWidth();
+        int height = alpha.getHeight();
+        int[] pixels = new int[width * height];
+        alpha.getPixels(pixels, 0, width, 0, 0, width, height);
+        int band = Math.max(1, height / 220);
+        for (int row = 0; row < left.length; row++) {
+            float amount = row / (float) Math.max(1, left.length - 1);
+            float normalizedY = verticalRange.top
+                    + (verticalRange.bottom - verticalRange.top) * amount;
+            int centerY = Math.max(0, Math.min(
+                    height - 1,
+                    Math.round(normalizedY * Math.max(1, height - 1))
+            ));
+            int minimumX = width;
+            int maximumX = -1;
+            for (int y = Math.max(0, centerY - band);
+                 y <= Math.min(height - 1, centerY + band);
+                 y++) {
+                int offset = y * width;
+                for (int x = 0; x < width; x++) {
+                    if (Color.alpha(pixels[offset + x]) > ALPHA_THRESHOLD) {
+                        minimumX = Math.min(minimumX, x);
+                        maximumX = Math.max(maximumX, x);
+                    }
+                }
+            }
+            if (maximumX < minimumX) {
+                left[row] = Float.NaN;
+                right[row] = Float.NaN;
+            } else {
+                left[row] = pixelToStrip(minimumX, width);
+                right[row] = pixelToStrip(maximumX, width);
+            }
+        }
+    }
+
+    private static float pixelToStrip(int x, int width) {
+        return x / (float) Math.max(1, width - 1) * 2.0f - 1.0f;
+    }
+
+    private static void repairStripRows(float[] left, float[] right) {
+        for (int row = 0; row < left.length; row++) {
+            if (isValidStrip(left[row], right[row])) {
                 continue;
             }
-            int replacement = nearestHealthyIndex(
-                    areas,
-                    spans,
-                    medianArea,
-                    medianSpan,
-                    index
-            );
+            int before = row - 1;
+            while (before >= 0 && !isValidStrip(left[before], right[before])) {
+                before--;
+            }
+            int after = row + 1;
+            while (after < left.length && !isValidStrip(left[after], right[after])) {
+                after++;
+            }
+            if (before >= 0 && after < left.length) {
+                float amount = (row - before) / (float) (after - before);
+                left[row] = lerp(left[before], left[after], amount);
+                right[row] = lerp(right[before], right[after], amount);
+            } else if (before >= 0) {
+                left[row] = left[before];
+                right[row] = right[before];
+            } else if (after < left.length) {
+                left[row] = left[after];
+                right[row] = right[after];
+            } else {
+                left[row] = -0.05f;
+                right[row] = 0.05f;
+            }
+        }
+    }
+
+    private static boolean isValidStrip(float left, float right) {
+        return Float.isFinite(left)
+                && Float.isFinite(right)
+                && right - left >= 0.01f;
+    }
+
+    private static void smoothStrips(float[] left, float[] right, int passes) {
+        for (int pass = 0; pass < passes; pass++) {
+            float[] sourceLeft = Arrays.copyOf(left, left.length);
+            float[] sourceRight = Arrays.copyOf(right, right.length);
+            for (int row = 1; row < left.length - 1; row++) {
+                left[row] = sourceLeft[row] * 0.60f
+                        + (sourceLeft[row - 1] + sourceLeft[row + 1]) * 0.20f;
+                right[row] = sourceRight[row] * 0.60f
+                        + (sourceRight[row - 1] + sourceRight[row + 1]) * 0.20f;
+                if (right[row] - left[row] < 0.012f) {
+                    float center = (right[row] + left[row]) * 0.5f;
+                    left[row] = center - 0.006f;
+                    right[row] = center + 0.006f;
+                }
+            }
+        }
+    }
+
+    private static void alignStripCenters(float[][] left, float[][] right) {
+        float[] viewCenters = new float[VIEW_COUNT];
+        float[] scratch = new float[left[0].length];
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            for (int row = 0; row < left[view].length; row++) {
+                scratch[row] = (left[view][row] + right[view][row]) * 0.5f;
+            }
+            viewCenters[view] = median(scratch);
+        }
+        float globalCenter = median(viewCenters);
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            float offset = viewCenters[view] - globalCenter;
+            for (int row = 0; row < left[view].length; row++) {
+                left[view][row] -= offset;
+                right[view][row] -= offset;
+            }
+        }
+    }
+
+    private static int repairWidthOutliers(float[][] left, float[][] right) {
+        float[] medians = new float[VIEW_COUNT];
+        float[] widths = new float[left[0].length];
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            for (int row = 0; row < widths.length; row++) {
+                widths[row] = right[view][row] - left[view][row];
+            }
+            medians[view] = median(widths);
+        }
+        float global = median(medians);
+        int repaired = 0;
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            if (medians[view] >= global * 0.42f
+                    && medians[view] <= global * 2.10f) {
+                continue;
+            }
+            int replacement = nearestHealthyView(medians, global, view);
             if (replacement < 0) {
                 continue;
             }
-            masks[index] = Arrays.copyOf(
-                    masks[replacement],
-                    width * height
-            );
-            if (textures[index] != null && !textures[index].isRecycled()) {
-                textures[index].recycle();
-            }
-            textures[index] = textures[replacement].copy(
-                    Bitmap.Config.ARGB_8888,
-                    false
-            );
+            left[view] = Arrays.copyOf(left[replacement], left[replacement].length);
+            right[view] = Arrays.copyOf(right[replacement], right[replacement].length);
             repaired++;
         }
         return repaired;
     }
 
-    private static int nearestHealthyIndex(
-            int[] areas,
-            int[] spans,
-            float medianArea,
-            float medianSpan,
+    private static int nearestHealthyView(
+            float[] medians,
+            float global,
             int target
     ) {
         for (int distance = 1; distance < VIEW_COUNT; distance++) {
-            int before = target - distance;
-            if (before >= 0 && isHealthy(
-                    areas[before],
-                    spans[before],
-                    medianArea,
-                    medianSpan
-            )) {
+            int before = (target - distance + VIEW_COUNT) % VIEW_COUNT;
+            if (medians[before] >= global * 0.42f
+                    && medians[before] <= global * 2.10f) {
                 return before;
             }
-            int after = target + distance;
-            if (after < VIEW_COUNT && isHealthy(
-                    areas[after],
-                    spans[after],
-                    medianArea,
-                    medianSpan
-            )) {
+            int after = (target + distance) % VIEW_COUNT;
+            if (medians[after] >= global * 0.42f
+                    && medians[after] <= global * 2.10f) {
                 return after;
             }
         }
         return -1;
     }
 
-    private static boolean isHealthy(
-            int area,
-            int span,
-            float medianArea,
-            float medianSpan
+    private static float median(float[] values) {
+        float[] copy = Arrays.copyOf(values, values.length);
+        Arrays.sort(copy);
+        int middle = copy.length / 2;
+        return (copy.length & 1) == 0
+                ? (copy[middle - 1] + copy[middle]) * 0.5f
+                : copy[middle];
+    }
+
+    private static Bitmap bakeCylindricalTexture(
+            PreparedView[] views,
+            SilhouetteStripMesher.Sweep sweep,
+            VerticalRange verticalRange,
+            int textureWidth,
+            int textureHeight
     ) {
-        return area >= medianArea * 0.25f
-                && area <= medianArea * 2.45f
-                && span >= medianSpan * 0.62f;
-    }
-
-    private static int nearestPreparedIndex(boolean[][] masks, int target) {
-        for (int distance = 1; distance < VIEW_COUNT; distance++) {
-            int before = target - distance;
-            if (before >= 0 && masks[before] != null) {
-                return before;
-            }
-            int after = target + distance;
-            if (after < target && masks[after] != null) {
-                return after;
-            }
-        }
-        return -1;
-    }
-
-    private static Bitmap[] rotateTextures(Bitmap[] textures, int phase) {
-        Bitmap[] ordered = new Bitmap[VIEW_COUNT];
+        PixelSource[] sources = new PixelSource[VIEW_COUNT];
         for (int index = 0; index < VIEW_COUNT; index++) {
-            ordered[index] = textures[ViewPhaseEstimator.sourceIndex(index, phase)];
+            sources[index] = PixelSource.from(views[index].filled);
         }
-        return ordered;
-    }
+        int[] output = new int[textureWidth * textureHeight];
+        for (int y = 0; y < textureHeight; y++) {
+            float v = y / (float) Math.max(1, textureHeight - 1);
+            float sourceY = verticalRange.top
+                    + (verticalRange.bottom - verticalRange.top) * v;
+            for (int x = 0; x < textureWidth; x++) {
+                float u = x / (float) Math.max(1, textureWidth - 1);
+                double surfaceAngle = Math.PI * 2.0 * u;
+                float surfaceX = sweep.sampleX(u, v);
+                float surfaceZ = sweep.sampleZ(u, v);
+                float red = 0.0f;
+                float green = 0.0f;
+                float blue = 0.0f;
+                float totalWeight = 0.0f;
 
-    private static Bitmap buildDepthAtlas(
-            Bitmap[] orderedTextures,
-            SmoothHullMesher.AtlasLayout layout
-    ) {
-        Bitmap atlas = Bitmap.createBitmap(
-                layout.atlasWidth,
-                layout.atlasHeight,
+                for (int view = 0; view < VIEW_COUNT; view++) {
+                    double viewAngle = Math.PI * 2.0 * view / VIEW_COUNT;
+                    float facing = (float) Math.cos(surfaceAngle - viewAngle);
+                    if (facing <= 0.0f) {
+                        continue;
+                    }
+                    float weight = facing * facing * facing * facing;
+                    float projection = surfaceX * (float) Math.cos(viewAngle)
+                            + surfaceZ * (float) Math.sin(viewAngle);
+                    int color = sources[view].sample(
+                            clamp((projection + 1.0f) * 0.5f, 0.0f, 1.0f),
+                            sourceY
+                    );
+                    red += Color.red(color) * weight;
+                    green += Color.green(color) * weight;
+                    blue += Color.blue(color) * weight;
+                    totalWeight += weight;
+                }
+
+                if (totalWeight <= 0.0f) {
+                    int nearest = Math.floorMod(
+                            Math.round(u * VIEW_COUNT),
+                            VIEW_COUNT
+                    );
+                    output[y * textureWidth + x] = sources[nearest].sample(
+                            0.5f,
+                            sourceY
+                    );
+                } else {
+                    output[y * textureWidth + x] = Color.rgb(
+                            clampColor(Math.round(red / totalWeight)),
+                            clampColor(Math.round(green / totalWeight)),
+                            clampColor(Math.round(blue / totalWeight))
+                    );
+                }
+            }
+        }
+        Bitmap texture = Bitmap.createBitmap(
+                textureWidth,
+                textureHeight,
                 Bitmap.Config.ARGB_8888
         );
-        Canvas canvas = new Canvas(atlas);
-        canvas.drawColor(Color.rgb(26, 28, 34));
-        Paint paint = new Paint(
-                Paint.ANTI_ALIAS_FLAG
-                        | Paint.FILTER_BITMAP_FLAG
-                        | Paint.DITHER_FLAG
+        texture.setPixels(
+                output,
+                0,
+                textureWidth,
+                0,
+                0,
+                textureWidth,
+                textureHeight
         );
-        int[] starts = {
-                layout.frontStart,
-                layout.backStart,
-                layout.rightStart,
-                layout.leftStart
-        };
-        int[] widths = {
-                layout.frontWidth,
-                layout.frontWidth,
-                layout.sideWidth,
-                layout.sideWidth
-        };
-        for (int slot = 0; slot < CARDINAL_INDICES.length; slot++) {
-            Bitmap source = orderedTextures[CARDINAL_INDICES[slot]];
-            canvas.drawBitmap(
-                    source,
-                    null,
-                    new RectF(
-                            starts[slot],
-                            0,
-                            starts[slot] + widths[slot],
-                            layout.atlasHeight
-                    ),
-                    paint
-            );
-        }
-        return atlas;
+        return texture;
+    }
+
+    private static int clampColor(int value) {
+        return Math.max(0, Math.min(255, value));
     }
 
     private static Bitmap contrastIsolation(Bitmap source) {
@@ -566,102 +610,33 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
         float backgroundR = red / (float) Math.max(1, samples);
         float backgroundG = green / (float) Math.max(1, samples);
         float backgroundB = blue / (float) Math.max(1, samples);
-
         for (int index = 0; index < pixels.length; index++) {
             int color = pixels[index];
             float dr = Color.red(color) - backgroundR;
             float dg = Color.green(color) - backgroundG;
             float db = Color.blue(color) - backgroundB;
             float distance = (float) Math.sqrt(dr * dr + dg * dg + db * db);
-            pixels[index] = distance >= 25.0f
+            pixels[index] = distance >= 28.0f
                     ? 0xFF000000 | (color & 0x00FFFFFF)
                     : Color.TRANSPARENT;
         }
-        Bitmap output = Bitmap.createBitmap(
-                width,
-                height,
-                Bitmap.Config.ARGB_8888
-        );
+        Bitmap output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         output.setPixels(pixels, 0, width, 0, 0, width, height);
         return output;
     }
 
-    private static Rect findForegroundBounds(Bitmap bitmap) {
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-        int[] pixels = new int[width * height];
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
-        int left = width;
-        int top = height;
-        int right = -1;
-        int bottom = -1;
-        int foreground = 0;
-        for (int y = 0; y < height; y++) {
-            int row = y * width;
-            for (int x = 0; x < width; x++) {
-                if (Color.alpha(pixels[row + x]) > ALPHA_THRESHOLD) {
-                    foreground++;
-                    left = Math.min(left, x);
-                    top = Math.min(top, y);
-                    right = Math.max(right, x);
-                    bottom = Math.max(bottom, y);
-                }
+    private static int nearestPreparedIndex(PreparedView[] views, int target) {
+        for (int distance = 1; distance < VIEW_COUNT; distance++) {
+            int before = (target - distance + VIEW_COUNT) % VIEW_COUNT;
+            if (views[before] != null) {
+                return before;
+            }
+            int after = (target + distance) % VIEW_COUNT;
+            if (views[after] != null) {
+                return after;
             }
         }
-        int minimum = Math.max(64, width * height / 2600);
-        if (right < left || bottom < top || foreground < minimum) {
-            throw new IllegalArgumentException(
-                    "Sujet trop petit ou détourage vidéo insuffisant"
-            );
-        }
-        return new Rect(left, top, right + 1, bottom + 1);
-    }
-
-    private static void closeMask(boolean[] mask, int width, int height) {
-        boolean[] source = Arrays.copyOf(mask, mask.length);
-        for (int y = 1; y < height - 1; y++) {
-            for (int x = 1; x < width - 1; x++) {
-                int index = y * width + x;
-                if (source[index]) {
-                    continue;
-                }
-                int neighbours = 0;
-                for (int oy = -1; oy <= 1; oy++) {
-                    for (int ox = -1; ox <= 1; ox++) {
-                        if (source[(y + oy) * width + x + ox]) {
-                            neighbours++;
-                        }
-                    }
-                }
-                if (neighbours >= 4) {
-                    mask[index] = true;
-                }
-            }
-        }
-    }
-
-    private static int verticalSpan(boolean[] mask, int width, int height) {
-        int top = height;
-        int bottom = -1;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (mask[y * width + x]) {
-                    top = Math.min(top, y);
-                    bottom = Math.max(bottom, y);
-                }
-            }
-        }
-        return bottom < top ? 0 : bottom - top + 1;
-    }
-
-    private static int countTrue(boolean[] values) {
-        int count = 0;
-        for (boolean value : values) {
-            if (value) {
-                count++;
-            }
-        }
-        return count;
+        return -1;
     }
 
     private static void validateFrames(List<Bitmap> frames) {
@@ -675,10 +650,10 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
         }
     }
 
-    private static void recycleAll(Bitmap[] bitmaps) {
-        for (Bitmap bitmap : bitmaps) {
-            if (bitmap != null && !bitmap.isRecycled()) {
-                bitmap.recycle();
+    private static void recycleAll(PreparedView[] views) {
+        for (PreparedView view : views) {
+            if (view != null) {
+                view.close();
             }
         }
     }
@@ -694,25 +669,17 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
         }
     }
 
-    private static void releaseMemory() {
-        Runtime.getRuntime().gc();
-        System.runFinalization();
+    private static float lerp(float first, float second, float amount) {
+        return first + (second - first) * amount;
     }
 
-    private static String shortError(Throwable error) {
-        String message = error.getMessage();
-        if (message == null || message.trim().isEmpty()) {
-            return error.getClass().getSimpleName();
-        }
-        message = message.trim();
-        return message.length() > 100
-                ? message.substring(0, 97) + "…"
-                : message;
+    private static float clamp(float value, float minimum, float maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
     }
 
     @Override
     public void close() {
-        // Les sessions neuronales sont fermées à chaque génération.
+        // Les ressources neuronales sont fermées à la fin de chaque génération.
     }
 
     public enum Stage {
@@ -803,45 +770,131 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
         }
     }
 
-    private static final class PreparedView {
-        final boolean[] mask;
-        final Bitmap texture;
+    private static final class PreparedView implements AutoCloseable {
+        final Bitmap alpha;
+        final Bitmap filled;
         final Rect bounds;
 
-        PreparedView(boolean[] mask, Bitmap texture, Rect bounds) {
-            this.mask = mask;
-            this.texture = texture;
+        PreparedView(Bitmap alpha, Bitmap filled, Rect bounds) {
+            this.alpha = alpha;
+            this.filled = filled;
             this.bounds = bounds;
+        }
+
+        PreparedView copy() {
+            Bitmap alphaCopy = alpha.copy(Bitmap.Config.ARGB_8888, false);
+            Bitmap filledCopy = filled.copy(Bitmap.Config.ARGB_8888, false);
+            if (alphaCopy == null || filledCopy == null) {
+                if (alphaCopy != null) {
+                    alphaCopy.recycle();
+                }
+                if (filledCopy != null) {
+                    filledCopy.recycle();
+                }
+                throw new IllegalStateException("Copie de vue vidéo impossible");
+            }
+            return new PreparedView(alphaCopy, filledCopy, new Rect(bounds));
+        }
+
+        @Override
+        public void close() {
+            if (!alpha.isRecycled()) {
+                alpha.recycle();
+            }
+            if (!filled.isRecycled()) {
+                filled.recycle();
+            }
+        }
+    }
+
+    private static final class VerticalRange {
+        final float top;
+        final float bottom;
+
+        VerticalRange(float top, float bottom) {
+            this.top = top;
+            this.bottom = bottom;
+        }
+    }
+
+    private static final class PixelSource {
+        final int width;
+        final int height;
+        final int[] pixels;
+
+        PixelSource(int width, int height, int[] pixels) {
+            this.width = width;
+            this.height = height;
+            this.pixels = pixels;
+        }
+
+        static PixelSource from(Bitmap bitmap) {
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            int[] pixels = new int[width * height];
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+            return new PixelSource(width, height, pixels);
+        }
+
+        int sample(float normalizedX, float normalizedY) {
+            float x = clamp(normalizedX, 0.0f, 1.0f) * Math.max(1, width - 1);
+            float y = clamp(normalizedY, 0.0f, 1.0f) * Math.max(1, height - 1);
+            int x0 = Math.max(0, Math.min(width - 1, (int) Math.floor(x)));
+            int y0 = Math.max(0, Math.min(height - 1, (int) Math.floor(y)));
+            int x1 = Math.min(width - 1, x0 + 1);
+            int y1 = Math.min(height - 1, y0 + 1);
+            float tx = x - x0;
+            float ty = y - y0;
+            int top = blend(pixels[y0 * width + x0], pixels[y0 * width + x1], tx);
+            int bottom = blend(pixels[y1 * width + x0], pixels[y1 * width + x1], tx);
+            return blend(top, bottom, ty);
+        }
+
+        private static int blend(int first, int second, float amount) {
+            return Color.rgb(
+                    clampColor(Math.round(lerp(
+                            Color.red(first),
+                            Color.red(second),
+                            amount
+                    ))),
+                    clampColor(Math.round(lerp(
+                            Color.green(first),
+                            Color.green(second),
+                            amount
+                    ))),
+                    clampColor(Math.round(lerp(
+                            Color.blue(first),
+                            Color.blue(second),
+                            amount
+                    )))
+            );
         }
     }
 
     private static final class Profile {
-        final int width;
-        final int height;
-        final int depth;
+        final int rows;
+        final int sectors;
         final int processors;
-        final int depthAtlasHeight;
-        final int textureCellHeight;
-        final int triangleLimit;
+        final int sampleDimension;
+        final int textureWidth;
+        final int textureHeight;
         final String label;
 
         Profile(
-                int width,
-                int height,
-                int depth,
+                int rows,
+                int sectors,
                 int processors,
-                int depthAtlasHeight,
-                int textureCellHeight,
-                int triangleLimit,
+                int sampleDimension,
+                int textureWidth,
+                int textureHeight,
                 String label
         ) {
-            this.width = width;
-            this.height = height;
-            this.depth = depth;
+            this.rows = rows;
+            this.sectors = sectors;
             this.processors = processors;
-            this.depthAtlasHeight = depthAtlasHeight;
-            this.textureCellHeight = textureCellHeight;
-            this.triangleLimit = triangleLimit;
+            this.sampleDimension = sampleDimension;
+            this.textureWidth = textureWidth;
+            this.textureHeight = textureHeight;
             this.label = label;
         }
 
@@ -850,37 +903,34 @@ public final class VideoReconstructionEngineV48 implements AutoCloseable {
             switch (device.getTier()) {
                 case TURBO:
                     return new Profile(
-                            96,
-                            192,
-                            96,
+                            176,
+                            40,
                             processors,
+                            576,
                             1024,
-                            704,
-                            110_000,
-                            "Vidéo V4.8 multivue Turbo"
+                            1024,
+                            "Vidéo V4.9 Surface continue Turbo"
                     );
                 case QUALITY:
                     return new Profile(
-                            84,
-                            168,
-                            84,
+                            152,
+                            36,
                             processors,
+                            512,
                             896,
-                            608,
-                            88_000,
-                            "Vidéo V4.8 multivue Qualité"
+                            896,
+                            "Vidéo V4.9 Surface continue Qualité"
                     );
                 case COMPATIBILITY:
                 default:
                     return new Profile(
-                            72,
-                            144,
-                            72,
+                            128,
+                            32,
                             processors,
+                            448,
                             768,
-                            512,
-                            66_000,
-                            "Vidéo V4.8 multivue Compatible"
+                            768,
+                            "Vidéo V4.9 Surface continue Compatible"
                     );
             }
         }
