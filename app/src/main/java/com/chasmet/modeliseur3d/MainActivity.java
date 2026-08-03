@@ -22,9 +22,8 @@ import androidx.core.content.FileProvider;
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceView;
 import com.chasmet.modeliseur3d.media.VideoFrameExtractor;
 import com.chasmet.modeliseur3d.model.MeshData;
-import com.chasmet.modeliseur3d.model.NeuralReconstructionEngineV47;
 import com.chasmet.modeliseur3d.model.ObjExporter;
-import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV47;
+import com.chasmet.modeliseur3d.model.Relief25DEngine;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
@@ -35,7 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
-    private static final String TAG = "Modeliseur3D";
+    private static final String TAG = "Modeliseur25D";
     private static final int REQUEST_IMAGE = 2001;
     private static final int REQUEST_VIDEO = 2002;
 
@@ -43,8 +42,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private DevicePerformanceProfile performanceProfile;
     private ProcessingPowerLock processingPowerLock;
-    private NeuralReconstructionEngineV47 imageGenerator;
-    private VideoReconstructionEngineV47 videoGenerator;
+    private Relief25DEngine reliefGenerator;
     private ModelGLSurfaceView viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -154,7 +152,17 @@ public final class MainActivity extends AppCompatActivity {
                         imageUri,
                         performanceProfile.getMaximumInputSide()
                 );
-                generateFromBitmap(source);
+                if (reliefGenerator == null) {
+                    reliefGenerator = new Relief25DEngine(
+                            getApplicationContext(),
+                            performanceProfile
+                    );
+                }
+                Relief25DEngine.Result result = reliefGenerator.generateImage(
+                        source,
+                        this::postReliefProgress
+                );
+                showResult(result, false);
             } catch (Exception | OutOfMemoryError error) {
                 handleGenerationFailure(error, R.string.error_generation);
             } finally {
@@ -177,96 +185,68 @@ public final class MainActivity extends AppCompatActivity {
                                          total
                                  ))
                          )) {
-                if (videoGenerator == null) {
-                    postStatus(getString(R.string.status_loading_video_engine));
-                    videoGenerator = new VideoReconstructionEngineV47(
+                if (reliefGenerator == null) {
+                    reliefGenerator = new Relief25DEngine(
                             getApplicationContext(),
                             performanceProfile
                     );
                 }
-                VideoReconstructionEngineV47.Result result =
-                        videoGenerator.generate(
-                                extracted.getFrames(),
-                                extracted.getDecodedFrameCount(),
-                                this::postVideoProgress
-                        );
-                runOnUiThread(() -> {
-                    replaceCurrentModel(result.getMesh(), result.getTexture());
-                    emptyText.setVisibility(View.GONE);
-                    setBusy(false, R.string.status_done_video);
-                    statusText.setText(getString(
-                            R.string.status_done_video_details,
-                            result.getQualityLabel(),
-                            result.getProcessorCount(),
-                            currentMesh.getTriangleCount(),
-                            currentMesh.getVertexCount(),
-                            result.getOccupiedVoxels(),
-                            result.getBackend(),
-                            result.getTotalDurationMs() / 1000.0
-                    ));
-                });
+                Relief25DEngine.Result result = reliefGenerator.generateVideo(
+                        extracted.getFrames(),
+                        extracted.getDecodedFrameCount(),
+                        this::postReliefProgress
+                );
+                showResult(result, true);
             } catch (Exception | OutOfMemoryError error) {
                 handleGenerationFailure(error, R.string.error_video);
             }
         });
     }
 
-    private void postVideoProgress(
-            VideoReconstructionEngineV47.Stage stage,
+    private void postReliefProgress(
+            Relief25DEngine.Stage stage,
             int current,
             int total
     ) {
         switch (stage) {
             case SEGMENTING:
                 postStatus(getString(
-                        R.string.status_video_segmenting,
+                        R.string.status_25d_segmenting,
                         current,
                         total
                 ));
                 break;
-            case BUILDING_HULL:
-                postStatus(getString(R.string.status_video_hull));
+            case ALIGNING:
+                postStatus(getString(R.string.status_25d_aligning));
                 break;
             case MESHING:
-                postStatus(getString(R.string.status_video_meshing));
+                postStatus(getString(R.string.status_25d_meshing));
                 break;
-            case DEPTH:
+            case TEXTURING:
             default:
-                postStatus(getString(
-                        R.string.status_video_depth,
-                        current,
-                        total
-                ));
+                postStatus(getString(R.string.status_25d_texturing));
                 break;
         }
     }
 
-    private void generateFromBitmap(Bitmap source) throws Exception {
-        if (imageGenerator == null) {
-            postStatus(getString(R.string.status_loading_neural_engine));
-            imageGenerator = new NeuralReconstructionEngineV47(
-                    getApplicationContext(),
-                    performanceProfile
-            );
-        }
-        postStatus(getString(R.string.status_generating_image_v47));
-        NeuralReconstructionEngineV47.Result result =
-                imageGenerator.generate(source);
+    private void showResult(Relief25DEngine.Result result, boolean video) {
         runOnUiThread(() -> {
             replaceCurrentModel(result.getMesh(), result.getTexture());
             emptyText.setVisibility(View.GONE);
-            setBusy(false, R.string.status_done);
+            setBusy(
+                    false,
+                    video ? R.string.status_done_video : R.string.status_done
+            );
             statusText.setText(getString(
-                    R.string.status_done_details,
-                    result.getFinalSubjectCount(),
-                    result.getDetectedSubjectCount(),
+                    R.string.status_done_25d_details,
                     result.getQualityLabel(),
                     result.getProcessorCount(),
                     currentMesh.getTriangleCount(),
                     currentMesh.getVertexCount(),
-                    result.getGridWidth(),
-                    result.getGridHeight(),
-                    result.getNeuralBackend(),
+                    result.getRows(),
+                    result.getColumns(),
+                    result.getSourceViewCount(),
+                    result.getBackend(),
                     result.getTotalDurationMs() / 1000.0
             ));
         });
@@ -294,7 +274,7 @@ public final class MainActivity extends AppCompatActivity {
             Throwable error,
             int messageResource
     ) {
-        Log.e(TAG, "Échec de reconstruction V4.8 mobile", error);
+        Log.e(TAG, "Échec de génération 2.5D V5", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
@@ -333,7 +313,7 @@ public final class MainActivity extends AppCompatActivity {
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export V4.8", error);
+                Log.e(TAG, "Échec d'export 2.5D V5", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -364,11 +344,11 @@ public final class MainActivity extends AppCompatActivity {
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Modèle 3D V4.8 Multivue mobile — GLB HD + GLB mobile 1 Mo"
+                "Personnage 2.5D V5 — GLB HD + GLB mobile 1 Mo"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
-                "Fichiers créés localement dans : "
+                "Relief 2.5D créé localement dans : "
                         + result.getDirectory().getAbsolutePath()
                         + "\nGLB mobile vérifié : "
                         + result.getMobileSizeBytes()
@@ -376,7 +356,7 @@ public final class MainActivity extends AppCompatActivity {
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.8",
+                "Personnage 2.5D V5",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -403,7 +383,7 @@ public final class MainActivity extends AppCompatActivity {
             if (processingPowerLock == null) {
                 processingPowerLock = ProcessingPowerLock.acquire(
                         this,
-                        "reconstruction"
+                        "relief-25d"
                 );
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -483,11 +463,8 @@ public final class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         worker.shutdownNow();
         configurePerformanceMode(false);
-        if (imageGenerator != null) {
-            imageGenerator.close();
-        }
-        if (videoGenerator != null) {
-            videoGenerator.close();
+        if (reliefGenerator != null) {
+            reliefGenerator.close();
         }
         if (currentTexture != null && !currentTexture.isRecycled()) {
             currentTexture.recycle();
