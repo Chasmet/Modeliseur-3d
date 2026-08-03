@@ -13,7 +13,7 @@ def segmentationModelTemporary = file(
         'src/main/assets/models/isnet_anime_fp32.onnx.part'
 )
 def segmentationModelUrl =
-        'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e1165ba7e9575585388a36f/onnx/model.onnx?download=true'
+        'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true'
 def segmentationModelSha256 =
         '6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba'
 def ciDebugKeystorePath = System.getenv('MODELISEUR_DEBUG_KEYSTORE')
