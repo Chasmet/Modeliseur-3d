@@ -51,13 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache les réseaux locaux V4.9
+      - name: Mettre en cache le détourage local V5
         uses: actions/cache@v4
         with:
-          path: |
-            app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
-            app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v49-depth-afb6a5c2-isnet-fp32-6a92a19a
+          path: app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v50-25d-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -69,7 +67,7 @@ jobs:
           URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
           if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime FP32 déjà présent dans le cache et vérifié."
+            echo "IS-Net Anime FP32 déjà présent et vérifié."
           else
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
@@ -78,7 +76,7 @@ jobs:
             mv "$PART" "$MODEL"
           fi
 
-      - name: Préparer le SDK Android préinstallé
+      - name: Préparer le SDK Android
         shell: bash
         run: |
           set -euo pipefail
@@ -87,49 +85,39 @@ jobs:
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-
-      - name: Installer Android 34
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "build-tools;34.0.0"
 
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V4.9 Surface continue
+      - name: Vérifier l'architecture V5 2.5D
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
-          ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai|render.com" \
-            app/src/main/java app/src/main/res
-          grep -q "versionName '4.9.0'" app/build.gradle
-          grep -q "versionCode 15" app/build.gradle
-          grep -q "DevicePerformanceProfile.detect" \
+          grep -q "versionName '5.0.0'" app/build.gradle
+          grep -q "versionCode 16" app/build.gradle
+          ! grep -q "downloadDepthModel" app/build.gradle
+          grep -q "Relief25DEngine" \
             app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
-          grep -q "ProcessingPowerLock.acquire" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
-          grep -q "SingleSubjectExtractor.extract" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV47.java
-          grep -q "VideoSubjectNormalizer.normalize" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV47.java
-          grep -q "SilhouetteStripMesher.build" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
-          grep -q "bakeCylindricalTexture" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
-          ! grep -q "MultiViewHullProjector.build" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
-          ! grep -q "MultiViewTextureMapper.buildAtlas" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
-          grep -q "VIEW_COUNT = 8" \
-            app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
+          grep -q "Relief25DMesher.build" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DEngine.java
+          grep -q "atlas cardinal 2x2" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DEngine.java
+          grep -q "texel.a < 0.055" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
+          grep -q "-58.0f, 58.0f" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
+          grep -q 'mimeType\\\":\\\"image/png' \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
+          grep -q 'alphaMode\\\":\\\"MASK' \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Tester la sélection d'un seul personnage
+      - name: Tester la sélection du personnage principal
         run: |
           mkdir -p build/single-subject-tests
           javac -encoding UTF-8 \
@@ -139,58 +127,18 @@ jobs:
           java -cp build/single-subject-tests \
             com.chasmet.modeliseur3d.model.SingleSubjectSelectorSelfTest
 
-      - name: Tester le regroupement des silhouettes
+      - name: Tester le maillage fermé 2.5D
         run: |
-          mkdir -p build/view-grouping-tests
+          mkdir -p build/relief-25d-tests
           javac -encoding UTF-8 \
-            -d build/view-grouping-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouper.java \
-            validation/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouperSelfTest.java
-          java -cp build/view-grouping-tests \
-            com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
-
-      - name: Tester la projection volumique huit vues historique
-        run: |
-          mkdir -p build/multiview-hull-tests
-          javac -encoding UTF-8 \
-            -d build/multiview-hull-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewHullProjector.java \
-            validation/java/com/chasmet/modeliseur3d/model/MultiViewHullProjectorSelfTest.java
-          java -cp build/multiview-hull-tests \
-            com.chasmet.modeliseur3d.model.MultiViewHullProjectorSelfTest
-
-      - name: Tester le nettoyage topologique historique
-        run: |
-          mkdir -p build/volume-cleaner-tests
-          javac -encoding UTF-8 \
-            -d build/volume-cleaner-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VolumeTopologyCleaner.java \
-            validation/java/com/chasmet/modeliseur3d/model/VolumeTopologyCleanerSelfTest.java
-          java -cp build/volume-cleaner-tests \
-            com.chasmet.modeliseur3d.model.VolumeTopologyCleanerSelfTest
-
-      - name: Tester l'alignement des angles vidéo
-        run: |
-          mkdir -p build/view-phase-tests
-          javac -encoding UTF-8 \
-            -d build/view-phase-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ViewPhaseEstimator.java \
-            validation/java/com/chasmet/modeliseur3d/model/ViewPhaseEstimatorSelfTest.java
-          java -cp build/view-phase-tests \
-            com.chasmet.modeliseur3d.model.ViewPhaseEstimatorSelfTest
-
-      - name: Tester la surface continue par coupes
-        run: |
-          mkdir -p build/silhouette-strip-tests
-          javac -encoding UTF-8 \
-            -d build/silhouette-strip-tests \
+            -d build/relief-25d-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/SilhouetteStripMesher.java \
-            validation/java/com/chasmet/modeliseur3d/model/SilhouetteStripMesherSelfTest.java
-          java -cp build/silhouette-strip-tests \
-            com.chasmet.modeliseur3d.model.SilhouetteStripMesherSelfTest
+            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DMesher.java \
+            validation/java/com/chasmet/modeliseur3d/model/Relief25DMesherSelfTest.java
+          java -cp build/relief-25d-tests \
+            com.chasmet.modeliseur3d.model.Relief25DMesherSelfTest
 
-      - name: Tester la simplification topologique mobile
+      - name: Tester la simplification mobile
         run: |
           mkdir -p build/mobile-mesh-tests
           javac -encoding UTF-8 \
@@ -201,7 +149,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V4.9 Surface continue
+      - name: Compiler et vérifier la V5 2.5D
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -209,13 +157,12 @@ jobs:
             exit 1
           }
 
-      - name: Vérifier l'APK, sa signature et ses modèles
+      - name: Vérifier l'APK, sa signature et son modèle
         shell: bash
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          DEPTH_SHA="afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
           ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
 
           ls -lh "$APK"
@@ -223,13 +170,13 @@ jobs:
           test -f "$MODELISEUR_DEBUG_KEYSTORE"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
-          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
+          ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V4.9
+      - name: Publier l'APK V5 2.5D
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.9-Surface-Continue-GLB1Mo-debug
+          name: Modeliseur-2.5D-V5-GLB-Mobile-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
