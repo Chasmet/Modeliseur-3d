@@ -1,9 +1,6 @@
 package com.chasmet.modeliseur3d.model;
 
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -13,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
-/** Écrit une copie GLB légère avec indices 16 bits et texture JPEG intégrée. */
+/** Écrit une copie GLB 2.5D légère avec indices 16 bits et texture PNG alpha. */
 public final class MobileGlbExporter {
     private static final int GLB_MAGIC = 0x46546C67;
     private static final int GLB_VERSION = 2;
@@ -28,7 +25,7 @@ public final class MobileGlbExporter {
             MeshData mesh,
             Bitmap texture,
             int textureMaximumSide,
-            int jpegQuality
+            int ignoredQuality
     ) throws IOException {
         if (mesh.getVertexCount() > 65_535) {
             throw new IOException(
@@ -36,10 +33,9 @@ public final class MobileGlbExporter {
             );
         }
 
-        byte[] jpeg = encodeJpeg(
+        byte[] png = encodePng(
                 texture,
-                Math.max(48, textureMaximumSide),
-                Math.max(25, Math.min(95, jpegQuality))
+                Math.max(48, textureMaximumSide)
         );
         float[] positions = mesh.getPositions();
         float[] normals = mesh.getNormals();
@@ -55,7 +51,7 @@ public final class MobileGlbExporter {
         int indexOffset = align4(texCoordOffset + texCoordLength);
         int indexLength = indices.length * 2;
         int imageOffset = align4(indexOffset + indexLength);
-        int imageLength = jpeg.length;
+        int imageLength = png.length;
         int binaryLength = align4(imageOffset + imageLength);
 
         ByteBuffer binary = ByteBuffer.allocate(binaryLength)
@@ -80,7 +76,7 @@ public final class MobileGlbExporter {
             binary.putShort((short) (value & 0xFFFF));
         }
         binary.position(imageOffset);
-        binary.put(jpeg);
+        binary.put(png);
 
         float[] minimum = positionBounds(positions, true);
         float[] maximum = positionBounds(positions, false);
@@ -147,22 +143,22 @@ public final class MobileGlbExporter {
         StringBuilder json = new StringBuilder(1900);
         json.append('{');
         json.append("\"asset\":{\"version\":\"2.0\",\"generator\":")
-                .append("\"Modeliseur 3D V4.4 Android local\"},");
+                .append("\"Modeliseur 2.5D V5 Android\"},");
         json.append("\"scene\":0,");
         json.append("\"scenes\":[{\"nodes\":[0]}],");
-        json.append("\"nodes\":[{\"mesh\":0,\"name\":\"Modele mobile V4.4\"}],");
-        json.append("\"meshes\":[{\"name\":\"Modele mobile V4.4\",\"primitives\":[{");
+        json.append("\"nodes\":[{\"mesh\":0,\"name\":\"Personnage 2.5D mobile\"}],");
+        json.append("\"meshes\":[{\"name\":\"Personnage 2.5D mobile\",\"primitives\":[{");
         json.append("\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},");
         json.append("\"indices\":3,\"material\":0}]}],");
-        json.append("\"materials\":[{\"name\":\"Texture mobile locale\",");
+        json.append("\"materials\":[{\"name\":\"Texture 2.5D transparente\",");
         json.append("\"pbrMetallicRoughness\":{\"baseColorTexture\":{\"index\":0},");
-        json.append("\"metallicFactor\":0.0,\"roughnessFactor\":0.82},");
-        json.append("\"doubleSided\":true,\"alphaMode\":\"OPAQUE\"}],");
+        json.append("\"metallicFactor\":0.0,\"roughnessFactor\":0.84},");
+        json.append("\"doubleSided\":true,\"alphaMode\":\"MASK\",\"alphaCutoff\":0.05}],");
         json.append("\"textures\":[{\"sampler\":0,\"source\":0}],");
         json.append("\"samplers\":[{\"magFilter\":9729,\"minFilter\":9987,");
         json.append("\"wrapS\":33071,\"wrapT\":33071}],");
-        json.append("\"images\":[{\"bufferView\":4,\"mimeType\":\"image/jpeg\",");
-        json.append("\"name\":\"texture_mobile_v44\"}],");
+        json.append("\"images\":[{\"bufferView\":4,\"mimeType\":\"image/png\",");
+        json.append("\"name\":\"texture_25d_mobile\"}],");
         json.append("\"buffers\":[{\"byteLength\":")
                 .append(binaryLength).append("}],");
         json.append("\"bufferViews\":[");
@@ -235,10 +231,9 @@ public final class MobileGlbExporter {
         return result;
     }
 
-    private static byte[] encodeJpeg(
+    private static byte[] encodePng(
             Bitmap source,
-            int maximumSide,
-            int quality
+            int maximumSide
     ) throws IOException {
         float scale = Math.min(
                 1.0f,
@@ -254,19 +249,19 @@ public final class MobileGlbExporter {
             scaled = Bitmap.createScaledBitmap(source, width, height, true);
         }
 
-        Bitmap opaque = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(opaque);
-        canvas.drawColor(Color.WHITE);
-        canvas.drawBitmap(scaled, 0.0f, 0.0f, new Paint(Paint.FILTER_BITMAP_FLAG));
-
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        boolean encoded = opaque.compress(Bitmap.CompressFormat.JPEG, quality, output);
-        opaque.recycle();
+        boolean encoded = scaled.compress(
+                Bitmap.CompressFormat.PNG,
+                100,
+                output
+        );
         if (scaled != source) {
             scaled.recycle();
         }
         if (!encoded) {
-            throw new IOException("Impossible d'encoder la texture JPEG mobile");
+            throw new IOException(
+                    "Impossible d'encoder la texture PNG mobile 2.5D"
+            );
         }
         return output.toByteArray();
     }

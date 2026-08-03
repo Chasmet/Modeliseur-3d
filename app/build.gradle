@@ -6,17 +6,6 @@ plugins {
     id 'com.android.application'
 }
 
-def depthModelFile = file(
-        'src/main/assets/models/depth_anything_v2_small_fp32.onnx'
-)
-def depthModelTemporary = file(
-        'src/main/assets/models/depth_anything_v2_small_fp32.onnx.part'
-)
-def depthModelUrl =
-        'https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx?download=true'
-def depthModelSha256 =
-        'afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c'
-
 def segmentationModelFile = file(
         'src/main/assets/models/isnet_anime_fp32.onnx'
 )
@@ -45,48 +34,9 @@ def fileDigest = { File target, String algorithm ->
     }.join()
 }
 
-tasks.register('downloadDepthModel') {
-    group = 'machine learning'
-    description = 'Télécharge Depth Anything V2 Small pour le relief local.'
-    outputs.file(depthModelFile)
-
-    doLast {
-        if (depthModelFile.isFile()
-                && fileDigest(depthModelFile, 'SHA-256') == depthModelSha256) {
-            println 'Depth Anything V2 déjà présent et vérifié.'
-            return
-        }
-
-        depthModelFile.parentFile.mkdirs()
-        depthModelTemporary.delete()
-        println 'Téléchargement de Depth Anything V2 Small FP32…'
-        ant.get(
-                src: depthModelUrl,
-                dest: depthModelTemporary,
-                verbose: true,
-                skipexisting: false
-        )
-
-        String downloaded = fileDigest(depthModelTemporary, 'SHA-256')
-        if (downloaded != depthModelSha256) {
-            depthModelTemporary.delete()
-            throw new GradleException(
-                    'Depth Anything V2 est incomplet ou corrompu. SHA-256 : '
-                            + downloaded
-            )
-        }
-        Files.move(
-                depthModelTemporary.toPath(),
-                depthModelFile.toPath(),
-                StandardCopyOption.REPLACE_EXISTING
-        )
-        println 'Depth Anything V2 vérifié : ' + depthModelFile.length() + ' octets.'
-    }
-}
-
 tasks.register('downloadAnimeSegmentationModel') {
     group = 'machine learning'
-    description = 'Télécharge IS-Net Anime FP32 compatible avec le CPU Android.'
+    description = 'Télécharge IS-Net Anime FP32 pour le détourage 2.5D local.'
     outputs.file(segmentationModelFile)
 
     doLast {
@@ -143,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 15
-        versionName '4.9.0'
+        versionCode 16
+        versionName '5.0.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -185,7 +135,6 @@ android {
 }
 
 tasks.named('preBuild').configure {
-    dependsOn tasks.named('downloadDepthModel')
     dependsOn tasks.named('downloadAnimeSegmentationModel')
 }
 
