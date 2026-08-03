@@ -3,7 +3,6 @@ package com.chasmet.modeliseur3d;
 import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,9 +11,10 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -23,8 +23,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceViewV52;
-import com.chasmet.modeliseur3d.model.AnimeSegmentationEngine;
-import com.chasmet.modeliseur3d.model.ManualViewPreprocessor;
+import com.chasmet.modeliseur3d.model.FaceBackAutoViewSynthesizer;
 import com.chasmet.modeliseur3d.model.MeshData;
 import com.chasmet.modeliseur3d.model.ObjExporter;
 import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV48;
@@ -38,36 +37,31 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Reconstruction 3D V5.4 : huit photos guidées par silhouettes, validées et
- * normalisées avant d'être transmises au moteur de maillage.
- */
+/** V5.5 : reconstruction 3D assistée avec seulement une face et un dos. */
 public final class Manual3DActivity extends AppCompatActivity {
-    private static final String TAG = "Modeliseur3DGuideV54";
-    private static final int REQUEST_VIEW_BASE = 5400;
+    private static final String TAG = "Modeliseur3DAutoV55";
+    private static final int REQUEST_FRONT = 5501;
+    private static final int REQUEST_BACK = 5502;
     private static final int MAXIMUM_DECODE_SIDE = 1280;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final Uri[] sourceUris = new Uri[ManualViewPlan.VIEW_COUNT];
-    private final ManualViewPreprocessor.Result[] preparedResults =
-            new ManualViewPreprocessor.Result[ManualViewPlan.VIEW_COUNT];
-    private final GuidedPhotoSlotView[] slotViews =
-            new GuidedPhotoSlotView[ManualViewPlan.VIEW_COUNT];
-    private final ManualViewPreprocessor preprocessor =
-            new ManualViewPreprocessor();
 
     private DevicePerformanceProfile performanceProfile;
     private ProcessingPowerLock processingPowerLock;
-    private AnimeSegmentationEngine validationSegmentation;
+    private FaceBackAutoViewSynthesizer synthesizer;
     private VideoReconstructionEngineV48 reconstructionEngine;
     private ModelGLSurfaceViewV52 viewer;
+
     private ScrollView capturePanel;
     private View viewerPanel;
     private ProgressBar progressBar;
     private TextView statusText;
-    private TextView selectionCounter;
-    private TextView sequenceQualityText;
-    private TextView emptyViewerText;
+    private TextView frontLabel;
+    private TextView backLabel;
+    private TextView depthValueText;
+    private ImageView frontPreview;
+    private ImageView backPreview;
+    private SeekBar depthSeekBar;
     private Button generateButton;
     private Button clearButton;
     private Button editButton;
@@ -75,7 +69,10 @@ public final class Manual3DActivity extends AppCompatActivity {
     private Button rotationButton;
     private Button exportButton;
 
-    private ManualViewSequenceValidator.Result sequenceValidation;
+    private Uri frontUri;
+    private Uri backUri;
+    private Bitmap frontPreviewBitmap;
+    private Bitmap backPreviewBitmap;
     private MeshData currentMesh;
     private Bitmap currentTexture;
     private boolean busy;
@@ -90,9 +87,12 @@ public final class Manual3DActivity extends AppCompatActivity {
         viewerPanel = findViewById(R.id.viewer3dPanel);
         progressBar = findViewById(R.id.manualProgressBar);
         statusText = findViewById(R.id.manualStatusText);
-        selectionCounter = findViewById(R.id.selectionCounter);
-        sequenceQualityText = findViewById(R.id.sequenceQualityText);
-        emptyViewerText = findViewById(R.id.manualEmptyViewerText);
+        frontLabel = findViewById(R.id.frontLabel);
+        backLabel = findViewById(R.id.backLabel);
+        depthValueText = findViewById(R.id.depthValueText);
+        frontPreview = findViewById(R.id.frontPreview);
+        backPreview = findViewById(R.id.backPreview);
+        depthSeekBar = findViewById(R.id.depthSeekBar);
         generateButton = findViewById(R.id.generate3dButton);
         clearButton = findViewById(R.id.clearViewsButton);
         editButton = findViewById(R.id.editViewsButton);
@@ -102,15 +102,16 @@ public final class Manual3DActivity extends AppCompatActivity {
 
         FrameLayout viewerContainer = findViewById(R.id.viewer3dContainer);
         viewer = new ModelGLSurfaceViewV52(this);
-        viewerContainer.addView(viewer, 0, new FrameLayout.LayoutParams(
+        viewerContainer.addView(viewer, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
         viewer.setVisibility(View.INVISIBLE);
 
-        buildViewSlots(findViewById(R.id.manualViewGrid));
-        generateButton.setOnClickListener(view -> generateManualModel());
-        clearButton.setOnClickListener(view -> clearAllViews());
+        findViewById(R.id.frontCard).setOnClickListener(view -> chooseImage(true));
+        findViewById(R.id.backCard).setOnClickListener(view -> chooseImage(false));
+        generateButton.setOnClickListener(view -> generateAutomaticModel());
+        clearButton.setOnClickListener(view -> clearInputs());
         editButton.setOnClickListener(view -> showCapturePanel());
         resetButton.setOnClickListener(view -> {
             viewer.stopAutoRotation();
@@ -119,41 +120,28 @@ public final class Manual3DActivity extends AppCompatActivity {
         });
         rotationButton.setOnClickListener(view -> toggleAutomaticRotation());
         exportButton.setOnClickListener(view -> exportCurrentModel());
+        depthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateDepthText();
+            }
 
-        updateSelectionState();
-        statusText.setText(getString(
-                R.string.manual_status_ready,
-                performanceProfile.describe()
-        ));
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        updateDepthText();
+        updateInputState();
+        statusText.setText("Prêt — Face + Dos vers six vues automatiques • "
+                + performanceProfile.describe());
     }
 
-    private void buildViewSlots(GridLayout grid) {
-        grid.setColumnCount(2);
-        int margin = dp(5);
-        for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-            final int slotIndex = index;
-            GuidedPhotoSlotView slot = new GuidedPhotoSlotView(this, index);
-            slot.setContentDescription(getString(
-                    R.string.manual_slot_content_description,
-                    ManualViewPlan.getSlotLabel(index)
-            ));
-            slot.setOnClickListener(view -> chooseImage(slotIndex));
-            slot.setOnLongClickListener(view -> {
-                clearView(slotIndex);
-                return true;
-            });
-            GridLayout.LayoutParams parameters = new GridLayout.LayoutParams();
-            parameters.width = 0;
-            parameters.height = dp(258);
-            parameters.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1.0f);
-            parameters.setMargins(margin, margin, margin, margin);
-            slot.setLayoutParams(parameters);
-            slotViews[index] = slot;
-            grid.addView(slot);
-        }
-    }
-
-    private void chooseImage(int viewIndex) {
+    private void chooseImage(boolean front) {
         if (busy) {
             return;
         }
@@ -162,7 +150,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         intent.setType("image/*");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, REQUEST_VIEW_BASE + viewIndex);
+        startActivityForResult(intent, front ? REQUEST_FRONT : REQUEST_BACK);
     }
 
     @Override
@@ -172,318 +160,138 @@ public final class Manual3DActivity extends AppCompatActivity {
             @Nullable Intent data
     ) {
         super.onActivityResult(requestCode, resultCode, data);
-        int viewIndex = requestCode - REQUEST_VIEW_BASE;
-        if (viewIndex < 0 || viewIndex >= ManualViewPlan.VIEW_COUNT
+        if ((requestCode != REQUEST_FRONT && requestCode != REQUEST_BACK)
                 || resultCode != RESULT_OK
                 || data == null
                 || data.getData() == null) {
             return;
         }
         Uri uri = data.getData();
-        String mimeType = getContentResolver().getType(uri);
-        if (mimeType != null && !mimeType.startsWith("image/")) {
-            Toast.makeText(this, R.string.manual_error_not_image, Toast.LENGTH_LONG).show();
+        String type = getContentResolver().getType(uri);
+        if (type != null && !type.startsWith("image/")) {
+            Toast.makeText(this, "Le fichier choisi n’est pas une image.", Toast.LENGTH_LONG).show();
             return;
         }
-        persistPermission(uri);
-        validateSelectedImage(viewIndex, uri);
-    }
-
-    private void persistPermission(Uri uri) {
         try {
             getContentResolver().takePersistableUriPermission(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
-            // Certains fournisseurs donnent seulement une permission temporaire.
         }
+        boolean front = requestCode == REQUEST_FRONT;
+        if (front) {
+            frontUri = uri;
+        } else {
+            backUri = uri;
+        }
+        loadPreview(front, uri);
     }
 
-    private void validateSelectedImage(int viewIndex, Uri uri) {
-        setBusy(true, getString(
-                R.string.manual_status_analyzing_view,
-                ManualViewPlan.getName(viewIndex)
-        ));
-        slotViews[viewIndex].showAnalyzing();
-
+    private void loadPreview(boolean front, Uri uri) {
+        setBusy(true, front ? "Lecture de la face…" : "Lecture du dos…");
         worker.execute(() -> {
-            ProcessingPowerLock.favorCurrentThread();
-            Bitmap source = null;
-            ManualViewPreprocessor.Result result = null;
+            Bitmap bitmap = null;
             try {
-                source = BitmapUtils.decodeBitmapFromUri(
+                bitmap = BitmapUtils.decodeBitmapFromUri(
                         getContentResolver(),
                         uri,
-                        Math.min(
-                                MAXIMUM_DECODE_SIDE,
-                                performanceProfile.getMaximumInputSide()
-                        )
+                        720
                 );
-                ensureValidationSegmentation();
-                result = preprocessor.process(
-                        source,
-                        validationSegmentation,
-                        viewIndex
-                );
-                ManualViewPreprocessor.Result finalResult = result;
-                result = null;
-                runOnUiThread(() -> acceptValidationResult(
-                        viewIndex,
-                        uri,
-                        finalResult
-                ));
+                Bitmap finalBitmap = bitmap;
+                runOnUiThread(() -> {
+                    replacePreview(front, finalBitmap);
+                    setBusy(false, front
+                            ? "Face sélectionnée. Ajoute maintenant le dos."
+                            : "Dos sélectionné. Les deux images sont prêtes.");
+                    updateInputState();
+                });
+                bitmap = null;
             } catch (Exception | OutOfMemoryError error) {
-                if (result != null) {
-                    result.close();
-                }
-                handleValidationFailure(viewIndex, error);
-            } finally {
-                if (source != null && !source.isRecycled()) {
-                    source.recycle();
-                }
+                Bitmap failed = bitmap;
+                runOnUiThread(() -> {
+                    recycle(failed);
+                    if (front) {
+                        frontUri = null;
+                    } else {
+                        backUri = null;
+                    }
+                    setBusy(false, "Impossible de lire cette image : " + safeMessage(error));
+                    updateInputState();
+                });
             }
         });
     }
 
-    private void ensureValidationSegmentation() throws Exception {
-        if (validationSegmentation == null) {
-            validationSegmentation = new AnimeSegmentationEngine(
-                    getApplicationContext(),
-                    performanceProfile.getNeuralThreadCount()
-            );
-        }
-    }
-
-    private void acceptValidationResult(
-            int viewIndex,
-            Uri uri,
-            ManualViewPreprocessor.Result result
-    ) {
-        releasePreparedResult(viewIndex);
-        sourceUris[viewIndex] = uri;
-        preparedResults[viewIndex] = result;
-        setBusy(false, result.getMessage());
-        updateSelectionState();
-        statusText.setText(getString(
-                result.isAccepted()
-                        ? R.string.manual_status_view_valid
-                        : R.string.manual_status_view_invalid,
-                ManualViewPlan.getName(viewIndex),
-                result.getScore(),
-                result.getMessage()
-        ));
-        if (!result.isAccepted()) {
-            Toast.makeText(
-                    this,
-                    getString(
-                            R.string.manual_toast_replace_view,
-                            ManualViewPlan.getName(viewIndex),
-                            result.getMessage()
-                    ),
-                    Toast.LENGTH_LONG
-            ).show();
-        }
-    }
-
-    private void handleValidationFailure(int viewIndex, Throwable error) {
-        Log.e(TAG, "Échec de validation de la vue " + viewIndex, error);
-        String message = getString(
-                R.string.manual_error_validation,
-                ManualViewPlan.getName(viewIndex)
-        ) + " " + safeMessage(error);
-        runOnUiThread(() -> {
-            setBusy(false, message);
-            updateSelectionState();
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-        });
-    }
-
-    private void clearView(int index) {
-        if (busy) {
-            return;
-        }
-        sourceUris[index] = null;
-        releasePreparedResult(index);
-        updateSelectionState();
-        statusText.setText(getString(
-                R.string.manual_status_slot_cleared,
-                ManualViewPlan.getSlotLabel(index)
-        ));
-    }
-
-    private void clearAllViews() {
-        if (busy) {
-            return;
-        }
-        for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-            sourceUris[index] = null;
-            releasePreparedResult(index);
-        }
-        closeValidationSegmentation();
-        updateSelectionState();
-        statusText.setText(R.string.manual_status_ready_short);
-    }
-
-    private void releasePreparedResult(int index) {
-        GuidedPhotoSlotView slot = slotViews[index];
-        if (slot != null) {
-            slot.clearPreviewReference();
-        }
-        ManualViewPreprocessor.Result previous = preparedResults[index];
-        preparedResults[index] = null;
-        if (previous != null) {
-            previous.close();
-        }
-    }
-
-    private void updateSelectionState() {
-        int chosen = 0;
-        int valid = 0;
-        float[] aspects = new float[ManualViewPlan.VIEW_COUNT];
-        boolean[] accepted = new boolean[ManualViewPlan.VIEW_COUNT];
-
-        for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-            ManualViewPreprocessor.Result result = preparedResults[index];
-            if (result == null) {
-                slotViews[index].showEmpty();
-                aspects[index] = Float.NaN;
-                continue;
-            }
-            chosen++;
-            if (result.isAccepted()) {
-                valid++;
-            }
-            accepted[index] = result.isAccepted();
-            aspects[index] = result.getSilhouetteAspect();
-            slotViews[index].showResult(
-                    result.getNormalizedBitmap(),
-                    result.isAccepted(),
-                    result.getScore(),
-                    result.getMessage()
-            );
-        }
-
-        selectionCounter.setText(getString(
-                R.string.manual_selection_counter,
-                chosen,
-                valid,
-                ManualViewPlan.VIEW_COUNT
-        ));
-
-        sequenceValidation = null;
-        boolean allIndividuallyValid = valid == ManualViewPlan.VIEW_COUNT;
-        if (allIndividuallyValid) {
-            sequenceValidation = ManualViewSequenceValidator.validate(
-                    aspects,
-                    accepted
-            );
-            if (sequenceValidation.isValid()) {
-                sequenceQualityText.setText(
-                        R.string.manual_sequence_valid
-                );
-                sequenceQualityText.setTextColor(Color.rgb(42, 145, 78));
-            } else {
-                sequenceQualityText.setText(sequenceValidation.getMessage());
-                sequenceQualityText.setTextColor(Color.rgb(196, 55, 55));
-                int failing = sequenceValidation.getFailingIndex();
-                if (failing >= 0) {
-                    slotViews[failing].showSequenceWarning(
-                            sequenceValidation.getMessage()
-                    );
-                }
-            }
+    private void replacePreview(boolean front, Bitmap bitmap) {
+        if (front) {
+            recycle(frontPreviewBitmap);
+            frontPreviewBitmap = bitmap;
+            frontPreview.setImageBitmap(bitmap);
+            frontLabel.setText("FACE ✓ — Appuyer pour remplacer");
         } else {
-            sequenceQualityText.setText(getString(
-                    R.string.manual_sequence_progress,
-                    valid,
-                    ManualViewPlan.VIEW_COUNT
-            ));
-            sequenceQualityText.setTextColor(getColorCompat(R.color.text_secondary));
+            recycle(backPreviewBitmap);
+            backPreviewBitmap = bitmap;
+            backPreview.setImageBitmap(bitmap);
+            backLabel.setText("DOS ✓ — Appuyer pour remplacer");
         }
-
-        generateButton.setEnabled(
-                !busy
-                        && allIndividuallyValid
-                        && sequenceValidation != null
-                        && sequenceValidation.isValid()
-        );
     }
 
-    private int firstProblemIndex() {
-        for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-            ManualViewPreprocessor.Result result = preparedResults[index];
-            if (result == null || !result.isAccepted()) {
-                return index;
-            }
-        }
-        if (sequenceValidation == null) {
-            updateSelectionState();
-        }
-        if (sequenceValidation != null && !sequenceValidation.isValid()) {
-            return sequenceValidation.getFailingIndex();
-        }
-        return -1;
+    private void updateInputState() {
+        generateButton.setEnabled(!busy && frontUri != null && backUri != null);
+        clearButton.setEnabled(!busy && (frontUri != null || backUri != null));
     }
 
-    private void generateManualModel() {
-        updateSelectionState();
-        int problem = firstProblemIndex();
-        if (problem >= 0) {
-            String message;
-            ManualViewPreprocessor.Result result = preparedResults[problem];
-            if (result == null) {
-                message = getString(
-                        R.string.manual_error_missing_view,
-                        ManualViewPlan.getSlotLabel(problem)
-                );
-            } else if (!result.isAccepted()) {
-                message = getString(
-                        R.string.manual_error_invalid_view,
-                        ManualViewPlan.getSlotLabel(problem),
-                        result.getMessage()
-                );
-            } else {
-                message = sequenceValidation != null
-                        ? sequenceValidation.getMessage()
-                        : getString(R.string.manual_error_sequence);
-            }
-            statusText.setText(message);
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-            slotViews[problem].requestFocus();
+    private void updateDepthText() {
+        int progress = depthSeekBar.getProgress();
+        int percent = 80 + Math.round(progress * 0.4f);
+        String label = percent < 94 ? "Fin" : (percent > 108 ? "Large" : "Normal");
+        depthValueText.setText(label + " — " + percent + " %");
+    }
+
+    private float depthMultiplier() {
+        return 0.80f + depthSeekBar.getProgress() * 0.004f;
+    }
+
+    private void generateAutomaticModel() {
+        if (frontUri == null || backUri == null) {
+            Toast.makeText(this, "Ajoute obligatoirement la face et le dos.", Toast.LENGTH_LONG).show();
             return;
         }
-
-        setBusy(true, getString(R.string.manual_status_preparing_v54));
+        setBusy(true, "Préparation des deux vraies images…");
         viewer.stopAutoRotation();
         rotationButton.setText(R.string.rotation_start);
 
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
-            ArrayList<Bitmap> views = new ArrayList<>(ManualViewPlan.VIEW_COUNT);
+            Bitmap front = null;
+            Bitmap back = null;
+            List<Bitmap> generatedViews = null;
             try {
-                closeValidationSegmentation();
-                for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-                    postStatus(getString(
-                            R.string.manual_status_loading_normalized_view,
-                            index + 1,
-                            ManualViewPlan.VIEW_COUNT,
-                            ManualViewPlan.getName(index)
-                    ));
-                    Bitmap normalized = preparedResults[index]
-                            .getNormalizedBitmap();
-                    Bitmap copy = normalized.copy(
-                            Bitmap.Config.ARGB_8888,
-                            false
+                int maximumSide = Math.min(
+                        MAXIMUM_DECODE_SIDE,
+                        performanceProfile.getMaximumInputSide()
+                );
+                front = BitmapUtils.decodeBitmapFromUri(
+                        getContentResolver(), frontUri, maximumSide
+                );
+                back = BitmapUtils.decodeBitmapFromUri(
+                        getContentResolver(), backUri, maximumSide
+                );
+                if (synthesizer == null) {
+                    synthesizer = new FaceBackAutoViewSynthesizer(
+                            getApplicationContext(),
+                            performanceProfile
                     );
-                    if (copy == null) {
-                        throw new IllegalStateException(
-                                "Copie normalisée impossible pour "
-                                        + ManualViewPlan.getName(index)
-                        );
-                    }
-                    views.add(copy);
                 }
+                FaceBackAutoViewSynthesizer.Result synthesized = synthesizer.synthesize(
+                        front,
+                        back,
+                        depthMultiplier(),
+                        (current, total, message) -> postStatus(message)
+                );
+                generatedViews = synthesized.getViews();
+                postStatus("Reconstruction du volume à partir des huit vues cohérentes…");
                 if (reconstructionEngine == null) {
                     reconstructionEngine = new VideoReconstructionEngineV48(
                             getApplicationContext(),
@@ -491,15 +299,17 @@ public final class Manual3DActivity extends AppCompatActivity {
                     );
                 }
                 VideoReconstructionEngineV48.Result result = reconstructionEngine.generate(
-                        views,
-                        ManualViewPlan.VIEW_COUNT,
+                        generatedViews,
+                        FaceBackAutoViewSynthesizer.VIEW_COUNT,
                         this::postReconstructionProgress
                 );
-                showResult(result);
+                showResult(result, synthesized.getBackend());
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, R.string.manual_error_generation, true);
+                handleFailure(error, "La génération 3D Face + Dos a échoué.", true);
             } finally {
-                recycleBitmaps(views);
+                recycle(front);
+                recycle(back);
+                recycleBitmaps(generatedViews);
             }
         });
     }
@@ -511,52 +321,45 @@ public final class Manual3DActivity extends AppCompatActivity {
     ) {
         switch (stage) {
             case SEGMENTING:
-                postStatus(getString(
-                        R.string.manual_status_segmenting_normalized,
-                        current,
-                        total
-                ));
+                postStatus("Contrôle de la vue automatique " + current + "/" + total + "…");
                 break;
             case BUILDING_HULL:
-                postStatus(getString(R.string.manual_status_building_hull_v54));
+                postStatus("Calcul du volume 360° stable…");
                 break;
             case MESHING:
-                postStatus(getString(R.string.manual_status_meshing_v54));
+                postStatus("Création du maillage fermé…");
                 break;
             case DEPTH:
             default:
-                postStatus(getString(R.string.manual_status_texturing_v54));
+                postStatus("Application des textures face, dos et transitions…");
                 break;
         }
     }
 
-    private void showResult(VideoReconstructionEngineV48.Result result) {
+    private void showResult(
+            VideoReconstructionEngineV48.Result result,
+            String synthesisBackend
+    ) {
         runOnUiThread(() -> {
-            Bitmap previousTexture = currentTexture;
+            Bitmap previous = currentTexture;
             currentMesh = result.getMesh();
             currentTexture = result.getTexture();
             viewer.setModel(currentMesh, currentTexture);
             viewer.resetView();
             viewer.setVisibility(View.VISIBLE);
-            emptyViewerText.setVisibility(View.GONE);
-            if (previousTexture != null
-                    && previousTexture != currentTexture
-                    && !previousTexture.isRecycled()) {
-                previousTexture.recycle();
+            if (previous != null && previous != currentTexture && !previous.isRecycled()) {
+                previous.recycle();
             }
-            setBusy(false, getString(R.string.manual_status_done_v54));
+            setBusy(false, "Modèle 3D V5.5 prêt.");
             capturePanel.setVisibility(View.GONE);
             viewerPanel.setVisibility(View.VISIBLE);
-            statusText.setText(getString(
-                    R.string.manual_status_done_details,
-                    getString(R.string.manual_quality_v54),
-                    result.getProcessorCount(),
-                    currentMesh.getTriangleCount(),
-                    currentMesh.getVertexCount(),
-                    result.getDecodedFrameCount(),
-                    result.getRepairedViewCount(),
-                    result.getTotalDurationMs() / 1000.0
-            ));
+            statusText.setText(
+                    "V5.5 Face + Dos • 6 vues automatiques • "
+                            + currentMesh.getTriangleCount() + " triangles • "
+                            + currentMesh.getVertexCount() + " sommets • "
+                            + String.format(java.util.Locale.FRANCE, "%.1f s", result.getTotalDurationMs() / 1000.0)
+                            + " • " + synthesisBackend
+            );
         });
     }
 
@@ -568,39 +371,35 @@ public final class Manual3DActivity extends AppCompatActivity {
         rotationButton.setText(R.string.rotation_start);
         viewerPanel.setVisibility(View.GONE);
         capturePanel.setVisibility(View.VISIBLE);
-        updateSelectionState();
-        statusText.setText(R.string.manual_status_editing_v54);
+        statusText.setText("Modifie la face, le dos ou l’épaisseur puis relance la génération.");
     }
 
     private void toggleAutomaticRotation() {
         boolean running = viewer.toggleAutoRotation();
-        rotationButton.setText(running
-                ? R.string.rotation_stop
-                : R.string.rotation_start);
+        rotationButton.setText(running ? R.string.rotation_stop : R.string.rotation_start);
     }
 
     private void exportCurrentModel() {
-        MeshData mesh = currentMesh;
-        Bitmap texture = currentTexture;
-        if (mesh == null || texture == null || busy) {
+        if (currentMesh == null || currentTexture == null || busy) {
             return;
         }
-        setBusy(true, getString(R.string.manual_status_exporting));
+        setBusy(true, "Création du GLB HD et de la copie mobile 200 ko…");
         worker.execute(() -> {
-            ProcessingPowerLock.favorCurrentThread();
             try {
-                ObjExporter.ExportResult result = ObjExporter.export(this, mesh, texture);
+                ObjExporter.ExportResult result = ObjExporter.export(
+                        this,
+                        currentMesh,
+                        currentTexture
+                );
                 runOnUiThread(() -> {
-                    setBusy(false, getString(R.string.manual_status_exported));
-                    statusText.setText(getString(
-                            R.string.manual_status_exported_details,
-                            result.getMobileSizeBytes() / 1_000_000.0,
-                            result.getMobileTriangleCount()
-                    ));
+                    setBusy(false, "Export GLB terminé.");
+                    statusText.setText("GLB mobile : "
+                            + result.getMobileSizeBytes() + " octets • "
+                            + result.getMobileTriangleCount() + " triangles");
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, R.string.manual_error_export, false);
+                handleFailure(error, "L’export GLB a échoué.", false);
             }
         });
     }
@@ -611,76 +410,57 @@ public final class Manual3DActivity extends AppCompatActivity {
         for (File file : result.getFiles()) {
             uris.add(FileProvider.getUriForFile(this, authority, file));
         }
-        if (uris.isEmpty()) {
-            return;
-        }
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.manual_share_subject));
-        share.putExtra(Intent.EXTRA_TEXT, getString(
-                R.string.manual_share_text,
-                result.getDirectory().getAbsolutePath(),
-                result.getMobileSizeBytes()
-        ));
+        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V5.5 Face + Dos");
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        ClipData clipData = ClipData.newRawUri("Modèle 3D guidé", uris.get(0));
-        for (int index = 1; index < uris.size(); index++) {
-            clipData.addItem(new ClipData.Item(uris.get(index)));
+        if (!uris.isEmpty()) {
+            ClipData clip = ClipData.newRawUri("Modèle 3D V5.5", uris.get(0));
+            for (int index = 1; index < uris.size(); index++) {
+                clip.addItem(new ClipData.Item(uris.get(index)));
+            }
+            share.setClipData(clip);
         }
-        share.setClipData(clipData);
-        startActivity(Intent.createChooser(
-                share,
-                getString(R.string.manual_share_chooser)
-        ));
+        startActivity(Intent.createChooser(share, "Partager ou enregistrer le modèle 3D"));
     }
 
-    private void handleFailure(
-            Throwable error,
-            int messageResource,
-            boolean returnToCapture
-    ) {
-        Log.e(TAG, "Échec du mode 3D guidé V5.4", error);
-        String message = getString(messageResource) + " " + safeMessage(error);
-        Runtime.getRuntime().gc();
-        runOnUiThread(() -> {
-            setBusy(false, message);
-            if (returnToCapture || currentMesh == null) {
-                capturePanel.setVisibility(View.VISIBLE);
-                viewerPanel.setVisibility(View.GONE);
-            } else {
-                capturePanel.setVisibility(View.GONE);
-                viewerPanel.setVisibility(View.VISIBLE);
-            }
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-        });
+    private void clearInputs() {
+        if (busy) {
+            return;
+        }
+        frontUri = null;
+        backUri = null;
+        frontPreview.setImageDrawable(null);
+        backPreview.setImageDrawable(null);
+        recycle(frontPreviewBitmap);
+        recycle(backPreviewBitmap);
+        frontPreviewBitmap = null;
+        backPreviewBitmap = null;
+        frontLabel.setText("FACE — Appuyer pour choisir");
+        backLabel.setText("DOS — Appuyer pour choisir");
+        updateInputState();
+        statusText.setText("Sélectionne la face et le dos.");
     }
 
     private void setBusy(boolean value, String message) {
         busy = value;
-        progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
-        clearButton.setEnabled(!busy);
-        editButton.setEnabled(!busy);
-        resetButton.setEnabled(!busy && currentMesh != null);
-        rotationButton.setEnabled(!busy && currentMesh != null);
-        exportButton.setEnabled(!busy && currentMesh != null);
-        for (GuidedPhotoSlotView slot : slotViews) {
-            if (slot != null) {
-                slot.setEnabled(!busy);
-            }
-        }
-        updateSelectionState();
+        progressBar.setVisibility(value ? View.VISIBLE : View.GONE);
+        generateButton.setEnabled(!value && frontUri != null && backUri != null);
+        clearButton.setEnabled(!value && (frontUri != null || backUri != null));
+        editButton.setEnabled(!value);
+        resetButton.setEnabled(!value && currentMesh != null);
+        rotationButton.setEnabled(!value && currentMesh != null);
+        exportButton.setEnabled(!value && currentMesh != null);
+        depthSeekBar.setEnabled(!value);
         statusText.setText(message);
-        configurePerformanceMode(busy);
+        configurePerformanceMode(value);
     }
 
     private void configurePerformanceMode(boolean enabled) {
         if (enabled) {
             if (processingPowerLock == null) {
-                processingPowerLock = ProcessingPowerLock.acquire(
-                        this,
-                        "guided-silhouettes-3d-v54"
-                );
+                processingPowerLock = ProcessingPowerLock.acquire(this, "face-back-auto-v55");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
@@ -696,17 +476,21 @@ public final class Manual3DActivity extends AppCompatActivity {
             try {
                 getWindow().setSustainedPerformanceMode(enabled);
             } catch (RuntimeException ignored) {
-                // Certaines surcouches refusent ce mode malgré son support annoncé.
             }
         }
     }
 
-    private void closeValidationSegmentation() {
-        AnimeSegmentationEngine engine = validationSegmentation;
-        validationSegmentation = null;
-        if (engine != null) {
-            engine.close();
-        }
+    private void handleFailure(Throwable error, String prefix, boolean showCapture) {
+        Log.e(TAG, prefix, error);
+        String message = prefix + " " + safeMessage(error);
+        runOnUiThread(() -> {
+            setBusy(false, message);
+            if (showCapture) {
+                capturePanel.setVisibility(View.VISIBLE);
+                viewerPanel.setVisibility(View.GONE);
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        });
     }
 
     private void postStatus(String message) {
@@ -714,49 +498,30 @@ public final class Manual3DActivity extends AppCompatActivity {
     }
 
     private static void recycleBitmaps(List<Bitmap> bitmaps) {
+        if (bitmaps == null) {
+            return;
+        }
         for (Bitmap bitmap : bitmaps) {
-            if (bitmap != null && !bitmap.isRecycled()) {
-                bitmap.recycle();
-            }
+            recycle(bitmap);
         }
         bitmaps.clear();
     }
 
+    private static void recycle(Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
+    }
+
     private static String safeMessage(Throwable error) {
         if (error instanceof OutOfMemoryError) {
-            return "(mémoire Android saturée ; ferme les autres applications puis réessaie)";
+            return "Mémoire Android saturée : ferme les autres applications puis réessaie.";
         }
-        Throwable current = error;
-        String message = null;
-        while (current != null) {
-            String candidate = current.getMessage();
-            if (candidate != null && !candidate.trim().isEmpty()) {
-                message = candidate.trim();
-            }
-            if (current.getCause() == current) {
-                break;
-            }
-            current = current.getCause();
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty()) {
+            return error.getClass().getSimpleName();
         }
-        if (message == null || message.isEmpty()) {
-            return "(" + error.getClass().getSimpleName() + ")";
-        }
-        if (message.length() > 180) {
-            message = message.substring(0, 177) + "…";
-        }
-        return "(" + error.getClass().getSimpleName() + " : " + message + ")";
-    }
-
-    private int getColorCompat(int resource) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return getColor(resource);
-        }
-        //noinspection deprecation
-        return getResources().getColor(resource);
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        return message.length() > 180 ? message.substring(0, 177) + "…" : message;
     }
 
     @Override
@@ -775,16 +540,17 @@ public final class Manual3DActivity extends AppCompatActivity {
     protected void onDestroy() {
         worker.shutdownNow();
         configurePerformanceMode(false);
-        closeValidationSegmentation();
+        if (synthesizer != null) {
+            synthesizer.close();
+        }
         if (reconstructionEngine != null) {
             reconstructionEngine.close();
         }
-        for (int index = 0; index < ManualViewPlan.VIEW_COUNT; index++) {
-            releasePreparedResult(index);
-        }
-        if (currentTexture != null && !currentTexture.isRecycled()) {
-            currentTexture.recycle();
-        }
+        frontPreview.setImageDrawable(null);
+        backPreview.setImageDrawable(null);
+        recycle(frontPreviewBitmap);
+        recycle(backPreviewBitmap);
+        recycle(currentTexture);
         super.onDestroy();
     }
 }
