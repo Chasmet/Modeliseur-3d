@@ -13,7 +13,7 @@ public final class MeshDepthScaler {
         if (source == null) {
             throw new IllegalArgumentException("Maillage absent");
         }
-        float safeMultiplier = Math.max(0.70f, Math.min(2.25f, multiplier));
+        float safeMultiplier = Math.max(0.50f, Math.min(2.00f, multiplier));
         float[] positions = Arrays.copyOf(
                 source.getPositions(),
                 source.getPositions().length
