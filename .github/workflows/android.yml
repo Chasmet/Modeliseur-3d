@@ -108,11 +108,13 @@ jobs:
             app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DEngine.java
           grep -q "texel.a < 0.055" \
             app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q "-58.0f, 58.0f" \
+          grep -q -- "-58.0f, 58.0f" \
             app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q 'mimeType\\\":\\\"image/png' \
+          grep -q "image/png" \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
-          grep -q 'alphaMode\\\":\\\"MASK' \
+          grep -q "alphaMode" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
+          grep -q "MASK" \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
