@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D automatique V5.5 — Face + Dos"
+        android:text="3D stable V5.6 — Volume Face + Dos"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Ajoute seulement une vraie image de face et une vraie image de dos. L’application aligne les silhouettes et fabrique automatiquement les six angles manquants."
+        android:text="Le moteur ne fabrique plus six fausses vues. Il conserve les vraies textures de face et de dos, puis crée un volume fermé avec des côtés calculés depuis leurs bords."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage, même pose, corps entier visible et caméra à la même hauteur. La position des bras et des jambes doit être identique entre la face et le dos."
+                android:text="Même personnage, même pose et même hauteur. Corps entier visible. Les bras, les jambes et les accessoires doivent occuper la même position sur la face et le dos."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -113,7 +113,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Épaisseur automatique du personnage"
+                android:text="Profondeur du volume"
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
@@ -121,7 +121,7 @@
                 android:id="@+id/depthSeekBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max="100"
+                android:max="150"
                 android:progress="50" />
 
             <TextView
@@ -131,6 +131,15 @@
                 android:gravity="center"
                 android:text="Normal — 100 %"
                 android:textColor="@color/text_secondary" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:text="50 % = très fin • 100 % = normal • 200 % = très profond"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -153,7 +162,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D automatique"
+                    android:text="Créer le volume stable"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
