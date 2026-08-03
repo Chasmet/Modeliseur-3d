@@ -13,6 +13,8 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 public final class ModelRenderer implements android.opengl.GLSurfaceView.Renderer {
+    private static final float AUTO_ROTATION_DEGREES_PER_SECOND = 32.0f;
+
     private static final String VERTEX_SHADER =
             "#version 300 es\n"
                     + "uniform mat4 uMvp;\n"
@@ -73,8 +75,10 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
     private MeshData pendingMesh;
     private Bitmap pendingTexture;
     private float angleX = -3.0f;
-    private float angleY = -12.0f;
+    private float angleY = 0.0f;
     private float zoom = 1.16f;
+    private boolean autoRotation;
+    private long lastFrameNanos;
 
     @Override
     public void onSurfaceCreated(
@@ -114,10 +118,20 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
             return;
         }
 
+        float drawAngleX;
+        float drawAngleY;
+        float drawZoom;
+        synchronized (this) {
+            updateAutomaticRotation();
+            drawAngleX = angleX;
+            drawAngleY = angleY;
+            drawZoom = zoom;
+        }
+
         Matrix.setIdentityM(model, 0);
-        Matrix.scaleM(model, 0, zoom, zoom, zoom);
-        Matrix.rotateM(model, 0, angleX, 1.0f, 0.0f, 0.0f);
-        Matrix.rotateM(model, 0, angleY, 0.0f, 1.0f, 0.0f);
+        Matrix.scaleM(model, 0, drawZoom, drawZoom, drawZoom);
+        Matrix.rotateM(model, 0, drawAngleX, 1.0f, 0.0f, 0.0f);
+        Matrix.rotateM(model, 0, drawAngleY, 0.0f, 1.0f, 0.0f);
 
         Matrix.setLookAtM(
                 view,
@@ -203,8 +217,10 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
     }
 
     public synchronized void rotate(float deltaX, float deltaY) {
-        angleY = clamp(angleY + deltaX * 0.28f, -58.0f, 58.0f);
+        // Sens corrigé : glisser vers la droite fait tourner le personnage vers la droite.
+        angleY = wrapDegrees(angleY - deltaX * 0.34f);
         angleX = clamp(angleX + deltaY * 0.24f, -35.0f, 35.0f);
+        lastFrameNanos = 0L;
     }
 
     public synchronized void scale(float factor) {
@@ -213,8 +229,30 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
 
     public synchronized void resetView() {
         angleX = -3.0f;
-        angleY = -12.0f;
+        angleY = 0.0f;
         zoom = 1.16f;
+        lastFrameNanos = 0L;
+    }
+
+    public synchronized void setAutoRotation(boolean enabled) {
+        autoRotation = enabled;
+        lastFrameNanos = 0L;
+    }
+
+    private void updateAutomaticRotation() {
+        if (!autoRotation) {
+            lastFrameNanos = 0L;
+            return;
+        }
+        long now = System.nanoTime();
+        if (lastFrameNanos != 0L) {
+            float seconds = (now - lastFrameNanos) / 1_000_000_000.0f;
+            seconds = Math.min(seconds, 0.10f);
+            angleY = wrapDegrees(
+                    angleY - AUTO_ROTATION_DEGREES_PER_SECOND * seconds
+            );
+        }
+        lastFrameNanos = now;
     }
 
     private synchronized void uploadPendingModelIfNeeded() {
@@ -330,6 +368,16 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
             );
         }
         return shader;
+    }
+
+    private static float wrapDegrees(float value) {
+        float wrapped = value % 360.0f;
+        if (wrapped > 180.0f) {
+            wrapped -= 360.0f;
+        } else if (wrapped < -180.0f) {
+            wrapped += 360.0f;
+        }
+        return wrapped;
     }
 
     private static float clamp(float value, float min, float max) {

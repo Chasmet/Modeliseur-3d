@@ -15,6 +15,7 @@ public final class ModelGLSurfaceView extends GLSurfaceView {
     private final GestureDetector gestureDetector;
     private float previousX;
     private float previousY;
+    private boolean autoRotation;
 
     public ModelGLSurfaceView(Context context) {
         super(context);
@@ -50,7 +51,25 @@ public final class ModelGLSurfaceView extends GLSurfaceView {
     }
 
     public void resetView() {
-        modelRenderer.resetView();
+        queueEvent(modelRenderer::resetView);
+        requestRender();
+    }
+
+    public boolean toggleAutoRotation() {
+        setAutoRotationEnabled(!autoRotation);
+        return autoRotation;
+    }
+
+    public void stopAutoRotation() {
+        setAutoRotationEnabled(false);
+    }
+
+    private void setAutoRotationEnabled(boolean enabled) {
+        autoRotation = enabled;
+        queueEvent(() -> modelRenderer.setAutoRotation(enabled));
+        setRenderMode(enabled
+                ? RENDERMODE_CONTINUOUSLY
+                : RENDERMODE_WHEN_DIRTY);
         requestRender();
     }
 
@@ -62,14 +81,17 @@ public final class ModelGLSurfaceView extends GLSurfaceView {
         if (event.getPointerCount() == 1 && !scaleDetector.isInProgress()) {
             float x = event.getX();
             float y = event.getY();
-            if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                previousX = x;
+                previousY = y;
+            } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
                 float dx = x - previousX;
                 float dy = y - previousY;
                 modelRenderer.rotate(dx, dy);
                 requestRender();
+                previousX = x;
+                previousY = y;
             }
-            previousX = x;
-            previousY = y;
         }
         return true;
     }

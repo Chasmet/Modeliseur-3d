@@ -31,11 +31,34 @@
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/selectButton"
+            android:id="@+id/selectFrontButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/select_image" />
+            android:text="@string/select_front" />
+
+        <Button
+            android:id="@+id/selectBackButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/select_back" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/generatePairButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:text="@string/generate_front_back" />
 
         <Button
             android:id="@+id/selectVideoButton"
@@ -54,15 +77,25 @@
 
         <Button
             android:id="@+id/resetButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="@string/reset_view" />
+
+        <Button
+            android:id="@+id/rotationButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:text="@string/rotation_start" />
 
         <Button
             android:id="@+id/exportButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:enabled="false"
             android:text="@string/export_obj" />

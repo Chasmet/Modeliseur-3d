@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5
+      - name: Mettre en cache le détourage local V5.1
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v50-25d-isnet-fp32-6a92a19a
+          key: modeliseur-v51-face-dos-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -91,30 +91,36 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5 2.5D
+      - name: Vérifier l'architecture V5.1 Face Dos
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.0.0'" app/build.gradle
-          grep -q "versionCode 16" app/build.gradle
+          grep -q "versionName '5.1.0'" app/build.gradle
+          grep -q "versionCode 17" app/build.gradle
           ! grep -q "downloadDepthModel" app/build.gradle
-          grep -q "Relief25DEngine" \
+          grep -q "REQUEST_BACK_IMAGE" \
             app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
-          grep -q "Relief25DMesher.build" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DEngine.java
-          grep -q "atlas cardinal 2x2" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DEngine.java
+          grep -q "composeFrontBackAtlas" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
+          grep -q "selectFrontButton" \
+            app/src/main/res/layout/activity_main.xml
+          grep -q "selectBackButton" \
+            app/src/main/res/layout/activity_main.xml
+          grep -q "rotationButton" \
+            app/src/main/res/layout/activity_main.xml
+          grep -q "toggleAutoRotation" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelGLSurfaceView.java
+          grep -q "AUTO_ROTATION_DEGREES_PER_SECOND" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
+          grep -q "angleY - deltaX" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
+          grep -q "wrapDegrees" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
           grep -q "texel.a < 0.055" \
             app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q -- "-58.0f, 58.0f" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
           grep -q "image/png" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
-          grep -q "alphaMode" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
-          grep -q "MASK" \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
@@ -151,7 +157,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V5 2.5D
+      - name: Compiler et vérifier la V5.1 Face Dos
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -175,10 +181,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V5 2.5D
+      - name: Publier l'APK V5.1 Face Dos
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-2.5D-V5-GLB-Mobile-debug
+          name: Modeliseur-2.5D-V5.1-Face-Dos-Rotation-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
