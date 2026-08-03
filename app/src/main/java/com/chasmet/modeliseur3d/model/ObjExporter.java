@@ -17,20 +17,20 @@ import java.util.List;
 import java.util.Locale;
 
 public final class ObjExporter {
-    public static final long MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L;
+    public static final long MAXIMUM_MOBILE_GLB_BYTES = 200_000L;
 
     private static final MobilePreset[] MOBILE_PRESETS = {
-            new MobilePreset(18_000, 1024),
-            new MobilePreset(16_000, 896),
-            new MobilePreset(14_000, 768),
-            new MobilePreset(12_000, 640),
-            new MobilePreset(10_000, 576),
-            new MobilePreset(8_000, 512),
-            new MobilePreset(6_000, 448),
-            new MobilePreset(4_500, 384),
-            new MobilePreset(3_200, 320),
-            new MobilePreset(2_100, 256),
-            new MobilePreset(1_400, 192)
+            new MobilePreset(4_000, 256),
+            new MobilePreset(3_200, 224),
+            new MobilePreset(2_600, 192),
+            new MobilePreset(2_100, 160),
+            new MobilePreset(1_600, 144),
+            new MobilePreset(1_200, 128),
+            new MobilePreset(900, 112),
+            new MobilePreset(700, 96),
+            new MobilePreset(500, 80),
+            new MobilePreset(350, 64),
+            new MobilePreset(220, 48)
     };
 
     private ObjExporter() {
@@ -66,7 +66,7 @@ public final class ObjExporter {
         );
         File mobileFile = new File(
                 directory,
-                "personnage_25d_v5_mobile_1mo.glb"
+                "personnage_25d_v5_mobile_200ko.glb"
         );
         File objFile = new File(directory, "personnage_25d_v5.obj");
         File mtlFile = new File(directory, "personnage_25d_v5.mtl");
@@ -139,7 +139,7 @@ public final class ObjExporter {
             output.deleteOnExit();
         }
         throw new IOException(
-                "Impossible de produire un GLB 2.5D mobile inférieur ou égal à 1 000 000 octets",
+                "Impossible de produire un GLB mobile inférieur ou égal à 200 000 octets",
                 lastError
         );
     }
