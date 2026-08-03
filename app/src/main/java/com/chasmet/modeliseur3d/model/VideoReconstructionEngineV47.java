@@ -7,11 +7,11 @@ import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 
 import java.util.List;
 
-/** Pipeline vidéo V4.7 : recentrage du sujet puis reconstruction huit vues V4.6. */
+/** Façade compatible de l'application, désormais branchée sur le moteur V4.8. */
 public final class VideoReconstructionEngineV47 implements AutoCloseable {
     private final Context context;
     private final DevicePerformanceProfile profile;
-    private VideoReconstructionEngineV46 delegate;
+    private VideoReconstructionEngineV48 delegate;
 
     public VideoReconstructionEngineV47(
             Context context,
@@ -29,9 +29,9 @@ public final class VideoReconstructionEngineV47 implements AutoCloseable {
         try (VideoSubjectNormalizer.Result normalized =
                      VideoSubjectNormalizer.normalize(frames, profile)) {
             if (delegate == null) {
-                delegate = new VideoReconstructionEngineV46(context);
+                delegate = new VideoReconstructionEngineV48(context, profile);
             }
-            VideoReconstructionEngineV46.Result result = delegate.generate(
+            VideoReconstructionEngineV48.Result result = delegate.generate(
                     normalized.getFrames(),
                     decodedFrameCount,
                     (stage, current, total) -> notifyProgress(
@@ -42,11 +42,12 @@ public final class VideoReconstructionEngineV47 implements AutoCloseable {
                     )
             );
             String quality = profile.getLabel()
-                    + " • sujet recentré dans "
+                    + " • alignement global dans "
                     + normalized.getDetectedFrameCount()
                     + "/8 vues • "
                     + result.getQualityLabel();
-            String backend = "Normalisation sujet unique V4.7 • "
+            String backend = "Pipeline mobile inspiré de l'architecture Modly"
+                    + " • sans serveur • "
                     + result.getBackend();
             return new Result(
                     result.getMesh(),
@@ -64,7 +65,7 @@ public final class VideoReconstructionEngineV47 implements AutoCloseable {
         }
     }
 
-    private static Stage map(VideoReconstructionEngineV46.Stage stage) {
+    private static Stage map(VideoReconstructionEngineV48.Stage stage) {
         switch (stage) {
             case SEGMENTING:
                 return Stage.SEGMENTING;
