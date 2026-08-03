@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.2
+      - name: Mettre en cache le détourage local V5.3
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v52-face-dos-reel-isnet-fp32-6a92a19a
+          key: modeliseur-v53-double-mode-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -91,36 +91,48 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.2 Face Dos réelle
+      - name: Vérifier l'architecture V5.3 double mode
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
+          grep -q "HomeActivity" app/src/main/AndroidManifest.xml
           grep -q "MainActivityV52" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.2.0'" app/build.gradle
-          grep -q "versionCode 18" app/build.gradle
+          grep -q "Manual3DActivity" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.3.0'" app/build.gradle
+          grep -q "versionCode 19" app/build.gradle
           ! grep -q "downloadDepthModel" app/build.gradle
+          grep -q "mode25dButton" app/src/main/res/layout/activity_home.xml
+          grep -q "mode3dButton" app/src/main/res/layout/activity_home.xml
+          grep -q "ManualViewPlan.VIEW_COUNT" \
+            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "VideoReconstructionEngineV48" \
+            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "0, 45, 90, 135, 180, 225, 270, 315" \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java
           grep -q "FaceBack25DEngine" \
             app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q "FaceBack25DMesher.build" \
             app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
-          grep -q "alignement Face/Dos commun" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
-          grep -q "profils calculés depuis les bords réels" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
           grep -q "texCoords\[offset + 1\] = pixelY / atlasHeight" \
             app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java
-          ! grep -q "composeFrontBackAtlas" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
-          grep -q "0.78 + 0.18" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
           grep -q "AUTO_ROTATION_DEGREES_PER_SECOND" \
             app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
           grep -q "image/png" \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
+
+      - name: Tester le plan manuel de huit vues
+        run: |
+          mkdir -p build/manual-view-plan-tests
+          javac -encoding UTF-8 \
+            -d build/manual-view-plan-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java \
+            validation/java/com/chasmet/modeliseur3d/ManualViewPlanSelfTest.java
+          java -cp build/manual-view-plan-tests \
+            com.chasmet.modeliseur3d.ManualViewPlanSelfTest
 
       - name: Tester la sélection du personnage principal
         run: |
@@ -132,7 +144,7 @@ jobs:
           java -cp build/single-subject-tests \
             com.chasmet.modeliseur3d.model.SingleSubjectSelectorSelfTest
 
-      - name: Tester le nouveau maillage Face Dos et les UV
+      - name: Tester le maillage Face Dos et les UV
         run: |
           mkdir -p build/face-back-25d-tests
           javac -encoding UTF-8 \
@@ -165,7 +177,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V5.2 Face Dos réelle
+      - name: Compiler et vérifier la V5.3
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -189,10 +201,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V5.2 Face Dos réelle
+      - name: Publier l'APK V5.3 double mode
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-2.5D-V5.2-Face-Dos-Reel-debug
+          name: Modeliseur-V5.3-2.5D-et-3D-Manuel-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

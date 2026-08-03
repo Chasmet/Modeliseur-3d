@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 2.5D V5.2</string>
-    <string name="title">Modéliseur 2.5D V5.2 — Face + Dos réel</string>
-    <string name="subtitle">Importe une image de face et une image de dos. La V5.2 aligne les deux silhouettes, garde les vraies textures avant et arrière, reconstruit les côtés depuis les bords réels et corrige définitivement le personnage affiché à l’envers.</string>
+    <string name="app_name">Modéliseur 2.5D + 3D V5.3</string>
+
+    <string name="home_title">Modéliseur 3D V5.3</string>
+    <string name="home_subtitle">Choisis uniquement le type de reconstruction à utiliser.</string>
+    <string name="home_mode_25d">2.5D\nFace + dos</string>
+    <string name="home_mode_3d">3D\n8 images guidées à 360°</string>
+
+    <string name="title">Modéliseur 2.5D V5.3 — Face + Dos réel</string>
+    <string name="subtitle">Importe une image de face et une image de dos. Le mode 2.5D aligne les silhouettes, garde les textures avant et arrière et reconstruit l’épaisseur depuis les bords réels.</string>
 
     <string name="select_image">Choisir une image</string>
     <string name="select_front">Image face</string>
@@ -18,8 +24,8 @@
     <string name="export_obj">Exporter GLB</string>
 
     <string name="empty_message">Le personnage 2.5D apparaîtra ici.\nSélectionne la face, puis le dos, et appuie sur Générer Face + Dos.</string>
-    <string name="status_ready">Prêt — moteur 2.5D V5.2 Face + Dos réel.</string>
-    <string name="status_ready_profile">Prêt — moteur Face + Dos V5.2 • %1$s</string>
+    <string name="status_ready">Prêt — moteur 2.5D V5.3 Face + Dos réel.</string>
+    <string name="status_ready_profile">Prêt — moteur Face + Dos V5.3 • %1$s</string>
     <string name="status_front_selected">Image de face sélectionnée. Ajoute le dos pour un meilleur résultat.</string>
     <string name="status_back_selected_first">Image de dos sélectionnée. Sélectionne maintenant l’image de face.</string>
     <string name="status_front_back_selected">Face et dos sélectionnés. Appuie sur Générer Face + Dos.</string>
@@ -34,7 +40,7 @@
     <string name="status_25d_aligning">Sélection des vues avant, arrière, gauche et droite…</string>
     <string name="status_25d_aligning_v52">Alignement précis des silhouettes face et dos…</string>
     <string name="status_25d_meshing">Création de la face, du dos et de l’épaisseur 2.5D…</string>
-    <string name="status_25d_meshing_v52">Création du nouveau volume Face/Dos plus épais et plus stable…</string>
+    <string name="status_25d_meshing_v52">Création du volume Face/Dos plus épais et plus stable…</string>
     <string name="status_25d_texturing">Création de l’atlas transparent avant–arrière–profils…</string>
     <string name="status_25d_texturing_v52">Création des vraies textures face, dos et côtés calculés depuis les bords…</string>
     <string name="status_loading_video_engine">Préparation du moteur vidéo 2.5D…</string>
@@ -49,10 +55,10 @@
     <string name="status_generating_image_v46">Détourage et création du relief 2.5D…</string>
     <string name="status_generating_image_v47">Détourage et création du relief 2.5D…</string>
 
-    <string name="status_done">Personnage image 2.5D V5.2 prêt.</string>
-    <string name="status_done_video">Personnage vidéo 2.5D V5.2 prêt.</string>
-    <string name="status_done_pair">Personnage Face + Dos V5.2 prêt.</string>
-    <string name="quality_front_back">Face + Dos réels V5.2</string>
+    <string name="status_done">Personnage image 2.5D V5.3 prêt.</string>
+    <string name="status_done_video">Personnage vidéo 2.5D V5.3 prêt.</string>
+    <string name="status_done_pair">Personnage Face + Dos V5.3 prêt.</string>
+    <string name="quality_front_back">Face + Dos réels V5.3</string>
     <string name="backend_front_back">Deux détourages IS-Net • silhouette commune • vraies textures avant/arrière • profils depuis les bords • UV corrigés</string>
     <string name="status_done_25d_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • grille %5$d×%6$d • %7$d vue(s) source • %8$s • total %9$.1f s</string>
     <string name="status_done_details">%1$d personnage final • %2$d sujets détectés • %3$s • %4$d cœurs • %5$d triangles • %6$d sommets • grille %7$d×%8$d • %9$s • total %10$.1f s</string>
@@ -61,7 +67,7 @@
     <string name="status_exporting">Création du GLB 2.5D HD puis de la copie mobile transparente à 1 000 000 octets maximum…</string>
     <string name="status_exported">GLB 2.5D HD et mobile créés.</string>
     <string name="status_exported_details">Export terminé • GLB mobile %1$.3f Mo • %2$d triangles • limite 1 Mo vérifiée.</string>
-    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.2</string>
+    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.3</string>
 
     <string name="error_select_front">Sélectionne d’abord une image de face.</string>
     <string name="error_image">Impossible de lire cette image.</string>
@@ -69,4 +75,42 @@
     <string name="error_video">La vidéo n’a pas pu produire un relief 2.5D exploitable.</string>
     <string name="error_generation">La génération 2.5D locale a échoué. Le détail est affiché ci-dessous.</string>
     <string name="error_export">L’export GLB 2.5D HD ou mobile a échoué.</string>
+
+    <string name="manual_title">Reconstruction 3D manuelle — 8 vues</string>
+    <string name="manual_subtitle">Chaque emplacement correspond à un angle déjà calculé. Place les images dans l’ordre indiqué pour que le moteur reconstruise le tour complet du sujet.</string>
+    <string name="manual_capture_rules">RÈGLES IMPORTANTES\n• Même personnage, même pose et même hauteur dans les 8 images.\n• Tourne autour du sujet dans le sens horaire, sans déplacer le sujet.\n• Garde la même distance, le même zoom et un fond simple.\n• Le corps entier doit rester visible.\n• Appui long sur une case pour l’effacer.</string>
+    <string name="manual_selection_counter_default">0/8 images placées</string>
+    <string name="manual_selection_counter">%1$d/%2$d images placées</string>
+    <string name="manual_slot_empty">%1$s\nAppuyer pour choisir</string>
+    <string name="manual_slot_selected">%1$s ✓\nAppuyer pour remplacer</string>
+    <string name="manual_slot_content_description">Choisir l’image %1$s</string>
+    <string name="manual_clear_all">Tout effacer</string>
+    <string name="manual_generate">Reconstruire la 3D</string>
+    <string name="manual_edit_photos">Photos</string>
+    <string name="manual_empty_viewer">Le modèle 3D apparaîtra ici.</string>
+
+    <string name="manual_status_ready">Prêt — reconstruction locale 8 vues • %1$s</string>
+    <string name="manual_status_ready_short">Place les 8 images dans les angles indiqués.</string>
+    <string name="manual_status_slot_cleared">Vue effacée : %1$s</string>
+    <string name="manual_status_preparing">Préparation des 8 images et activation de la puissance du téléphone…</string>
+    <string name="manual_status_loading_view">Lecture de l’image %1$d/%2$d : %3$s…</string>
+    <string name="manual_status_segmenting">Détourage local de la vue %1$d/%2$d…</string>
+    <string name="manual_status_building_hull">Calcul de l’enveloppe 3D à partir des 8 angles…</string>
+    <string name="manual_status_meshing">Création du maillage 3D fermé…</string>
+    <string name="manual_status_texturing">Fusion des 8 textures autour du modèle…</string>
+    <string name="manual_status_done">Modèle 3D manuel prêt.</string>
+    <string name="manual_status_done_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • %5$d vues • %6$d vue(s) réparée(s) • total %7$.1f s</string>
+    <string name="manual_status_editing">Modifie les images puis relance la reconstruction.</string>
+    <string name="manual_status_exporting">Création du GLB 3D HD et de la copie mobile…</string>
+    <string name="manual_status_exported">GLB 3D créé.</string>
+    <string name="manual_status_exported_details">Export terminé • GLB mobile %1$.3f Mo • %2$d triangles.</string>
+
+    <string name="manual_error_not_image">Le fichier choisi n’est pas une image.</string>
+    <string name="manual_error_missing_view">Image manquante : %1$s</string>
+    <string name="manual_error_generation">La reconstruction 3D locale a échoué.</string>
+    <string name="manual_error_export">L’export du modèle 3D a échoué.</string>
+
+    <string name="manual_share_subject">Modèle 3D manuel V5.3 — 8 vues</string>
+    <string name="manual_share_text">GLB 3D créé localement dans : %1$s\nCopie mobile : %2$d octets.</string>
+    <string name="manual_share_chooser">Partager ou enregistrer le modèle 3D</string>
 </resources>
