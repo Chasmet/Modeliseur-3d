@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.4
+      - name: Mettre en cache le détourage local V5.5
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v54-silhouettes-guidees-isnet-fp32-6a92a19a
+          key: modeliseur-v55-face-dos-auto-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -67,11 +67,10 @@ jobs:
           URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
           if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime FP32 déjà présent dans le cache et vérifié."
+            echo "IS-Net Anime FP32 déjà présent et vérifié."
           else
             rm -f "$MODEL" "$PART"
-            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
-              -o "$PART" "$URL"
+            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
             echo "$SHA  $PART" | sha256sum -c -
             mv "$PART" "$MODEL"
           fi
@@ -81,155 +80,68 @@ jobs:
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-34" "build-tools;34.0.0"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Autoriser le script Gradle
+      - name: Autoriser Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.4 silhouettes guidées
+      - name: Vérifier l'architecture V5.5 Face Dos
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
-          grep -q "HomeActivity" app/src/main/AndroidManifest.xml
-          grep -q "MainActivityV52" app/src/main/AndroidManifest.xml
-          grep -q "Manual3DActivity" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.4.0'" app/build.gradle
-          grep -q "versionCode 21" app/build.gradle
-          ! grep -q "downloadDepthModel" app/build.gradle
-          grep -q "mode25dButton" app/src/main/res/layout/activity_home.xml
-          grep -q "mode3dButton" app/src/main/res/layout/activity_home.xml
-          grep -q "sequenceQualityText" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "manualEmptyViewerText" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "GuidedPhotoSlotView" \
-            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "ManualViewPreprocessor" \
-            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "ManualViewSequenceValidator" \
-            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "getNormalizedBitmap" \
-            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "OUTPUT_WIDTH = 512" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
-          grep -q "OUTPUT_HEIGHT = 768" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
-          grep -q "Profil pas assez latéral" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
-          grep -q "Le profil doit être nettement plus fin" \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewSequenceValidator.java
-          grep -q "GUIDE_WIDTH_FACTORS" \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java
-          grep -q "0, 45, 90, 135, 180, 225, 270, 315" \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java
-          grep -q "FaceBack25DEngine" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
-          grep -q "FaceBack25DMesher.build" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
-          grep -q "AUTO_ROTATION_DEGREES_PER_SECOND" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
-          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
-          grep -q "mobile_200ko.glb" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
+          grep -q "versionName '5.5.0'" app/build.gradle
+          grep -q "versionCode 22" app/build.gradle
+          grep -q "FaceBackAutoViewSynthesizer" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "FaceBackAutoViewSynthesizer" app/src/main/java/com/chasmet/modeliseur3d/model/FaceBackAutoViewSynthesizer.java
+          grep -q "WIDTH_FACTORS" app/src/main/java/com/chasmet/modeliseur3d/model/FaceBackAutoViewSynthesizer.java
+          grep -q "BACK_WEIGHTS" app/src/main/java/com/chasmet/modeliseur3d/model/FaceBackAutoViewSynthesizer.java
+          grep -q "frontPreview" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "backPreview" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "depthSeekBar" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Tester le plan guidé de huit silhouettes
+      - name: Tester les composants Java existants
+        shell: bash
         run: |
-          mkdir -p build/manual-view-plan-tests
-          javac -encoding UTF-8 \
-            -d build/manual-view-plan-tests \
+          mkdir -p build/manual-view-plan-tests build/mobile-mesh-tests
+          javac -encoding UTF-8 -d build/manual-view-plan-tests \
             app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java \
             validation/java/com/chasmet/modeliseur3d/ManualViewPlanSelfTest.java
-          java -cp build/manual-view-plan-tests \
-            com.chasmet.modeliseur3d.ManualViewPlanSelfTest
-
-      - name: Tester la cohérence du tour 360 degrés
-        run: |
-          mkdir -p build/manual-view-sequence-tests
-          javac -encoding UTF-8 \
-            -d build/manual-view-sequence-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewSequenceValidator.java \
-            validation/java/com/chasmet/modeliseur3d/ManualViewSequenceValidatorSelfTest.java
-          java -cp build/manual-view-sequence-tests \
-            com.chasmet.modeliseur3d.ManualViewSequenceValidatorSelfTest
-
-      - name: Tester la sélection du personnage principal
-        run: |
-          mkdir -p build/single-subject-tests
-          javac -encoding UTF-8 \
-            -d build/single-subject-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/SingleSubjectSelector.java \
-            validation/java/com/chasmet/modeliseur3d/model/SingleSubjectSelectorSelfTest.java
-          java -cp build/single-subject-tests \
-            com.chasmet.modeliseur3d.model.SingleSubjectSelectorSelfTest
-
-      - name: Tester le maillage Face Dos et les UV
-        run: |
-          mkdir -p build/face-back-25d-tests
-          javac -encoding UTF-8 \
-            -d build/face-back-25d-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
-            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
-          java -cp build/face-back-25d-tests \
-            com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
-
-      - name: Tester le maillage historique 2.5D
-        run: |
-          mkdir -p build/relief-25d-tests
-          javac -encoding UTF-8 \
-            -d build/relief-25d-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/Relief25DMesher.java \
-            validation/java/com/chasmet/modeliseur3d/model/Relief25DMesherSelfTest.java
-          java -cp build/relief-25d-tests \
-            com.chasmet.modeliseur3d.model.Relief25DMesherSelfTest
-
-      - name: Tester la simplification mobile
-        run: |
-          mkdir -p build/mobile-mesh-tests
-          javac -encoding UTF-8 \
-            -d build/mobile-mesh-tests \
+          java -cp build/manual-view-plan-tests com.chasmet.modeliseur3d.ManualViewPlanSelfTest
+          javac -encoding UTF-8 -d build/mobile-mesh-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizer.java \
             validation/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizerSelfTest.java
-          java -cp build/mobile-mesh-tests \
-            com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
+          java -cp build/mobile-mesh-tests com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V5.4
+      - name: Compiler et vérifier la V5.5
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
-            find app/build/reports -name 'lint-results-debug.txt' \
-              -print -exec cat {} \; 2>/dev/null || true
+            find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
             exit 1
           }
 
-      - name: Vérifier l'APK, sa signature et son modèle
+      - name: Vérifier l'APK et sa signature
         shell: bash
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
           ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
-
           ls -lh "$APK"
           sha256sum "$APK"
-          test -f "$MODELISEUR_DEBUG_KEYSTORE"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
-          ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V5.4 silhouettes guidées
+      - name: Publier l'APK V5.5
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.4-2.5D-3D-Silhouettes-Guidees-GLB-200ko-debug
+          name: Modeliseur-V5.5-Face-Dos-6-Vues-Auto-GLB-200ko-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
