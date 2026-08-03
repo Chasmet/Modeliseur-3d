@@ -13,7 +13,7 @@ def segmentationModelTemporary = file(
         'src/main/assets/models/isnet_anime_fp32.onnx.part'
 )
 def segmentationModelUrl =
-        'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true'
+        'https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e1165ba7e9575585388a36f/onnx/model.onnx?download=true'
 def segmentationModelSha256 =
         '6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba'
 def ciDebugKeystorePath = System.getenv('MODELISEUR_DEBUG_KEYSTORE')
@@ -36,7 +36,7 @@ def fileDigest = { File target, String algorithm ->
 
 tasks.register('downloadAnimeSegmentationModel') {
     group = 'machine learning'
-    description = 'Télécharge IS-Net Anime FP32 pour le détourage 2.5D local.'
+    description = 'Télécharge IS-Net Anime FP32 pour le détourage 2.5D et 3D local.'
     outputs.file(segmentationModelFile)
 
     doLast {
@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 18
-        versionName '5.2.0'
+        versionCode 19
+        versionName '5.3.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
