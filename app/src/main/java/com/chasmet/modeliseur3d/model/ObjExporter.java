@@ -20,21 +20,22 @@ public final class ObjExporter {
     public static final long MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L;
 
     /**
-     * La V4.5 commence par des réglages nettement plus qualitatifs que la V4.4.
-     * Le fichier est mesuré après chaque essai et le premier preset réellement
-     * inférieur ou égal à 1 Mo est conservé.
+     * Les premiers essais privilégient la texture. Le fichier réellement écrit
+     * est mesuré après chaque preset et le premier inférieur à 1 Mo est gardé.
      */
     private static final MobilePreset[] MOBILE_PRESETS = {
-            new MobilePreset(9000, 768, 92),
-            new MobilePreset(7600, 768, 88),
-            new MobilePreset(6400, 640, 88),
-            new MobilePreset(5200, 640, 84),
-            new MobilePreset(4200, 512, 86),
-            new MobilePreset(3400, 512, 80),
-            new MobilePreset(2700, 384, 82),
-            new MobilePreset(2100, 384, 74),
-            new MobilePreset(1600, 320, 72),
-            new MobilePreset(1100, 256, 68)
+            new MobilePreset(12_000, 1024, 92),
+            new MobilePreset(10_500, 896, 92),
+            new MobilePreset(9_000, 768, 92),
+            new MobilePreset(7_600, 768, 88),
+            new MobilePreset(6_400, 640, 88),
+            new MobilePreset(5_200, 640, 84),
+            new MobilePreset(4_200, 512, 86),
+            new MobilePreset(3_400, 512, 80),
+            new MobilePreset(2_700, 384, 82),
+            new MobilePreset(2_100, 384, 74),
+            new MobilePreset(1_600, 320, 72),
+            new MobilePreset(1_100, 256, 68)
     };
 
     private ObjExporter() {
@@ -58,7 +59,7 @@ public final class ObjExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Modele_V4_5_Local_" + stamp
+                "Modeliseur3D/Modele_V4_6_Local_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier d'export");
@@ -66,15 +67,15 @@ public final class ObjExporter {
 
         File highDefinitionFile = new File(
                 directory,
-                "personnage_v45_local_hd.glb"
+                "personnage_v46_local_hd.glb"
         );
         File mobileFile = new File(
                 directory,
-                "personnage_v45_mobile_1mo.glb"
+                "personnage_v46_mobile_1mo.glb"
         );
-        File objFile = new File(directory, "personnage_v45_local.obj");
-        File mtlFile = new File(directory, "personnage_v45_local.mtl");
-        File textureFile = new File(directory, "texture_multivue_v45.png");
+        File objFile = new File(directory, "personnage_v46_local.obj");
+        File mtlFile = new File(directory, "personnage_v46_local.mtl");
+        File textureFile = new File(directory, "texture_v46.png");
         File infoFile = new File(directory, "informations.txt");
 
         GlbExporter.write(highDefinitionFile, mesh, texture);
@@ -159,10 +160,9 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("# Modèle généré localement par Modéliseur 3D V4.5\n");
-            writer.write("mtllib personnage_v45_local.mtl\n");
-            writer.write("o personnage_v45_local\n");
-
+            writer.write("# Modèle généré localement par Modéliseur 3D V4.6\n");
+            writer.write("mtllib personnage_v46_local.mtl\n");
+            writer.write("o personnage_v46_local\n");
             for (int index = 0; index < positions.length; index += 3) {
                 writer.write(String.format(
                         Locale.US,
@@ -189,8 +189,7 @@ public final class ObjExporter {
                         normals[index + 2]
                 ));
             }
-
-            writer.write("usemtl personnage_texture_v45\n");
+            writer.write("usemtl personnage_texture_v46\n");
             for (int index = 0; index < indices.length; index += 3) {
                 int a = indices[index] + 1;
                 int b = indices[index + 1] + 1;
@@ -208,14 +207,14 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("newmtl personnage_texture_v45\n");
+            writer.write("newmtl personnage_texture_v46\n");
             writer.write("Ka 0.400000 0.400000 0.400000\n");
             writer.write("Kd 1.000000 1.000000 1.000000\n");
             writer.write("Ks 0.080000 0.080000 0.080000\n");
             writer.write("Ns 14.000000\n");
             writer.write("d 1.000000\n");
             writer.write("illum 2\n");
-            writer.write("map_Kd texture_multivue_v45.png\n");
+            writer.write("map_Kd texture_v46.png\n");
         }
     }
 
@@ -239,8 +238,10 @@ public final class ObjExporter {
                         new FileOutputStream(file),
                         StandardCharsets.UTF_8
                 ))) {
-            writer.write("Version : Modéliseur 3D V4.5 locale\n");
+            writer.write("Version : Modéliseur 3D V4.6 locale\n");
             writer.write("Connexion : aucune permission Internet, aucun serveur, aucune API.\n");
+            writer.write("Image unique : relief fermé, texture frontale préservée et dos stable.\n");
+            writer.write("Vidéo : huit angles alignés et fusionnés dans un volume commun.\n");
             writer.write("Format principal HD : GLB 2.0 autonome avec texture PNG.\n");
             writer.write("Copie mobile : GLB 2.0 avec indices 16 bits et texture JPEG.\n");
             writer.write("Sommets HD : " + mesh.getVertexCount() + "\n");
@@ -252,10 +253,10 @@ public final class ObjExporter {
             writer.write("Limite mobile vérifiée : "
                     + MAXIMUM_MOBILE_GLB_BYTES + " octets\n");
             writer.write("Réglage mobile : " + mobile.preset.label() + "\n");
+            writer.write("Simplification : regroupement spatial des sommets, suppression des triangles dégénérés.\n");
             writer.write("Segmentation : IS-Net Anime FP32 embarqué.\n");
             writer.write("Relief : Depth Anything V2 Small FP32 embarqué.\n");
             writer.write("Runtime : ONNX Runtime Android, NNAPI si compatible, repli CPU multi-cœurs.\n");
-            writer.write("Le GLB HD conserve la qualité complète. La copie 1 Mo conserve nettement plus de géométrie et de texture que l'ancienne copie 200 Ko.\n");
             writer.write("Import direct : Godot, Blender ou Unity.\n");
         }
     }
