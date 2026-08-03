@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="@string/home_title"
+        android:text="Modéliseur 3D V5.5"
         android:textColor="@color/text_primary"
         android:textSize="30sp"
         android:textStyle="bold" />
@@ -21,7 +21,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:gravity="center"
-        android:text="@string/home_subtitle"
+        android:text="Choisis le type de reconstruction à utiliser."
         android:textColor="@color/text_secondary"
         android:textSize="15sp" />
 
@@ -32,7 +32,7 @@
         android:layout_marginTop="34dp"
         android:backgroundTint="@color/launcher_background"
         android:gravity="center"
-        android:text="@string/home_mode_25d"
+        android:text="2.5D\nFace + Dos"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
         android:textSize="24sp"
@@ -45,10 +45,10 @@
         android:layout_marginTop="16dp"
         android:backgroundTint="@color/viewer_background"
         android:gravity="center"
-        android:text="@string/home_mode_3d"
+        android:text="3D automatique\nFace + Dos + 6 vues auto"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
-        android:textSize="24sp"
+        android:textSize="22sp"
         android:textStyle="bold" />
 
 </LinearLayout>
