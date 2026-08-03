@@ -18,13 +18,13 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Extrait huit vues d'une courte vidéo de rotation, sans réseau.
+ * Extrait huit vues d'une courte vidéo de rotation, entièrement hors ligne.
  *
- * La V4.6 copie d'abord l'URI dans le cache privé afin d'éviter les décodeurs
- * instables de certains fournisseurs Android. Chaque vue possède plusieurs
- * stratégies de lecture et plusieurs positions temporelles de secours. Une
- * trame manquante ne détruit plus toute la reconstruction : elle est remplacée
- * par la vue valide la plus proche, tout en conservant le nombre de vues réel.
+ * Le fichier choisi est d'abord copié dans le cache privé. Cette étape évite
+ * les échecs de décodage observés avec certains fournisseurs de documents
+ * Android. Chaque angle est ensuite lu avec plusieurs timestamps et plusieurs
+ * modes de MediaMetadataRetriever. Une vue manquante est remplacée par la vue
+ * valide la plus proche au lieu d'annuler toute la reconstruction.
  */
 public final class VideoFrameExtractor {
     public static final int VIEW_COUNT = 8;
@@ -34,6 +34,7 @@ public final class VideoFrameExtractor {
     private static final long MAXIMUM_CACHED_BYTES = 350_000_000L;
     private static final int SCORE_MAX_SIDE = 320;
     private static final int OUTPUT_MAX_SIDE = 720;
+
     private static final double[] TARGET_FRACTIONS = {
             0.035, 0.155, 0.275, 0.395,
             0.515, 0.635, 0.755, 0.875
@@ -42,6 +43,7 @@ public final class VideoFrameExtractor {
             -2.0, -1.0, 0.0, 1.0, 2.0
     };
     private static final double SCORE_WINDOW_FRACTION = 0.012;
+
     private static final long[] RETRY_OFFSETS_US = {
             0L,
             -40_000L, 40_000L,
@@ -51,6 +53,7 @@ public final class VideoFrameExtractor {
             -700_000L, 700_000L,
             -1_200_000L, 1_200_000L
     };
+
     private static final int[] FRAME_OPTIONS = {
             MediaMetadataRetriever.OPTION_CLOSEST,
             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
@@ -72,24 +75,14 @@ public final class VideoFrameExtractor {
 
         File cachedVideo = copyToPrivateCache(videoUri);
         List<Bitmap> frames = new ArrayList<>(VIEW_COUNT);
-        List<Boolean> decoded = new ArrayList<>(VIEW_COUNT);
+        boolean[] decoded = new boolean[VIEW_COUNT];
         long[] selectedTimesUs = new long[VIEW_COUNT];
-        Metadata metadata;
 
         try {
-            metadata = readMetadata(cachedVideo);
-            if (metadata.durationMs < MINIMUM_DURATION_MS) {
-                throw new IOException(
-                        "La vidéo est trop courte pour extraire plusieurs angles"
-                );
-            }
-            if (metadata.durationMs > MAXIMUM_DURATION_MS) {
-                throw new IOException(
-                        "La vidéo dépasse 2 minutes : garde seulement la rotation utile"
-                );
-            }
-
+            Metadata metadata = readMetadata(cachedVideo);
+            validateDuration(metadata.durationMs);
             long durationUs = metadata.durationMs * 1000L;
+
             Bitmap previous = null;
             for (int viewIndex = 0; viewIndex < VIEW_COUNT; viewIndex++) {
                 notifyProgress(listener, viewIndex + 1, VIEW_COUNT);
@@ -102,18 +95,20 @@ public final class VideoFrameExtractor {
                 );
                 if (choice == null) {
                     frames.add(null);
-                    decoded.add(false);
-                    selectedTimesUs[viewIndex] = clampTime(
-                            Math.round(durationUs * TARGET_FRACTIONS[viewIndex]),
-                            durationUs
+                    selectedTimesUs[viewIndex] = targetTimeUs(
+                            durationUs,
+                            viewIndex
                     );
                     continue;
                 }
 
-                Bitmap frame = rotateIfNeeded(choice.bitmap, metadata.rotation);
+                Bitmap frame = rotateIfNeeded(
+                        choice.bitmap,
+                        metadata.rotation
+                );
                 frame = ensureArgb(frame);
                 frames.add(frame);
-                decoded.add(true);
+                decoded[viewIndex] = true;
                 selectedTimesUs[viewIndex] = choice.timeUs;
                 previous = frame;
             }
@@ -126,7 +121,7 @@ public final class VideoFrameExtractor {
                 );
             }
 
-            fillMissingFrames(frames, selectedTimesUs, decoded);
+            fillMissingFrames(frames, selectedTimesUs);
             ensureRotationIsVisible(frames);
             return new Result(
                     frames,
@@ -134,35 +129,41 @@ public final class VideoFrameExtractor {
                     metadata.durationMs,
                     decodedCount
             );
-        } catch (RuntimeException error) {
-            recycleAll(frames);
-            throw new IOException("Lecture de la vidéo impossible", error);
         } catch (IOException error) {
             recycleAll(frames);
             throw error;
+        } catch (RuntimeException error) {
+            recycleAll(frames);
+            throw new IOException("Lecture de la vidéo impossible", error);
         } finally {
-            if (cachedVideo.exists() && !cachedVideo.delete()) {
-                cachedVideo.deleteOnExit();
-            }
+            deleteQuietly(cachedVideo);
         }
     }
 
     private File copyToPrivateCache(Uri videoUri) throws IOException {
         File directory = new File(context.getCacheDir(), "video_import");
-        if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
+        if (!directory.exists()
+                && !directory.mkdirs()
+                && !directory.isDirectory()) {
             throw new IOException("Impossible de préparer le cache vidéo privé");
         }
-        File output = File.createTempFile("rotation_", ".mp4", directory);
+
+        File output = File.createTempFile("rotation_", ".video", directory);
         long total = 0L;
-        try (InputStream raw = context.getContentResolver().openInputStream(videoUri)) {
+        try (InputStream raw = context.getContentResolver()
+                .openInputStream(videoUri)) {
             if (raw == null) {
-                throw new IOException("Le fichier vidéo sélectionné est inaccessible");
+                throw new IOException(
+                        "Le fichier vidéo sélectionné est inaccessible"
+                );
             }
-            try (BufferedInputStream input = new BufferedInputStream(raw, 1024 * 1024);
-                 BufferedOutputStream destination = new BufferedOutputStream(
-                         new FileOutputStream(output),
-                         1024 * 1024
-                 )) {
+            try (BufferedInputStream input = new BufferedInputStream(
+                    raw,
+                    1024 * 1024
+            ); BufferedOutputStream destination = new BufferedOutputStream(
+                    new FileOutputStream(output),
+                    1024 * 1024
+            )) {
                 byte[] buffer = new byte[1024 * 1024];
                 int read;
                 while ((read = input.read(buffer)) != -1) {
@@ -176,11 +177,12 @@ public final class VideoFrameExtractor {
                 }
             }
         } catch (IOException error) {
-            output.delete();
+            deleteQuietly(output);
             throw error;
         }
+
         if (total < 16_384L) {
-            output.delete();
+            deleteQuietly(output);
             throw new IOException("Le fichier vidéo est vide ou incomplet");
         }
         return output;
@@ -217,7 +219,20 @@ public final class VideoFrameExtractor {
         } catch (RuntimeException error) {
             throw new IOException("Métadonnées vidéo illisibles", error);
         } finally {
-            retriever.release();
+            releaseRetriever(retriever);
+        }
+    }
+
+    private static void validateDuration(long durationMs) throws IOException {
+        if (durationMs < MINIMUM_DURATION_MS) {
+            throw new IOException(
+                    "La vidéo est trop courte pour extraire plusieurs angles"
+            );
+        }
+        if (durationMs > MAXIMUM_DURATION_MS) {
+            throw new IOException(
+                    "La vidéo dépasse 2 minutes : garde seulement la rotation utile"
+            );
         }
     }
 
@@ -228,11 +243,9 @@ public final class VideoFrameExtractor {
             int viewIndex,
             Bitmap previous
     ) {
-        long targetUs = clampTime(
-                Math.round(durationUs * TARGET_FRACTIONS[viewIndex]),
-                durationUs
-        );
-        FrameChoice best = null;
+        long targetUs = targetTimeUs(durationUs, viewIndex);
+        long bestTimeUs = -1L;
+        Bitmap bestPreview = null;
         double bestScore = Double.NEGATIVE_INFINITY;
 
         for (double offset : SCORE_OFFSETS) {
@@ -243,7 +256,7 @@ public final class VideoFrameExtractor {
                     )),
                     durationUs
             );
-            Bitmap candidate = readFrameWithFallback(
+            Bitmap preview = readFrameWithFallback(
                     file,
                     candidateUs,
                     metadata.width,
@@ -251,28 +264,29 @@ public final class VideoFrameExtractor {
                     SCORE_MAX_SIDE,
                     durationUs
             );
-            if (candidate == null) {
+            if (!isUsable(preview)) {
+                recycle(preview);
                 continue;
             }
-            double score = sharpnessAndExposureScore(candidate);
+
+            double score = sharpnessAndExposureScore(preview);
             if (previous != null) {
                 score *= 0.92 + Math.min(
                         0.22,
-                        visualDifference(previous, candidate) / 90.0
+                        visualDifference(previous, preview) / 90.0
                 );
             }
             if (score > bestScore) {
-                if (best != null) {
-                    best.bitmap.recycle();
-                }
-                best = new FrameChoice(candidate, candidateUs);
+                recycle(bestPreview);
+                bestPreview = preview;
+                bestTimeUs = candidateUs;
                 bestScore = score;
             } else {
-                candidate.recycle();
+                recycle(preview);
             }
         }
 
-        if (best == null) {
+        if (bestTimeUs < 0L) {
             Bitmap recovered = readFrameWithFallback(
                     file,
                     targetUs,
@@ -281,19 +295,23 @@ public final class VideoFrameExtractor {
                     OUTPUT_MAX_SIDE,
                     durationUs
             );
-            return recovered == null ? null : new FrameChoice(recovered, targetUs);
+            return isUsable(recovered)
+                    ? new FrameChoice(recovered, targetUs)
+                    : null;
         }
 
+        recycle(bestPreview);
         Bitmap full = readFrameWithFallback(
                 file,
-                best.timeUs,
+                bestTimeUs,
                 metadata.width,
                 metadata.height,
                 OUTPUT_MAX_SIDE,
                 durationUs
         );
-        best.bitmap.recycle();
-        return full == null ? null : new FrameChoice(full, best.timeUs);
+        return isUsable(full)
+                ? new FrameChoice(full, bestTimeUs)
+                : null;
     }
 
     private static Bitmap readFrameWithFallback(
@@ -351,9 +369,14 @@ public final class VideoFrameExtractor {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
             retriever.setDataSource(file.getAbsolutePath());
-            int[] dimensions = fitInside(sourceWidth, sourceHeight, maximumSide);
             Bitmap frame = null;
-            if (scaledFirst && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            if (scaledFirst
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                int[] dimensions = fitInside(
+                        sourceWidth,
+                        sourceHeight,
+                        maximumSide
+                );
                 try {
                     frame = retriever.getScaledFrameAtTime(
                             timeUs,
@@ -376,7 +399,15 @@ public final class VideoFrameExtractor {
         } catch (RuntimeException ignored) {
             return null;
         } finally {
+            releaseRetriever(retriever);
+        }
+    }
+
+    private static void releaseRetriever(MediaMetadataRetriever retriever) {
+        try {
             retriever.release();
+        } catch (IOException | RuntimeException ignored) {
+            // La fermeture ne doit jamais annuler une vue déjà décodée.
         }
     }
 
@@ -384,7 +415,8 @@ public final class VideoFrameExtractor {
         if (frame == null) {
             return null;
         }
-        if (frame.getWidth() <= maximumSide && frame.getHeight() <= maximumSide) {
+        if (frame.getWidth() <= maximumSide
+                && frame.getHeight() <= maximumSide) {
             return frame;
         }
         int[] dimensions = fitInside(
@@ -404,19 +436,11 @@ public final class VideoFrameExtractor {
         return scaled;
     }
 
-    private static boolean isUsable(Bitmap bitmap) {
-        return bitmap != null
-                && !bitmap.isRecycled()
-                && bitmap.getWidth() >= 32
-                && bitmap.getHeight() >= 32;
-    }
-
     private static void fillMissingFrames(
             List<Bitmap> frames,
-            long[] selectedTimesUs,
-            List<Boolean> decoded
+            long[] selectedTimesUs
     ) throws IOException {
-        for (int index = 0; index < frames.size(); index++) {
+        for (int index = 0; index < VIEW_COUNT; index++) {
             if (frames.get(index) != null) {
                 continue;
             }
@@ -424,24 +448,28 @@ public final class VideoFrameExtractor {
             if (nearest < 0) {
                 throw new IOException("Aucune vue vidéo exploitable");
             }
-            Bitmap copy = frames.get(nearest).copy(Bitmap.Config.ARGB_8888, false);
+            Bitmap copy = frames.get(nearest).copy(
+                    Bitmap.Config.ARGB_8888,
+                    false
+            );
             if (copy == null) {
-                throw new IOException("Duplication d'une vue vidéo impossible");
+                throw new IOException(
+                        "Duplication d'une vue vidéo impossible"
+                );
             }
             frames.set(index, copy);
             selectedTimesUs[index] = selectedTimesUs[nearest];
-            decoded.set(index, false);
         }
     }
 
     private static int findNearestValid(List<Bitmap> frames, int target) {
-        for (int distance = 1; distance < frames.size(); distance++) {
+        for (int distance = 1; distance < VIEW_COUNT; distance++) {
             int before = target - distance;
             if (before >= 0 && frames.get(before) != null) {
                 return before;
             }
             int after = target + distance;
-            if (after < frames.size() && frames.get(after) != null) {
+            if (after < VIEW_COUNT && frames.get(after) != null) {
                 return after;
             }
         }
@@ -476,9 +504,31 @@ public final class VideoFrameExtractor {
         Bitmap converted = source.copy(Bitmap.Config.ARGB_8888, false);
         source.recycle();
         if (converted == null) {
-            throw new IllegalStateException("Conversion de la trame impossible");
+            throw new IllegalStateException(
+                    "Conversion de la trame impossible"
+            );
         }
         return converted;
+    }
+
+    private static void ensureRotationIsVisible(List<Bitmap> frames)
+            throws IOException {
+        if (frames.size() != VIEW_COUNT) {
+            throw new IOException("Les huit vues n'ont pas pu être préparées");
+        }
+        double maximumDifference = 0.0;
+        Bitmap first = frames.get(0);
+        for (int index = 1; index < VIEW_COUNT; index++) {
+            maximumDifference = Math.max(
+                    maximumDifference,
+                    visualDifference(first, frames.get(index))
+            );
+        }
+        if (maximumDifference < 2.2) {
+            throw new IOException(
+                    "La rotation n'est pas assez visible dans cette vidéo"
+            );
+        }
     }
 
     private static double sharpnessAndExposureScore(Bitmap bitmap) {
@@ -515,29 +565,11 @@ public final class VideoFrameExtractor {
                         - laplacianMean * laplacianMean
         );
         double meanLuminance = luminanceSum / samples;
-        double exposure = 1.0
-                - Math.min(1.0, Math.abs(meanLuminance - 138.0) / 138.0);
+        double exposure = 1.0 - Math.min(
+                1.0,
+                Math.abs(meanLuminance - 138.0) / 138.0
+        );
         return variance * (0.72 + 0.28 * exposure);
-    }
-
-    private static void ensureRotationIsVisible(List<Bitmap> frames)
-            throws IOException {
-        if (frames.size() != VIEW_COUNT) {
-            throw new IOException("Les huit vues n'ont pas pu être préparées");
-        }
-        double maximumDifference = 0.0;
-        Bitmap first = frames.get(0);
-        for (int index = 1; index < frames.size(); index++) {
-            maximumDifference = Math.max(
-                    maximumDifference,
-                    visualDifference(first, frames.get(index))
-            );
-        }
-        if (maximumDifference < 2.2) {
-            throw new IOException(
-                    "La rotation n'est pas assez visible dans cette vidéo"
-            );
-        }
     }
 
     private static double visualDifference(Bitmap left, Bitmap right) {
@@ -576,6 +608,13 @@ public final class VideoFrameExtractor {
                 + 0.0722 * (color & 0xFF);
     }
 
+    private static boolean isUsable(Bitmap bitmap) {
+        return bitmap != null
+                && !bitmap.isRecycled()
+                && bitmap.getWidth() >= 32
+                && bitmap.getHeight() >= 32;
+    }
+
     private static int[] fitInside(int width, int height, int maximumSide) {
         float scale = Math.min(
                 1.0f,
@@ -585,6 +624,13 @@ public final class VideoFrameExtractor {
                 Math.max(1, Math.round(width * scale)),
                 Math.max(1, Math.round(height * scale))
         };
+    }
+
+    private static long targetTimeUs(long durationUs, int viewIndex) {
+        return clampTime(
+                Math.round(durationUs * TARGET_FRACTIONS[viewIndex]),
+                durationUs
+        );
     }
 
     private static long clampTime(long value, long durationUs) {
@@ -617,10 +663,10 @@ public final class VideoFrameExtractor {
                 : (int) value;
     }
 
-    private static int countTrue(List<Boolean> values) {
+    private static int countTrue(boolean[] values) {
         int count = 0;
-        for (Boolean value : values) {
-            if (Boolean.TRUE.equals(value)) {
+        for (boolean value : values) {
+            if (value) {
                 count++;
             }
         }
@@ -634,6 +680,12 @@ public final class VideoFrameExtractor {
     ) {
         if (listener != null) {
             listener.onFrameSelected(current, total);
+        }
+    }
+
+    private static void deleteQuietly(File file) {
+        if (file != null && file.exists() && !file.delete()) {
+            file.deleteOnExit();
         }
     }
 
