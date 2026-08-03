@@ -78,11 +78,22 @@ jobs:
             mv "$PART" "$MODEL"
           fi
 
-      - name: Installer le SDK Android
-        uses: android-actions/setup-android@v3
+      - name: Préparer le SDK Android préinstallé
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
 
       - name: Installer Android 34
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" "build-tools;34.0.0"
 
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
