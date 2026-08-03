@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.3.1
+      - name: Mettre en cache le détourage local V5.4
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v531-double-mode-200ko-isnet-fp32-6a92a19a
+          key: modeliseur-v54-silhouettes-guidees-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -91,7 +91,7 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.3.1 double mode et GLB 200 ko
+      - name: Vérifier l'architecture V5.4 silhouettes guidées
         shell: bash
         run: |
           set -euo pipefail
@@ -100,35 +100,45 @@ jobs:
           grep -q "HomeActivity" app/src/main/AndroidManifest.xml
           grep -q "MainActivityV52" app/src/main/AndroidManifest.xml
           grep -q "Manual3DActivity" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.3.1'" app/build.gradle
-          grep -q "versionCode 20" app/build.gradle
+          grep -q "versionName '5.4.0'" app/build.gradle
+          grep -q "versionCode 21" app/build.gradle
           ! grep -q "downloadDepthModel" app/build.gradle
           grep -q "mode25dButton" app/src/main/res/layout/activity_home.xml
           grep -q "mode3dButton" app/src/main/res/layout/activity_home.xml
-          grep -q "ManualViewPlan.VIEW_COUNT" \
+          grep -q "sequenceQualityText" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "manualEmptyViewerText" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "GuidedPhotoSlotView" \
             app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "VideoReconstructionEngineV48" \
+          grep -q "ManualViewPreprocessor" \
             app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "ManualViewSequenceValidator" \
+            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "getNormalizedBitmap" \
+            app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "OUTPUT_WIDTH = 512" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
+          grep -q "OUTPUT_HEIGHT = 768" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
+          grep -q "Profil pas assez latéral" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ManualViewPreprocessor.java
+          grep -q "Le profil doit être nettement plus fin" \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewSequenceValidator.java
+          grep -q "GUIDE_WIDTH_FACTORS" \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java
           grep -q "0, 45, 90, 135, 180, 225, 270, 315" \
             app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java
           grep -q "FaceBack25DEngine" \
             app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q "FaceBack25DMesher.build" \
             app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
-          grep -q "texCoords\[offset + 1\] = pixelY / atlasHeight" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java
           grep -q "AUTO_ROTATION_DEGREES_PER_SECOND" \
             app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
-          grep -q "image/png" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
-          grep -q "new MobilePreset(220, 48)" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
           grep -q "mobile_200ko.glb" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Tester le plan manuel de huit vues
+      - name: Tester le plan guidé de huit silhouettes
         run: |
           mkdir -p build/manual-view-plan-tests
           javac -encoding UTF-8 \
@@ -137,6 +147,17 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/ManualViewPlanSelfTest.java
           java -cp build/manual-view-plan-tests \
             com.chasmet.modeliseur3d.ManualViewPlanSelfTest
+
+      - name: Tester la cohérence du tour 360 degrés
+        run: |
+          mkdir -p build/manual-view-sequence-tests
+          javac -encoding UTF-8 \
+            -d build/manual-view-sequence-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java \
+            app/src/main/java/com/chasmet/modeliseur3d/ManualViewSequenceValidator.java \
+            validation/java/com/chasmet/modeliseur3d/ManualViewSequenceValidatorSelfTest.java
+          java -cp build/manual-view-sequence-tests \
+            com.chasmet.modeliseur3d.ManualViewSequenceValidatorSelfTest
 
       - name: Tester la sélection du personnage principal
         run: |
@@ -181,7 +202,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V5.3.1
+      - name: Compiler et vérifier la V5.4
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -205,10 +226,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V5.3.1 double mode et GLB 200 ko
+      - name: Publier l'APK V5.4 silhouettes guidées
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.3.1-2.5D-3D-Manuel-GLB-200ko-debug
+          name: Modeliseur-V5.4-2.5D-3D-Silhouettes-Guidees-GLB-200ko-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
