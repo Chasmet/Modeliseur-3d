@@ -38,20 +38,35 @@
             android:text="@string/select_image" />
 
         <Button
-            android:id="@+id/resetButton"
-            android:layout_width="wrap_content"
+            android:id="@+id/selectVideoButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:text="@string/reset_view" />
+            android:layout_weight="1"
+            android:text="@string/select_video" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/exportButton"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:enabled="false"
-        android:text="@string/export_obj" />
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/resetButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/reset_view" />
+
+        <Button
+            android:id="@+id/exportButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:text="@string/export_obj" />
+    </LinearLayout>
 
     <FrameLayout
         android:id="@+id/viewerContainer"
