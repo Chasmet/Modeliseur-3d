@@ -22,9 +22,9 @@ import androidx.core.content.FileProvider;
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceView;
 import com.chasmet.modeliseur3d.media.VideoFrameExtractor;
 import com.chasmet.modeliseur3d.model.MeshData;
-import com.chasmet.modeliseur3d.model.NeuralReconstructionEngine;
+import com.chasmet.modeliseur3d.model.NeuralReconstructionEngineV46;
 import com.chasmet.modeliseur3d.model.ObjExporter;
-import com.chasmet.modeliseur3d.model.VideoReconstructionEngine;
+import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV46;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
 
 import java.io.File;
@@ -40,8 +40,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
-    private NeuralReconstructionEngine imageGenerator;
-    private VideoReconstructionEngine videoGenerator;
+    private NeuralReconstructionEngineV46 imageGenerator;
+    private VideoReconstructionEngineV46 videoGenerator;
     private ModelGLSurfaceView viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -91,12 +91,10 @@ public final class MainActivity extends AppCompatActivity {
     private void chooseVideo() {
         Intent intent;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Le sélecteur système Android 13+ est forcé en mode vidéo.
             intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
             intent.setType("video/*");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else {
-            // Sur les anciens Android, ouverture directe de la médiathèque vidéo.
             intent = new Intent(
                     Intent.ACTION_PICK,
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI
@@ -104,7 +102,6 @@ public final class MainActivity extends AppCompatActivity {
             intent.setType("video/*");
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         }
-
         if (intent.resolveActivity(getPackageManager()) == null) {
             intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -127,7 +124,6 @@ public final class MainActivity extends AppCompatActivity {
                 || data.getData() == null) {
             return;
         }
-
         Uri uri = data.getData();
         persistReadPermission(uri);
         if (requestCode == REQUEST_IMAGE) {
@@ -149,7 +145,7 @@ public final class MainActivity extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
-            // Le Photo Picker accorde une URI temporaire suffisante à la tâche.
+            // Le Photo Picker fournit une permission temporaire suffisante.
         }
     }
 
@@ -173,7 +169,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void generateVideoModel(Uri videoUri) {
-        setBusy(true, R.string.status_extracting_video);
+        setBusy(true, R.string.status_copying_video);
         worker.execute(() -> {
             try (VideoFrameExtractor.Result extracted =
                          new VideoFrameExtractor(this).extract(
@@ -186,13 +182,14 @@ public final class MainActivity extends AppCompatActivity {
                          )) {
                 if (videoGenerator == null) {
                     postStatus(getString(R.string.status_loading_video_engine));
-                    videoGenerator = new VideoReconstructionEngine(
+                    videoGenerator = new VideoReconstructionEngineV46(
                             getApplicationContext()
                     );
                 }
-                VideoReconstructionEngine.Result result =
+                VideoReconstructionEngineV46.Result result =
                         videoGenerator.generate(
                                 extracted.getFrames(),
+                                extracted.getDecodedFrameCount(),
                                 this::postVideoProgress
                         );
                 currentMesh = result.getMesh();
@@ -219,7 +216,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void postVideoProgress(
-            VideoReconstructionEngine.Stage stage,
+            VideoReconstructionEngineV46.Stage stage,
             int current,
             int total
     ) {
@@ -251,17 +248,15 @@ public final class MainActivity extends AppCompatActivity {
     private void generateFromBitmap(Bitmap source) throws Exception {
         if (imageGenerator == null) {
             postStatus(getString(R.string.status_loading_neural_engine));
-            imageGenerator = new NeuralReconstructionEngine(
+            imageGenerator = new NeuralReconstructionEngineV46(
                     getApplicationContext()
             );
         }
-
-        postStatus(getString(R.string.status_generating_neural));
-        NeuralReconstructionEngine.Result result =
+        postStatus(getString(R.string.status_generating_image_v46));
+        NeuralReconstructionEngineV46.Result result =
                 imageGenerator.generate(source);
         currentMesh = result.getMesh();
         currentTexture = result.getTexture();
-
         runOnUiThread(() -> {
             viewer.setModel(currentMesh, currentTexture);
             emptyText.setVisibility(View.GONE);
@@ -283,7 +278,7 @@ public final class MainActivity extends AppCompatActivity {
             Throwable error,
             int messageResource
     ) {
-        Log.e(TAG, "Échec de reconstruction V4.5 locale", error);
+        Log.e(TAG, "Échec de reconstruction V4.6 locale", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
@@ -300,7 +295,6 @@ public final class MainActivity extends AppCompatActivity {
         if (mesh == null || texture == null) {
             return;
         }
-
         setBusy(true, R.string.status_exporting);
         worker.execute(() -> {
             try {
@@ -319,7 +313,7 @@ public final class MainActivity extends AppCompatActivity {
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export V4.5", error);
+                Log.e(TAG, "Échec d'export V4.6", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -345,13 +339,12 @@ public final class MainActivity extends AppCompatActivity {
         if (uris.isEmpty()) {
             return;
         }
-
         Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
         share.setType("application/octet-stream");
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Modèle 3D V4.5 local — GLB HD + GLB mobile 1 Mo"
+                "Modèle 3D V4.6 local — GLB HD + GLB mobile 1 Mo"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
@@ -362,9 +355,8 @@ public final class MainActivity extends AppCompatActivity {
                         + " octets."
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.5",
+                "Modèle 3D V4.6",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -405,7 +397,6 @@ public final class MainActivity extends AppCompatActivity {
         if (error instanceof OutOfMemoryError) {
             return "(mémoire du téléphone insuffisante ; ferme les autres applications puis réessaie)";
         }
-
         Throwable current = error;
         String message = null;
         while (current != null) {
@@ -418,7 +409,6 @@ public final class MainActivity extends AppCompatActivity {
             }
             current = current.getCause();
         }
-
         String type = error.getClass().getSimpleName();
         if (message == null || message.isEmpty()) {
             return "(" + type + ")";
