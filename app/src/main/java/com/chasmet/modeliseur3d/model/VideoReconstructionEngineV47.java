@@ -7,7 +7,7 @@ import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 
 import java.util.List;
 
-/** Façade compatible de l'application, désormais branchée sur le moteur V4.8. */
+/** Façade compatible de l'application, désormais branchée sur le moteur V4.9. */
 public final class VideoReconstructionEngineV47 implements AutoCloseable {
     private final Context context;
     private final DevicePerformanceProfile profile;
@@ -42,12 +42,12 @@ public final class VideoReconstructionEngineV47 implements AutoCloseable {
                     )
             );
             String quality = profile.getLabel()
-                    + " • alignement global dans "
+                    + " • cadrage commun dans "
                     + normalized.getDetectedFrameCount()
                     + "/8 vues • "
                     + result.getQualityLabel();
-            String backend = "Pipeline mobile inspiré de l'architecture Modly"
-                    + " • sans serveur • "
+            String backend = "Pipeline mobile V4.9 sans serveur"
+                    + " • méthode par coupes de silhouettes • "
                     + result.getBackend();
             return new Result(
                     result.getMesh(),
