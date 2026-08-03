@@ -14,43 +14,44 @@ import java.nio.IntBuffer;
 
 public final class ModelRenderer implements android.opengl.GLSurfaceView.Renderer {
     private static final String VERTEX_SHADER =
-            "#version 300 es\n" +
-            "uniform mat4 uMvp;\n" +
-            "uniform mat4 uModel;\n" +
-            "in vec3 aPosition;\n" +
-            "in vec3 aNormal;\n" +
-            "in vec2 aTexCoord;\n" +
-            "out vec3 vNormal;\n" +
-            "out vec2 vTexCoord;\n" +
-            "void main() {\n" +
-            "  gl_Position = uMvp * vec4(aPosition, 1.0);\n" +
-            "  vNormal = normalize(mat3(uModel) * aNormal);\n" +
-            "  vTexCoord = aTexCoord;\n" +
-            "}\n";
+            "#version 300 es\n"
+                    + "uniform mat4 uMvp;\n"
+                    + "uniform mat4 uModel;\n"
+                    + "in vec3 aPosition;\n"
+                    + "in vec3 aNormal;\n"
+                    + "in vec2 aTexCoord;\n"
+                    + "out vec3 vNormal;\n"
+                    + "out vec2 vTexCoord;\n"
+                    + "void main() {\n"
+                    + "  gl_Position = uMvp * vec4(aPosition, 1.0);\n"
+                    + "  vNormal = normalize(mat3(uModel) * aNormal);\n"
+                    + "  vTexCoord = aTexCoord;\n"
+                    + "}\n";
 
     private static final String FRAGMENT_SHADER =
-            "#version 300 es\n" +
-            "precision highp float;\n" +
-            "uniform sampler2D uTexture;\n" +
-            "in vec3 vNormal;\n" +
-            "in vec2 vTexCoord;\n" +
-            "out vec4 fragColor;\n" +
-            "void main() {\n" +
-            "  vec3 base = texture(uTexture, vTexCoord).rgb;\n" +
-            "  vec3 normal = normalize(vNormal);\n" +
-            "  vec3 keyLight = normalize(vec3(-0.42, 0.72, 0.82));\n" +
-            "  vec3 fillLight = normalize(vec3(0.68, 0.20, 0.38));\n" +
-            "  float key = max(dot(normal, keyLight), 0.0);\n" +
-            "  float fill = max(dot(normal, fillLight), 0.0);\n" +
-            "  float hemisphere = 0.5 + 0.5 * normal.y;\n" +
-            "  float rim = pow(1.0 - clamp(abs(normal.z), 0.0, 1.0), 2.2);\n" +
-            "  float lighting = 0.34 + 0.48 * key + 0.15 * fill\n" +
-            "      + 0.10 * hemisphere + 0.10 * rim;\n" +
-            "  vec3 linearColor = pow(max(base, vec3(0.0)), vec3(2.2));\n" +
-            "  linearColor *= lighting;\n" +
-            "  vec3 finalColor = pow(max(linearColor, vec3(0.0)), vec3(1.0 / 2.2));\n" +
-            "  fragColor = vec4(finalColor, 1.0);\n" +
-            "}\n";
+            "#version 300 es\n"
+                    + "precision highp float;\n"
+                    + "uniform sampler2D uTexture;\n"
+                    + "in vec3 vNormal;\n"
+                    + "in vec2 vTexCoord;\n"
+                    + "out vec4 fragColor;\n"
+                    + "void main() {\n"
+                    + "  vec4 texel = texture(uTexture, vTexCoord);\n"
+                    + "  if (texel.a < 0.055) { discard; }\n"
+                    + "  vec3 normal = normalize(vNormal);\n"
+                    + "  vec3 keyLight = normalize(vec3(-0.42, 0.72, 0.82));\n"
+                    + "  vec3 fillLight = normalize(vec3(0.68, 0.20, 0.38));\n"
+                    + "  float key = max(dot(normal, keyLight), 0.0);\n"
+                    + "  float fill = max(dot(normal, fillLight), 0.0);\n"
+                    + "  float hemisphere = 0.5 + 0.5 * normal.y;\n"
+                    + "  float rim = pow(1.0 - clamp(abs(normal.z), 0.0, 1.0), 2.2);\n"
+                    + "  float lighting = 0.42 + 0.42 * key + 0.12 * fill\n"
+                    + "      + 0.08 * hemisphere + 0.09 * rim;\n"
+                    + "  vec3 linearColor = pow(max(texel.rgb, vec3(0.0)), vec3(2.2));\n"
+                    + "  linearColor *= lighting;\n"
+                    + "  vec3 finalColor = pow(max(linearColor, vec3(0.0)), vec3(1.0 / 2.2));\n"
+                    + "  fragColor = vec4(finalColor, texel.a);\n"
+                    + "}\n";
 
     private final float[] projection = new float[16];
     private final float[] view = new float[16];
@@ -71,24 +72,33 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
 
     private MeshData pendingMesh;
     private Bitmap pendingTexture;
-    private float angleX = -4.0f;
-    private float angleY = -18.0f;
-    private float zoom = 1.18f;
+    private float angleX = -3.0f;
+    private float angleY = -12.0f;
+    private float zoom = 1.16f;
 
     @Override
-    public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,
-                                 javax.microedition.khronos.egl.EGLConfig config) {
+    public void onSurfaceCreated(
+            javax.microedition.khronos.opengles.GL10 gl,
+            javax.microedition.khronos.egl.EGLConfig config
+    ) {
         GLES30.glClearColor(0.055f, 0.066f, 0.092f, 1.0f);
         GLES30.glEnable(GLES30.GL_DEPTH_TEST);
+        GLES30.glEnable(GLES30.GL_BLEND);
+        GLES30.glBlendFunc(
+                GLES30.GL_SRC_ALPHA,
+                GLES30.GL_ONE_MINUS_SRC_ALPHA
+        );
         GLES30.glDisable(GLES30.GL_CULL_FACE);
         program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
         uploadPendingModelIfNeeded();
     }
 
     @Override
-    public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,
-                                 int width,
-                                 int height) {
+    public void onSurfaceChanged(
+            javax.microedition.khronos.opengles.GL10 gl,
+            int width,
+            int height
+    ) {
         surfaceWidth = Math.max(1, width);
         surfaceHeight = Math.max(1, height);
         GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight);
@@ -109,10 +119,19 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
         Matrix.rotateM(model, 0, angleX, 1.0f, 0.0f, 0.0f);
         Matrix.rotateM(model, 0, angleY, 0.0f, 1.0f, 0.0f);
 
-        Matrix.setLookAtM(view, 0,
-                0.0f, 0.0f, 3.95f,
-                0.0f, 0.0f, 0.0f,
-                0.0f, 1.0f, 0.0f);
+        Matrix.setLookAtM(
+                view,
+                0,
+                0.0f,
+                0.0f,
+                3.85f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f
+        );
         Matrix.multiplyMM(viewModel, 0, view, 0, model, 0);
         Matrix.multiplyMM(mvp, 0, projection, 0, viewModel, 0);
 
@@ -132,14 +151,32 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
         indexBuffer.position(0);
 
         GLES30.glEnableVertexAttribArray(positionLocation);
-        GLES30.glVertexAttribPointer(positionLocation, 3,
-                GLES30.GL_FLOAT, false, 0, positionBuffer);
+        GLES30.glVertexAttribPointer(
+                positionLocation,
+                3,
+                GLES30.GL_FLOAT,
+                false,
+                0,
+                positionBuffer
+        );
         GLES30.glEnableVertexAttribArray(normalLocation);
-        GLES30.glVertexAttribPointer(normalLocation, 3,
-                GLES30.GL_FLOAT, false, 0, normalBuffer);
+        GLES30.glVertexAttribPointer(
+                normalLocation,
+                3,
+                GLES30.GL_FLOAT,
+                false,
+                0,
+                normalBuffer
+        );
         GLES30.glEnableVertexAttribArray(texCoordLocation);
-        GLES30.glVertexAttribPointer(texCoordLocation, 2,
-                GLES30.GL_FLOAT, false, 0, texCoordBuffer);
+        GLES30.glVertexAttribPointer(
+                texCoordLocation,
+                2,
+                GLES30.GL_FLOAT,
+                false,
+                0,
+                texCoordBuffer
+        );
 
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, textureId);
@@ -166,8 +203,8 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
     }
 
     public synchronized void rotate(float deltaX, float deltaY) {
-        angleY += deltaX * 0.42f;
-        angleX = clamp(angleX + deltaY * 0.32f, -85.0f, 85.0f);
+        angleY = clamp(angleY + deltaX * 0.28f, -58.0f, 58.0f);
+        angleX = clamp(angleX + deltaY * 0.24f, -35.0f, 35.0f);
     }
 
     public synchronized void scale(float factor) {
@@ -175,9 +212,9 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
     }
 
     public synchronized void resetView() {
-        angleX = -4.0f;
-        angleY = -18.0f;
-        zoom = 1.18f;
+        angleX = -3.0f;
+        angleY = -12.0f;
+        zoom = 1.16f;
     }
 
     private synchronized void uploadPendingModelIfNeeded() {
@@ -229,7 +266,7 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
 
     private void updateProjection() {
         float ratio = surfaceWidth / (float) surfaceHeight;
-        Matrix.perspectiveM(projection, 0, 40.0f, ratio, 0.1f, 100.0f);
+        Matrix.perspectiveM(projection, 0, 38.0f, ratio, 0.1f, 100.0f);
     }
 
     private static FloatBuffer toFloatBuffer(float[] values) {
@@ -248,8 +285,14 @@ public final class ModelRenderer implements android.opengl.GLSurfaceView.Rendere
         return buffer;
     }
 
-    private static int createProgram(String vertexSource, String fragmentSource) {
-        int vertexShader = compileShader(GLES30.GL_VERTEX_SHADER, vertexSource);
+    private static int createProgram(
+            String vertexSource,
+            String fragmentSource
+    ) {
+        int vertexShader = compileShader(
+                GLES30.GL_VERTEX_SHADER,
+                vertexSource
+        );
         int fragmentShader = compileShader(
                 GLES30.GL_FRAGMENT_SHADER,
                 fragmentSource
