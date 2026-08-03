@@ -51,13 +51,13 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache les réseaux locaux V4.5
+      - name: Mettre en cache les réseaux locaux V4.6
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
             app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v45-depth-afb6a5c2-isnet-fp32-6a92a19a
+          key: modeliseur-v46-depth-afb6a5c2-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -87,20 +87,24 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture entièrement locale
+      - name: Vérifier l'architecture V4.6 entièrement locale
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai" \
             app/src/main/java app/src/main/res
-          grep -q "versionName '4.5.0'" app/build.gradle
+          grep -q "versionName '4.6.0'" app/build.gradle
           grep -q "VIEW_COUNT = 8" \
             app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
-          grep -q "MultiViewHullProjector.build" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngine.java
-          grep -q "MediaStore.ACTION_PICK_IMAGES" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
+          grep -q "RETRY_OFFSETS_US" \
+            app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
+          grep -q "copyToPrivateCache" \
+            app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
+          grep -q "SingleImageReliefGenerator" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV46.java
+          grep -q "ViewPhaseEstimator.estimate" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV46.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
@@ -124,7 +128,17 @@ jobs:
           java -cp build/multiview-hull-tests \
             com.chasmet.modeliseur3d.model.MultiViewHullProjectorSelfTest
 
-      - name: Tester la simplification du maillage mobile
+      - name: Tester l'alignement des angles vidéo
+        run: |
+          mkdir -p build/view-phase-tests
+          javac -encoding UTF-8 \
+            -d build/view-phase-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ViewPhaseEstimator.java \
+            validation/java/com/chasmet/modeliseur3d/model/ViewPhaseEstimatorSelfTest.java
+          java -cp build/view-phase-tests \
+            com.chasmet.modeliseur3d.model.ViewPhaseEstimatorSelfTest
+
+      - name: Tester la simplification topologique mobile
         run: |
           mkdir -p build/mobile-mesh-tests
           javac -encoding UTF-8 \
@@ -135,7 +149,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V4.5 locale
+      - name: Compiler et vérifier la V4.6 locale
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -157,14 +171,13 @@ jobs:
           test -f "$MODELISEUR_DEBUG_KEYSTORE"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
-
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V4.5
+      - name: Publier l'APK V4.6
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.5-Video8-GLB1Mo-debug
+          name: Modeliseur3D-V4.6-Stabilite-Qualite-GLB1Mo-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
