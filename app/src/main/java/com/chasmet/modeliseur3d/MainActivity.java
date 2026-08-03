@@ -3,6 +3,10 @@ package com.chasmet.modeliseur3d;
 import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,8 +39,9 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends AppCompatActivity {
     private static final String TAG = "Modeliseur25D";
-    private static final int REQUEST_IMAGE = 2001;
+    private static final int REQUEST_FRONT_IMAGE = 2001;
     private static final int REQUEST_VIDEO = 2002;
+    private static final int REQUEST_BACK_IMAGE = 2003;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -47,12 +52,18 @@ public final class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView statusText;
     private TextView emptyText;
-    private Button selectButton;
+    private Button frontButton;
+    private Button backButton;
+    private Button generateButton;
     private Button videoButton;
+    private Button rotationButton;
     private Button exportButton;
 
+    private Uri selectedFrontUri;
+    private Uri selectedBackUri;
     private MeshData currentMesh;
     private Bitmap currentTexture;
+    private boolean busy;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -70,28 +81,40 @@ public final class MainActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
         statusText = findViewById(R.id.statusText);
         emptyText = findViewById(R.id.emptyText);
-        selectButton = findViewById(R.id.selectButton);
+        frontButton = findViewById(R.id.selectFrontButton);
+        backButton = findViewById(R.id.selectBackButton);
+        generateButton = findViewById(R.id.generatePairButton);
         videoButton = findViewById(R.id.selectVideoButton);
+        rotationButton = findViewById(R.id.rotationButton);
         exportButton = findViewById(R.id.exportButton);
         Button resetButton = findViewById(R.id.resetButton);
 
-        selectButton.setOnClickListener(view -> chooseImage());
+        frontButton.setOnClickListener(view -> chooseImage(REQUEST_FRONT_IMAGE));
+        backButton.setOnClickListener(view -> chooseImage(REQUEST_BACK_IMAGE));
+        generateButton.setOnClickListener(view -> generateSelectedImages());
         videoButton.setOnClickListener(view -> chooseVideo());
-        resetButton.setOnClickListener(view -> viewer.resetView());
+        rotationButton.setOnClickListener(view -> toggleAutomaticRotation());
+        resetButton.setOnClickListener(view -> {
+            viewer.stopAutoRotation();
+            viewer.resetView();
+            rotationButton.setText(R.string.rotation_start);
+        });
         exportButton.setOnClickListener(view -> exportCurrentModel());
+
+        updateSelectionButtons();
         statusText.setText(getString(
                 R.string.status_ready_profile,
                 performanceProfile.describe()
         ));
     }
 
-    private void chooseImage() {
+    private void chooseImage(int requestCode) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, REQUEST_IMAGE);
+        startActivityForResult(intent, requestCode);
     }
 
     private void chooseVideo() {
@@ -117,9 +140,24 @@ public final class MainActivity extends AppCompatActivity {
         }
         Uri uri = data.getData();
         persistReadPermission(uri);
-        if (requestCode == REQUEST_IMAGE) {
-            generateImageModel(uri);
-        } else if (requestCode == REQUEST_VIDEO) {
+
+        if (requestCode == REQUEST_FRONT_IMAGE) {
+            selectedFrontUri = uri;
+            updateSelectionButtons();
+            statusText.setText(selectedBackUri == null
+                    ? R.string.status_front_selected
+                    : R.string.status_front_back_selected);
+            return;
+        }
+        if (requestCode == REQUEST_BACK_IMAGE) {
+            selectedBackUri = uri;
+            updateSelectionButtons();
+            statusText.setText(selectedFrontUri == null
+                    ? R.string.status_back_selected_first
+                    : R.string.status_front_back_selected);
+            return;
+        }
+        if (requestCode == REQUEST_VIDEO) {
             String mimeType = getContentResolver().getType(uri);
             if (mimeType != null && !mimeType.startsWith("video/")) {
                 showToast(R.string.error_not_video);
@@ -140,33 +178,82 @@ public final class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void generateImageModel(Uri imageUri) {
+    private void updateSelectionButtons() {
+        frontButton.setText(selectedFrontUri == null
+                ? R.string.select_front
+                : R.string.front_selected);
+        backButton.setText(selectedBackUri == null
+                ? R.string.select_back
+                : R.string.back_selected);
+        generateButton.setText(selectedBackUri == null
+                ? R.string.generate_single
+                : R.string.generate_front_back);
+        generateButton.setEnabled(!busy && selectedFrontUri != null);
+    }
+
+    private void generateSelectedImages() {
+        Uri frontUri = selectedFrontUri;
+        Uri backUri = selectedBackUri;
+        if (frontUri == null) {
+            showToast(R.string.error_select_front);
+            return;
+        }
+
         prepareForNewGeneration();
-        setBusy(true, R.string.status_loading);
+        setBusy(true, backUri == null
+                ? R.string.status_loading
+                : R.string.status_loading_pair);
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
-            Bitmap source = null;
+            Bitmap frontSource = null;
+            Bitmap backSource = null;
+            Relief25DEngine.Result frontResult = null;
+            Relief25DEngine.Result backResult = null;
             try {
-                source = BitmapUtils.decodeBitmapFromUri(
+                frontSource = BitmapUtils.decodeBitmapFromUri(
                         getContentResolver(),
-                        imageUri,
+                        frontUri,
                         performanceProfile.getMaximumInputSide()
                 );
-                if (reliefGenerator == null) {
-                    reliefGenerator = new Relief25DEngine(
-                            getApplicationContext(),
-                            performanceProfile
+                ensureReliefGenerator();
+
+                if (backUri == null) {
+                    Relief25DEngine.Result result = reliefGenerator.generateImage(
+                            frontSource,
+                            this::postReliefProgress
                     );
+                    showResult(result, false);
+                    return;
                 }
-                Relief25DEngine.Result result = reliefGenerator.generateImage(
-                        source,
+
+                backSource = BitmapUtils.decodeBitmapFromUri(
+                        getContentResolver(),
+                        backUri,
+                        performanceProfile.getMaximumInputSide()
+                );
+                postStatus(getString(R.string.status_generating_front));
+                frontResult = reliefGenerator.generateImage(
+                        frontSource,
                         this::postReliefProgress
                 );
-                showResult(result, false);
+                postStatus(getString(R.string.status_generating_back));
+                backResult = reliefGenerator.generateImage(
+                        backSource,
+                        this::postReliefProgress
+                );
+
+                Bitmap combinedAtlas = composeFrontBackAtlas(
+                        frontResult.getTexture(),
+                        backResult.getTexture()
+                );
+                showFrontBackResult(frontResult, backResult, combinedAtlas);
             } catch (Exception | OutOfMemoryError error) {
                 handleGenerationFailure(error, R.string.error_generation);
             } finally {
-                recycleSource(source);
+                recycleSource(frontSource);
+                recycleSource(backSource);
+                recycleResultTexture(frontResult);
+                recycleResultTexture(backResult);
             }
         });
     }
@@ -185,12 +272,7 @@ public final class MainActivity extends AppCompatActivity {
                                          total
                                  ))
                          )) {
-                if (reliefGenerator == null) {
-                    reliefGenerator = new Relief25DEngine(
-                            getApplicationContext(),
-                            performanceProfile
-                    );
-                }
+                ensureReliefGenerator();
                 Relief25DEngine.Result result = reliefGenerator.generateVideo(
                         extracted.getFrames(),
                         extracted.getDecodedFrameCount(),
@@ -201,6 +283,77 @@ public final class MainActivity extends AppCompatActivity {
                 handleGenerationFailure(error, R.string.error_video);
             }
         });
+    }
+
+    private void ensureReliefGenerator() {
+        if (reliefGenerator == null) {
+            reliefGenerator = new Relief25DEngine(
+                    getApplicationContext(),
+                    performanceProfile
+            );
+        }
+    }
+
+    private static Bitmap composeFrontBackAtlas(
+            Bitmap frontAtlas,
+            Bitmap backAtlas
+    ) {
+        if (frontAtlas == null || backAtlas == null
+                || frontAtlas.isRecycled() || backAtlas.isRecycled()) {
+            throw new IllegalArgumentException("Atlas face ou dos absent");
+        }
+        int width = frontAtlas.getWidth();
+        int height = frontAtlas.getHeight();
+        if (backAtlas.getWidth() != width || backAtlas.getHeight() != height
+                || width < 4 || height < 4) {
+            throw new IllegalArgumentException("Atlas face et dos incompatibles");
+        }
+
+        int cellWidth = width / 2;
+        int cellHeight = height / 2;
+        Bitmap result = Bitmap.createBitmap(
+                width,
+                height,
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(result);
+        canvas.drawColor(Color.TRANSPARENT);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG
+                        | Paint.FILTER_BITMAP_FLAG
+                        | Paint.DITHER_FLAG
+        );
+
+        Rect firstCell = new Rect(0, 0, cellWidth, cellHeight);
+        drawAtlasCell(canvas, frontAtlas, firstCell,
+                new Rect(0, 0, cellWidth, cellHeight), paint);
+        drawAtlasCell(canvas, backAtlas, firstCell,
+                new Rect(cellWidth, 0, width, cellHeight), paint);
+
+        Rect frontLeft = new Rect(0, cellHeight, cellWidth, height);
+        Rect frontRight = new Rect(cellWidth, cellHeight, width, height);
+        Rect backLeft = new Rect(0, cellHeight, cellWidth, height);
+        Rect backRight = new Rect(cellWidth, cellHeight, width, height);
+        Rect leftTarget = new Rect(0, cellHeight, cellWidth, height);
+        Rect rightTarget = new Rect(cellWidth, cellHeight, width, height);
+
+        drawAtlasCell(canvas, frontAtlas, frontLeft, leftTarget, paint);
+        Paint blend = new Paint(paint);
+        blend.setAlpha(118);
+        drawAtlasCell(canvas, backAtlas, backRight, leftTarget, blend);
+        drawAtlasCell(canvas, frontAtlas, frontRight, rightTarget, paint);
+        drawAtlasCell(canvas, backAtlas, backLeft, rightTarget, blend);
+        return result;
+    }
+
+    private static void drawAtlasCell(
+            Canvas canvas,
+            Bitmap source,
+            Rect sourceRect,
+            Rect targetRect,
+            Paint paint
+    ) {
+        canvas.drawBitmap(source, sourceRect, targetRect, paint);
     }
 
     private void postReliefProgress(
@@ -252,7 +405,42 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void showFrontBackResult(
+            Relief25DEngine.Result front,
+            Relief25DEngine.Result back,
+            Bitmap atlas
+    ) {
+        long totalDuration = front.getTotalDurationMs()
+                + back.getTotalDurationMs();
+        runOnUiThread(() -> {
+            replaceCurrentModel(front.getMesh(), atlas);
+            emptyText.setVisibility(View.GONE);
+            setBusy(false, R.string.status_done_pair);
+            statusText.setText(getString(
+                    R.string.status_done_25d_details,
+                    getString(R.string.quality_front_back),
+                    front.getProcessorCount(),
+                    currentMesh.getTriangleCount(),
+                    currentMesh.getVertexCount(),
+                    front.getRows(),
+                    front.getColumns(),
+                    2,
+                    getString(R.string.backend_front_back),
+                    totalDuration / 1000.0
+            ));
+        });
+    }
+
+    private void toggleAutomaticRotation() {
+        boolean running = viewer.toggleAutoRotation();
+        rotationButton.setText(running
+                ? R.string.rotation_stop
+                : R.string.rotation_start);
+    }
+
     private void prepareForNewGeneration() {
+        viewer.stopAutoRotation();
+        rotationButton.setText(R.string.rotation_start);
         viewer.setVisibility(View.INVISIBLE);
         emptyText.setVisibility(View.VISIBLE);
     }
@@ -262,6 +450,7 @@ public final class MainActivity extends AppCompatActivity {
         currentMesh = mesh;
         currentTexture = texture;
         viewer.setModel(mesh, texture);
+        viewer.resetView();
         viewer.setVisibility(View.VISIBLE);
         if (previousTexture != null
                 && previousTexture != texture
@@ -274,7 +463,7 @@ public final class MainActivity extends AppCompatActivity {
             Throwable error,
             int messageResource
     ) {
-        Log.e(TAG, "Échec de génération 2.5D V5", error);
+        Log.e(TAG, "Échec de génération 2.5D V5.1", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
@@ -313,7 +502,7 @@ public final class MainActivity extends AppCompatActivity {
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export 2.5D V5", error);
+                Log.e(TAG, "Échec d'export 2.5D V5.1", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -344,7 +533,7 @@ public final class MainActivity extends AppCompatActivity {
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Personnage 2.5D V5 — GLB HD + GLB mobile 1 Mo"
+                "Personnage 2.5D V5.1 Face + Dos — GLB HD + mobile"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
@@ -356,7 +545,7 @@ public final class MainActivity extends AppCompatActivity {
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         ClipData clipData = ClipData.newRawUri(
-                "Personnage 2.5D V5",
+                "Personnage 2.5D V5.1",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -370,12 +559,17 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void setBusy(boolean busy, int messageResource) {
+        this.busy = busy;
         progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
-        selectButton.setEnabled(!busy);
+        frontButton.setEnabled(!busy);
+        backButton.setEnabled(!busy);
         videoButton.setEnabled(!busy);
+        generateButton.setEnabled(!busy && selectedFrontUri != null);
+        rotationButton.setEnabled(!busy && currentMesh != null);
         exportButton.setEnabled(!busy && currentMesh != null);
         statusText.setText(messageResource);
         configurePerformanceMode(busy);
+        updateSelectionButtons();
     }
 
     private void configurePerformanceMode(boolean busy) {
@@ -418,6 +612,18 @@ public final class MainActivity extends AppCompatActivity {
                 && source != currentTexture
                 && !source.isRecycled()) {
             source.recycle();
+        }
+    }
+
+    private void recycleResultTexture(Relief25DEngine.Result result) {
+        if (result == null) {
+            return;
+        }
+        Bitmap texture = result.getTexture();
+        if (texture != null
+                && texture != currentTexture
+                && !texture.isRecycled()) {
+            texture.recycle();
         }
     }
 
