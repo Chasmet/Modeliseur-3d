@@ -24,19 +24,13 @@ import java.nio.FloatBuffer;
 import java.util.Collections;
 import java.util.Map;
 
-/**
- * Segmentation anime locale optimisée pour Android.
- *
- * La V4.2 utilise le graphe FP32 officiel. Contrairement à la variante INT8,
- * il ne contient aucun opérateur ConvInteger non pris en charge sur certains
- * téléphones. La session reste volontairement sur le CPU ; NNAPI est réservé
- * à Depth Anything V2.
- */
+/** Segmentation locale IS-Net Anime FP32 avec threads adaptatifs V4.7. */
 public final class AnimeSegmentationEngine implements AutoCloseable {
     public static final String MODEL_NAME = "IS-Net Anime FP32 mobile";
 
     private static final String MODEL_ASSET = "models/isnet_anime_fp32.onnx";
-    private static final String MODEL_FILE = "isnet_anime_fp32_v412.onnx";
+    private static final String MODEL_FILE = "isnet_anime_fp32_v47.onnx";
+    private static final String LEGACY_FILE_V412 = "isnet_anime_fp32_v412.onnx";
     private static final String LEGACY_INT8_FILE = "isnet_anime_int8_v411.onnx";
     private static final int INPUT_SIZE = 1024;
     private static final long MINIMUM_MODEL_BYTES = 170_000_000L;
@@ -47,18 +41,33 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
     private final String backend;
 
     public AnimeSegmentationEngine(Context context) throws Exception {
+        this(
+                context,
+                Math.max(2, Math.min(
+                        4,
+                        Runtime.getRuntime().availableProcessors() - 1
+                ))
+        );
+    }
+
+    public AnimeSegmentationEngine(Context context, int requestedThreads)
+            throws Exception {
         File model = copyModelIfNeeded(context.getApplicationContext());
         environment = OrtEnvironment.getEnvironment();
-        session = createCpuSession(model);
+        int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
+        int threads = Math.max(2, Math.min(
+                Math.min(8, processors),
+                requestedThreads
+        ));
+        session = createCpuSession(model, threads);
         inputName = session.getInputNames().iterator().next();
-        backend = "IS-Net Anime FP32 • CPU pur multi-cœurs";
+        backend = "IS-Net Anime FP32 • CPU " + threads + " threads";
     }
 
     public Mask segment(Bitmap source) throws Exception {
         if (source == null || source.isRecycled()) {
-            throw new IllegalArgumentException("Planche absente pour la segmentation");
+            throw new IllegalArgumentException("Image absente pour la segmentation");
         }
-
         PreparedInput prepared = prepareInput(source);
         FloatBuffer inputBuffer;
         try {
@@ -67,24 +76,22 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
             prepared.bitmap.recycle();
         }
 
-        long[] shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
         try (OnnxTensor input = OnnxTensor.createTensor(
                 environment,
                 inputBuffer,
-                shape
+                new long[]{1, 3, INPUT_SIZE, INPUT_SIZE}
         )) {
             Map<String, OnnxTensor> inputs =
                     Collections.singletonMap(inputName, input);
             try (OrtSession.Result result = session.run(inputs)) {
                 OnnxValue value = result.get(0);
                 if (!(value instanceof OnnxTensor)) {
-                    throw new OrtException("La segmentation IS-Net ne renvoie pas de tenseur");
+                    throw new OrtException("La segmentation ne renvoie pas de tenseur");
                 }
                 FloatBuffer output = ((OnnxTensor) value).getFloatBuffer();
                 if (output == null || output.remaining() == 0) {
-                    throw new OrtException("La segmentation IS-Net est vide");
+                    throw new OrtException("La segmentation est vide");
                 }
-
                 float[] raw = new float[output.remaining()];
                 output.get(raw);
                 int expected = INPUT_SIZE * INPUT_SIZE;
@@ -94,9 +101,9 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                     );
                 }
                 if (raw.length != expected) {
-                    float[] primaryOutput = new float[expected];
-                    System.arraycopy(raw, 0, primaryOutput, 0, expected);
-                    raw = primaryOutput;
+                    float[] primary = new float[expected];
+                    System.arraycopy(raw, 0, primary, 0, expected);
+                    raw = primary;
                 }
                 sanitizeProbabilities(raw);
                 return new Mask(
@@ -121,14 +128,11 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         try {
             session.close();
         } catch (OrtException ignored) {
-            // La fermeture ne doit jamais empêcher le repli géométrique.
+            // La fermeture ne doit pas interrompre l'activité.
         }
     }
 
-    private OrtSession createCpuSession(File model) throws Exception {
-        int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
-        int threads = Math.max(2, Math.min(4, processors - 1));
-
+    private OrtSession createCpuSession(File model, int threads) throws Exception {
         OrtSession.SessionOptions options = new OrtSession.SessionOptions();
         options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
         options.setExecutionMode(
@@ -136,8 +140,6 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         );
         options.setIntraOpNumThreads(threads);
         options.setInterOpNumThreads(1);
-        // Aucun fournisseur NNAPI/QNN n'est ajouté ici. Le CPU est le
-        // fournisseur par défaut d'ONNX Runtime et garantit Conv FP32.
         try {
             return environment.createSession(model.getAbsolutePath(), options);
         } finally {
@@ -154,27 +156,29 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         int contentHeight = Math.max(1, Math.round(source.getHeight() * scale));
         int contentLeft = (INPUT_SIZE - contentWidth) / 2;
         int contentTop = (INPUT_SIZE - contentHeight) / 2;
-
         Bitmap bitmap = Bitmap.createBitmap(
                 INPUT_SIZE,
                 INPUT_SIZE,
                 Bitmap.Config.ARGB_8888
         );
         Canvas canvas = new Canvas(bitmap);
-        // Le prétraitement d'origine d'IS-Net Anime centre l'image sur du noir.
         canvas.drawColor(Color.BLACK);
         Paint paint = new Paint(
                 Paint.ANTI_ALIAS_FLAG
                         | Paint.FILTER_BITMAP_FLAG
                         | Paint.DITHER_FLAG
         );
-        RectF destination = new RectF(
-                contentLeft,
-                contentTop,
-                contentLeft + contentWidth,
-                contentTop + contentHeight
+        canvas.drawBitmap(
+                source,
+                null,
+                new RectF(
+                        contentLeft,
+                        contentTop,
+                        contentLeft + contentWidth,
+                        contentTop + contentHeight
+                ),
+                paint
         );
-        canvas.drawBitmap(source, null, destination, paint);
         return new PreparedInput(
                 bitmap,
                 contentLeft,
@@ -196,12 +200,10 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 INPUT_SIZE,
                 INPUT_SIZE
         );
-
         FloatBuffer buffer = ByteBuffer
                 .allocateDirect(count * 3 * Float.BYTES)
                 .order(ByteOrder.nativeOrder())
                 .asFloatBuffer();
-
         for (int channel = 0; channel < 3; channel++) {
             for (int color : pixels) {
                 int component;
@@ -212,8 +214,6 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 } else {
                     component = color & 0xFF;
                 }
-                // IS-Net Anime est entraîné en RGB [0, 1], sans normalisation
-                // ImageNet supplémentaire.
                 buffer.put(component / 255.0f);
             }
         }
@@ -222,17 +222,17 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
     }
 
     private static void sanitizeProbabilities(float[] values) {
-        boolean hasFiniteValue = false;
-        for (int i = 0; i < values.length; i++) {
-            float value = values[i];
+        boolean finite = false;
+        for (int index = 0; index < values.length; index++) {
+            float value = values[index];
             if (Float.isFinite(value)) {
-                hasFiniteValue = true;
-                values[i] = clamp01(value);
+                finite = true;
+                values[index] = clamp01(value);
             } else {
-                values[i] = 0.0f;
+                values[index] = 0.0f;
             }
         }
-        if (!hasFiniteValue) {
+        if (!finite) {
             throw new IllegalArgumentException("Masque IS-Net invalide");
         }
     }
@@ -241,20 +241,16 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         File directory = new File(context.getFilesDir(), "neural_models");
         if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
             throw new IllegalStateException(
-                    "Impossible de créer le dossier des réseaux V4.2"
+                    "Impossible de créer le dossier des réseaux locaux"
             );
         }
-
         File destination = new File(directory, MODEL_FILE);
         if (destination.isFile() && destination.length() >= MINIMUM_MODEL_BYTES) {
-            deleteLegacyInt8Model(directory);
+            deleteLegacyModels(directory);
             return destination;
         }
-
         File temporary = new File(directory, MODEL_FILE + ".part");
-        if (temporary.exists()) {
-            temporary.delete();
-        }
+        temporary.delete();
         try (InputStream input = new BufferedInputStream(
                 context.getAssets().open(MODEL_ASSET),
                 1024 * 1024
@@ -268,7 +264,6 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 output.write(buffer, 0, read);
             }
         }
-
         if (temporary.length() < MINIMUM_MODEL_BYTES) {
             temporary.delete();
             throw new IllegalStateException(
@@ -277,26 +272,21 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         }
         if (destination.exists() && !destination.delete()) {
             temporary.delete();
-            throw new IllegalStateException(
-                    "Ancien réseau de segmentation verrouillé"
-            );
+            throw new IllegalStateException("Ancien réseau verrouillé");
         }
         if (!temporary.renameTo(destination)) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Installation de la segmentation V4.2 impossible"
+                    "Installation de la segmentation locale impossible"
             );
         }
-        deleteLegacyInt8Model(directory);
+        deleteLegacyModels(directory);
         return destination;
     }
 
-    private static void deleteLegacyInt8Model(File directory) {
-        File legacy = new File(directory, LEGACY_INT8_FILE);
-        if (legacy.isFile()) {
-            // Ce cache privé n'est plus utilisable et occupait environ 44 Mo.
-            legacy.delete();
-        }
+    private static void deleteLegacyModels(File directory) {
+        new File(directory, LEGACY_FILE_V412).delete();
+        new File(directory, LEGACY_INT8_FILE).delete();
     }
 
     private static float clamp01(float value) {
@@ -369,7 +359,6 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
             int y1 = Math.min(height - 1, y0 + 1);
             float tx = x - x0;
             float ty = y - y0;
-
             float top = lerp(
                     values[y0 * width + x0],
                     values[y0 * width + x1],
@@ -388,8 +377,8 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
             int samples = 96;
             float sum = 0.0f;
             int count = 0;
-            for (int i = 0; i < samples; i++) {
-                float t = i / (float) Math.max(1, samples - 1);
+            for (int index = 0; index < samples; index++) {
+                float t = index / (float) Math.max(1, samples - 1);
                 sum += rawSample(t, 0.01f);
                 sum += rawSample(t, 0.99f);
                 sum += rawSample(0.01f, t);

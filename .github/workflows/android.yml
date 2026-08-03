@@ -51,13 +51,13 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache les réseaux locaux V4.6
+      - name: Mettre en cache les réseaux locaux V4.7
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
             app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v46-depth-afb6a5c2-isnet-fp32-6a92a19a
+          key: modeliseur-v47-depth-afb6a5c2-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -98,26 +98,42 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V4.6 entièrement locale
+      - name: Vérifier l'architecture V4.7 entièrement locale
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai" \
+          grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
+          ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai|render.com" \
             app/src/main/java app/src/main/res
-          grep -q "versionName '4.6.0'" app/build.gradle
+          grep -q "versionName '4.7.0'" app/build.gradle
+          grep -q "versionCode 13" app/build.gradle
+          grep -q "DevicePerformanceProfile.detect" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
+          grep -q "ProcessingPowerLock.acquire" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
+          grep -q "SingleSubjectExtractor.extract" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV47.java
+          grep -q "SingleImageMeshGeneratorV47" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV47.java
+          grep -q "VideoSubjectNormalizer.normalize" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV47.java
           grep -q "VIEW_COUNT = 8" \
             app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
           grep -q "RETRY_OFFSETS_US" \
             app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
-          grep -q "copyToPrivateCache" \
-            app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
-          grep -q "SingleImageReliefGenerator" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV46.java
-          grep -q "ViewPhaseEstimator.estimate" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV46.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
             app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
+
+      - name: Tester la sélection d'un seul personnage
+        run: |
+          mkdir -p build/single-subject-tests
+          javac -encoding UTF-8 \
+            -d build/single-subject-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/SingleSubjectSelector.java \
+            validation/java/com/chasmet/modeliseur3d/model/SingleSubjectSelectorSelfTest.java
+          java -cp build/single-subject-tests \
+            com.chasmet.modeliseur3d.model.SingleSubjectSelectorSelfTest
 
       - name: Tester le regroupement des silhouettes
         run: |
@@ -160,7 +176,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V4.6 locale
+      - name: Compiler et vérifier la V4.7 Turbo locale
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -185,10 +201,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V4.6
+      - name: Publier l'APK V4.7
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.6-Stabilite-Qualite-GLB1Mo-debug
+          name: Modeliseur3D-V4.7-Turbo-SujetUnique-GLB1Mo-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
