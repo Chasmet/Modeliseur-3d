@@ -9,16 +9,16 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/manual_title"
+        android:text="3D automatique V5.5 — Face + Dos"
         android:textColor="@color/text_primary"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="@string/manual_subtitle"
+        android:text="Ajoute seulement une vraie image de face et une vraie image de dos. L’application aligne les silhouettes et fabrique automatiquement les six angles manquants."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -39,41 +39,98 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
-                android:padding="12dp"
-                android:text="@string/manual_capture_rules"
+                android:padding="10dp"
+                android:text="Même personnage, même pose, corps entier visible et caméra à la même hauteur. La position des bras et des jambes doit être identique entre la face et le dos."
                 android:textColor="@color/text_primary"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/selectionCounter"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:text="@string/manual_selection_counter_default"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sequenceQualityText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center"
-                android:text="@string/manual_sequence_waiting"
-                android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
-            <GridLayout
-                android:id="@+id/manualViewGrid"
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="280dp"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/frontCard"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_manual_slot"
+                    android:padding="5dp">
+
+                    <ImageView
+                        android:id="@+id/frontPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Aperçu face"
+                        android:scaleType="fitCenter" />
+
+                    <TextView
+                        android:id="@+id/frontLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:background="#CC181C24"
+                        android:gravity="center"
+                        android:padding="8dp"
+                        android:text="FACE — Appuyer pour choisir"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/backCard"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_manual_slot"
+                    android:padding="5dp">
+
+                    <ImageView
+                        android:id="@+id/backPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Aperçu dos"
+                        android:scaleType="fitCenter" />
+
+                    <TextView
+                        android:id="@+id/backLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:background="#CC181C24"
+                        android:gravity="center"
+                        android:padding="8dp"
+                        android:text="DOS — Appuyer pour choisir"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:alignmentMode="alignMargins"
-                android:columnCount="2"
-                android:orientation="horizontal"
-                android:useDefaultMargins="false" />
+                android:layout_marginTop="12dp"
+                android:text="Épaisseur automatique du personnage"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
+
+            <SeekBar
+                android:id="@+id/depthSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="50" />
+
+            <TextView
+                android:id="@+id/depthValueText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Normal — 100 %"
+                android:textColor="@color/text_secondary" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -86,7 +143,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="@string/manual_clear_all"
+                    android:text="Effacer"
                     android:textAllCaps="false" />
 
                 <Button
@@ -96,7 +153,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="@string/manual_generate"
+                    android:text="Créer la 3D automatique"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -117,19 +174,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_panel">
-
-            <TextView
-                android:id="@+id/manualEmptyViewerText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:padding="24dp"
-                android:text="@string/manual_empty_viewer"
-                android:textColor="#D5DAE5"
-                android:textSize="16sp" />
-        </FrameLayout>
+            android:background="@drawable/bg_panel" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -142,7 +187,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/manual_edit_photos"
+                android:text="Face / Dos"
                 android:textAllCaps="false" />
 
             <Button
@@ -152,7 +197,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="@string/reset_view"
+                android:text="Face"
                 android:textAllCaps="false" />
 
             <Button
@@ -162,7 +207,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="@string/rotation_start"
+                android:text="Rotation"
                 android:textAllCaps="false" />
 
             <Button
@@ -172,7 +217,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="@string/export_obj"
+                android:text="Exporter GLB"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
@@ -197,7 +242,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="@string/manual_status_ready_short"
+            android:text="Sélectionne la face et le dos."
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>
