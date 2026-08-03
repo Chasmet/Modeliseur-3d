@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.1
+      - name: Mettre en cache le détourage local V5.2
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v51-face-dos-isnet-fp32-6a92a19a
+          key: modeliseur-v52-face-dos-reel-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -67,7 +67,7 @@ jobs:
           URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
           if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime FP32 déjà présent et vérifié."
+            echo "IS-Net Anime FP32 déjà présent dans le cache et vérifié."
           else
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
@@ -91,35 +91,32 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.1 Face Dos
+      - name: Vérifier l'architecture V5.2 Face Dos réelle
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
           grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.1.0'" app/build.gradle
-          grep -q "versionCode 17" app/build.gradle
+          grep -q "MainActivityV52" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.2.0'" app/build.gradle
+          grep -q "versionCode 18" app/build.gradle
           ! grep -q "downloadDepthModel" app/build.gradle
-          grep -q "REQUEST_BACK_IMAGE" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
-          grep -q "composeFrontBackAtlas" \
-            app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
-          grep -q "selectFrontButton" \
-            app/src/main/res/layout/activity_main.xml
-          grep -q "selectBackButton" \
-            app/src/main/res/layout/activity_main.xml
-          grep -q "rotationButton" \
-            app/src/main/res/layout/activity_main.xml
-          grep -q "toggleAutoRotation" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelGLSurfaceView.java
+          grep -q "FaceBack25DEngine" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q "FaceBack25DMesher.build" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
+          grep -q "alignement Face/Dos commun" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
+          grep -q "profils calculés depuis les bords réels" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DEngine.java
+          grep -q "texCoords\[offset + 1\] = pixelY / atlasHeight" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java
+          ! grep -q "composeFrontBackAtlas" \
+            app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q "0.78 + 0.18" \
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
           grep -q "AUTO_ROTATION_DEGREES_PER_SECOND" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q "angleY - deltaX" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q "wrapDegrees" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
-          grep -q "texel.a < 0.055" \
-            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRenderer.java
+            app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
           grep -q "image/png" \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileGlbExporter.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 1_000_000L" \
@@ -135,7 +132,18 @@ jobs:
           java -cp build/single-subject-tests \
             com.chasmet.modeliseur3d.model.SingleSubjectSelectorSelfTest
 
-      - name: Tester le maillage fermé 2.5D
+      - name: Tester le nouveau maillage Face Dos et les UV
+        run: |
+          mkdir -p build/face-back-25d-tests
+          javac -encoding UTF-8 \
+            -d build/face-back-25d-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
+            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
+          java -cp build/face-back-25d-tests \
+            com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
+
+      - name: Tester le maillage historique 2.5D
         run: |
           mkdir -p build/relief-25d-tests
           javac -encoding UTF-8 \
@@ -157,7 +165,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V5.1 Face Dos
+      - name: Compiler et vérifier la V5.2 Face Dos réelle
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -181,10 +189,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           ! unzip -l "$APK" | grep -q "depth_anything"
 
-      - name: Publier l'APK V5.1 Face Dos
+      - name: Publier l'APK V5.2 Face Dos réelle
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-2.5D-V5.1-Face-Dos-Rotation-debug
+          name: Modeliseur-2.5D-V5.2-Face-Dos-Reel-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
