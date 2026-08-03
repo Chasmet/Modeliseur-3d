@@ -6,9 +6,9 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
@@ -22,9 +22,11 @@ import androidx.core.content.FileProvider;
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceView;
 import com.chasmet.modeliseur3d.media.VideoFrameExtractor;
 import com.chasmet.modeliseur3d.model.MeshData;
-import com.chasmet.modeliseur3d.model.NeuralReconstructionEngineV46;
+import com.chasmet.modeliseur3d.model.NeuralReconstructionEngineV47;
 import com.chasmet.modeliseur3d.model.ObjExporter;
-import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV46;
+import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV47;
+import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
+import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
 
 import java.io.File;
@@ -36,12 +38,13 @@ public final class MainActivity extends AppCompatActivity {
     private static final String TAG = "Modeliseur3D";
     private static final int REQUEST_IMAGE = 2001;
     private static final int REQUEST_VIDEO = 2002;
-    private static final int MAX_INPUT_SIDE = 2048;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
-    private NeuralReconstructionEngineV46 imageGenerator;
-    private VideoReconstructionEngineV46 videoGenerator;
+    private DevicePerformanceProfile performanceProfile;
+    private ProcessingPowerLock processingPowerLock;
+    private NeuralReconstructionEngineV47 imageGenerator;
+    private VideoReconstructionEngineV47 videoGenerator;
     private ModelGLSurfaceView viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -58,6 +61,7 @@ public final class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        performanceProfile = DevicePerformanceProfile.detect(this);
         FrameLayout container = findViewById(R.id.viewerContainer);
         viewer = new ModelGLSurfaceView(this);
         container.addView(viewer, 0, new FrameLayout.LayoutParams(
@@ -77,6 +81,10 @@ public final class MainActivity extends AppCompatActivity {
         videoButton.setOnClickListener(view -> chooseVideo());
         resetButton.setOnClickListener(view -> viewer.resetView());
         exportButton.setOnClickListener(view -> exportCurrentModel());
+        statusText.setText(getString(
+                R.string.status_ready_profile,
+                performanceProfile.describe()
+        ));
     }
 
     private void chooseImage() {
@@ -89,26 +97,11 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void chooseVideo() {
-        Intent intent;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
-            intent.setType("video/*");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } else {
-            intent = new Intent(
-                    Intent.ACTION_PICK,
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            );
-            intent.setType("video/*");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        }
-        if (intent.resolveActivity(getPackageManager()) == null) {
-            intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("video/*");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("video/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(intent, REQUEST_VIDEO);
     }
 
@@ -145,19 +138,20 @@ public final class MainActivity extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
-            // Le Photo Picker fournit une permission temporaire suffisante.
+            // Certains fournisseurs accordent seulement une permission temporaire.
         }
     }
 
     private void generateImageModel(Uri imageUri) {
         setBusy(true, R.string.status_loading);
         worker.execute(() -> {
+            ProcessingPowerLock.favorCurrentThread();
             Bitmap source = null;
             try {
                 source = BitmapUtils.decodeBitmapFromUri(
                         getContentResolver(),
                         imageUri,
-                        MAX_INPUT_SIDE
+                        performanceProfile.getMaximumInputSide()
                 );
                 generateFromBitmap(source);
             } catch (Exception | OutOfMemoryError error) {
@@ -171,6 +165,7 @@ public final class MainActivity extends AppCompatActivity {
     private void generateVideoModel(Uri videoUri) {
         setBusy(true, R.string.status_copying_video);
         worker.execute(() -> {
+            ProcessingPowerLock.favorCurrentThread();
             try (VideoFrameExtractor.Result extracted =
                          new VideoFrameExtractor(this).extract(
                                  videoUri,
@@ -182,20 +177,19 @@ public final class MainActivity extends AppCompatActivity {
                          )) {
                 if (videoGenerator == null) {
                     postStatus(getString(R.string.status_loading_video_engine));
-                    videoGenerator = new VideoReconstructionEngineV46(
-                            getApplicationContext()
+                    videoGenerator = new VideoReconstructionEngineV47(
+                            getApplicationContext(),
+                            performanceProfile
                     );
                 }
-                VideoReconstructionEngineV46.Result result =
+                VideoReconstructionEngineV47.Result result =
                         videoGenerator.generate(
                                 extracted.getFrames(),
                                 extracted.getDecodedFrameCount(),
                                 this::postVideoProgress
                         );
-                currentMesh = result.getMesh();
-                currentTexture = result.getTexture();
                 runOnUiThread(() -> {
-                    viewer.setModel(currentMesh, currentTexture);
+                    replaceCurrentModel(result.getMesh(), result.getTexture());
                     emptyText.setVisibility(View.GONE);
                     setBusy(false, R.string.status_done_video);
                     statusText.setText(getString(
@@ -203,9 +197,9 @@ public final class MainActivity extends AppCompatActivity {
                             result.getQualityLabel(),
                             result.getProcessorCount(),
                             currentMesh.getTriangleCount(),
+                            currentMesh.getVertexCount(),
                             result.getOccupiedVoxels(),
                             result.getBackend(),
-                            result.getNeuralDurationMs() / 1000.0,
                             result.getTotalDurationMs() / 1000.0
                     ));
                 });
@@ -216,7 +210,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void postVideoProgress(
-            VideoReconstructionEngineV46.Stage stage,
+            VideoReconstructionEngineV47.Stage stage,
             int current,
             int total
     ) {
@@ -248,37 +242,51 @@ public final class MainActivity extends AppCompatActivity {
     private void generateFromBitmap(Bitmap source) throws Exception {
         if (imageGenerator == null) {
             postStatus(getString(R.string.status_loading_neural_engine));
-            imageGenerator = new NeuralReconstructionEngineV46(
-                    getApplicationContext()
+            imageGenerator = new NeuralReconstructionEngineV47(
+                    getApplicationContext(),
+                    performanceProfile
             );
         }
-        postStatus(getString(R.string.status_generating_image_v46));
-        NeuralReconstructionEngineV46.Result result =
+        postStatus(getString(R.string.status_generating_image_v47));
+        NeuralReconstructionEngineV47.Result result =
                 imageGenerator.generate(source);
-        currentMesh = result.getMesh();
-        currentTexture = result.getTexture();
         runOnUiThread(() -> {
-            viewer.setModel(currentMesh, currentTexture);
+            replaceCurrentModel(result.getMesh(), result.getTexture());
             emptyText.setVisibility(View.GONE);
             setBusy(false, R.string.status_done);
             statusText.setText(getString(
                     R.string.status_done_details,
-                    result.getDetectedViewCount(),
+                    result.getFinalSubjectCount(),
+                    result.getDetectedSubjectCount(),
                     result.getQualityLabel(),
                     result.getProcessorCount(),
                     currentMesh.getTriangleCount(),
+                    currentMesh.getVertexCount(),
+                    result.getGridWidth(),
+                    result.getGridHeight(),
                     result.getNeuralBackend(),
-                    result.getNeuralDurationMs() / 1000.0,
                     result.getTotalDurationMs() / 1000.0
             ));
         });
+    }
+
+    private void replaceCurrentModel(MeshData mesh, Bitmap texture) {
+        Bitmap previousTexture = currentTexture;
+        currentMesh = mesh;
+        currentTexture = texture;
+        viewer.setModel(mesh, texture);
+        if (previousTexture != null
+                && previousTexture != texture
+                && !previousTexture.isRecycled()) {
+            previousTexture.recycle();
+        }
     }
 
     private void handleGenerationFailure(
             Throwable error,
             int messageResource
     ) {
-        Log.e(TAG, "Échec de reconstruction V4.6 locale", error);
+        Log.e(TAG, "Échec de reconstruction V4.7 locale", error);
         String details = safeMessage(error);
         Runtime.getRuntime().gc();
         runOnUiThread(() -> {
@@ -297,6 +305,7 @@ public final class MainActivity extends AppCompatActivity {
         }
         setBusy(true, R.string.status_exporting);
         worker.execute(() -> {
+            ProcessingPowerLock.favorCurrentThread();
             try {
                 ObjExporter.ExportResult result = ObjExporter.export(
                         this,
@@ -313,7 +322,7 @@ public final class MainActivity extends AppCompatActivity {
                     shareFiles(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                Log.e(TAG, "Échec d'export V4.6", error);
+                Log.e(TAG, "Échec d'export V4.7", error);
                 String details = safeMessage(error);
                 runOnUiThread(() -> {
                     setBusy(false, R.string.error_export);
@@ -344,7 +353,7 @@ public final class MainActivity extends AppCompatActivity {
         share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         share.putExtra(
                 Intent.EXTRA_SUBJECT,
-                "Modèle 3D V4.6 local — GLB HD + GLB mobile 1 Mo"
+                "Modèle 3D V4.7 Turbo local — GLB HD + GLB mobile 1 Mo"
         );
         share.putExtra(
                 Intent.EXTRA_TEXT,
@@ -356,7 +365,7 @@ public final class MainActivity extends AppCompatActivity {
         );
         share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         ClipData clipData = ClipData.newRawUri(
-                "Modèle 3D V4.6",
+                "Modèle 3D V4.7",
                 uris.get(0)
         );
         for (int index = 1; index < uris.size(); index++) {
@@ -375,6 +384,34 @@ public final class MainActivity extends AppCompatActivity {
         videoButton.setEnabled(!busy);
         exportButton.setEnabled(!busy && currentMesh != null);
         statusText.setText(messageResource);
+        configurePerformanceMode(busy);
+    }
+
+    private void configurePerformanceMode(boolean busy) {
+        if (busy) {
+            if (processingPowerLock == null) {
+                processingPowerLock = ProcessingPowerLock.acquire(
+                        this,
+                        "reconstruction"
+                );
+            }
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            if (processingPowerLock != null) {
+                processingPowerLock.close();
+                processingPowerLock = null;
+            }
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                && performanceProfile != null
+                && performanceProfile.isSustainedPerformanceSupported()) {
+            try {
+                getWindow().setSustainedPerformanceMode(busy);
+            } catch (RuntimeException ignored) {
+                // Certaines surcouches déclarent le mode sans l'accepter.
+            }
+        }
     }
 
     private void postStatus(String message) {
@@ -395,7 +432,7 @@ public final class MainActivity extends AppCompatActivity {
 
     private static String safeMessage(Throwable error) {
         if (error instanceof OutOfMemoryError) {
-            return "(mémoire du téléphone insuffisante ; ferme les autres applications puis réessaie)";
+            return "(mémoire Android saturée ; ferme les autres applications puis réessaie)";
         }
         Throwable current = error;
         String message = null;
@@ -434,6 +471,7 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         worker.shutdownNow();
+        configurePerformanceMode(false);
         if (imageGenerator != null) {
             imageGenerator.close();
         }
