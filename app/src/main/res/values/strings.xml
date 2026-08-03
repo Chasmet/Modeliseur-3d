@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 2.5D + 3D V5.3.1</string>
+    <string name="app_name">Modéliseur 2.5D + 3D V5.4</string>
 
-    <string name="home_title">Modéliseur 3D V5.3.1</string>
+    <string name="home_title">Modéliseur 3D V5.4</string>
     <string name="home_subtitle">Choisis uniquement le type de reconstruction à utiliser.</string>
     <string name="home_mode_25d">2.5D\nFace + dos</string>
-    <string name="home_mode_3d">3D\n8 images guidées à 360°</string>
+    <string name="home_mode_3d">3D guidée\n8 silhouettes contrôlées</string>
 
-    <string name="title">Modéliseur 2.5D V5.3.1 — Face + Dos réel</string>
+    <string name="title">Modéliseur 2.5D V5.4 — Face + Dos réel</string>
     <string name="subtitle">Importe une image de face et une image de dos. Le mode 2.5D aligne les silhouettes, garde les textures avant et arrière et reconstruit l’épaisseur depuis les bords réels.</string>
 
     <string name="select_image">Choisir une image</string>
@@ -24,8 +24,8 @@
     <string name="export_obj">Exporter GLB</string>
 
     <string name="empty_message">Le personnage 2.5D apparaîtra ici.\nSélectionne la face, puis le dos, et appuie sur Générer Face + Dos.</string>
-    <string name="status_ready">Prêt — moteur 2.5D V5.3.1 Face + Dos réel.</string>
-    <string name="status_ready_profile">Prêt — moteur Face + Dos V5.3.1 • %1$s</string>
+    <string name="status_ready">Prêt — moteur 2.5D V5.4 Face + Dos réel.</string>
+    <string name="status_ready_profile">Prêt — moteur Face + Dos V5.4 • %1$s</string>
     <string name="status_front_selected">Image de face sélectionnée. Ajoute le dos pour un meilleur résultat.</string>
     <string name="status_back_selected_first">Image de dos sélectionnée. Sélectionne maintenant l’image de face.</string>
     <string name="status_front_back_selected">Face et dos sélectionnés. Appuie sur Générer Face + Dos.</string>
@@ -55,10 +55,10 @@
     <string name="status_generating_image_v46">Détourage et création du relief 2.5D…</string>
     <string name="status_generating_image_v47">Détourage et création du relief 2.5D…</string>
 
-    <string name="status_done">Personnage image 2.5D V5.3.1 prêt.</string>
-    <string name="status_done_video">Personnage vidéo 2.5D V5.3.1 prêt.</string>
-    <string name="status_done_pair">Personnage Face + Dos V5.3.1 prêt.</string>
-    <string name="quality_front_back">Face + Dos réels V5.3.1</string>
+    <string name="status_done">Personnage image 2.5D V5.4 prêt.</string>
+    <string name="status_done_video">Personnage vidéo 2.5D V5.4 prêt.</string>
+    <string name="status_done_pair">Personnage Face + Dos V5.4 prêt.</string>
+    <string name="quality_front_back">Face + Dos réels V5.4</string>
     <string name="backend_front_back">Deux détourages IS-Net • silhouette commune • vraies textures avant/arrière • profils depuis les bords • UV corrigés</string>
     <string name="status_done_25d_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • grille %5$d×%6$d • %7$d vue(s) source • %8$s • total %9$.1f s</string>
     <string name="status_done_details">%1$d personnage final • %2$d sujets détectés • %3$s • %4$d cœurs • %5$d triangles • %6$d sommets • grille %7$d×%8$d • %9$s • total %10$.1f s</string>
@@ -67,7 +67,7 @@
     <string name="status_exporting">Création du GLB HD intact puis de la copie mobile à 200 000 octets maximum…</string>
     <string name="status_exported">GLB HD et copie mobile 200 ko créés.</string>
     <string name="status_exported_details">Export terminé • GLB mobile %1$.3f Mo • %2$d triangles • limite 200 ko vérifiée.</string>
-    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.3.1</string>
+    <string name="share_model">Partager ou enregistrer le personnage 2.5D V5.4</string>
 
     <string name="error_select_front">Sélectionne d’abord une image de face.</string>
     <string name="error_image">Impossible de lire cette image.</string>
@@ -76,41 +76,60 @@
     <string name="error_generation">La génération 2.5D locale a échoué. Le détail est affiché ci-dessous.</string>
     <string name="error_export">L’export GLB HD ou de la copie mobile 200 ko a échoué.</string>
 
-    <string name="manual_title">Reconstruction 3D manuelle — 8 vues</string>
-    <string name="manual_subtitle">Chaque emplacement correspond à un angle déjà calculé. Place les images dans l’ordre indiqué pour que le moteur reconstruise le tour complet du sujet.</string>
-    <string name="manual_capture_rules">RÈGLES IMPORTANTES\n• Même personnage, même pose et même hauteur dans les 8 images.\n• Tourne autour du sujet dans le sens horaire, sans déplacer le sujet.\n• Garde la même distance, le même zoom et un fond simple.\n• Le corps entier doit rester visible.\n• Appui long sur une case pour l’effacer.</string>
-    <string name="manual_selection_counter_default">0/8 images placées</string>
-    <string name="manual_selection_counter">%1$d/%2$d images placées</string>
+    <string name="manual_title">Reconstruction 3D guidée V5.4 — 8 silhouettes</string>
+    <string name="manual_subtitle">Chaque case contient le profil précis à respecter. La photo est détourée, superposée au gabarit puis refusée si la pose, le cadrage ou l’angle sont incohérents.</string>
+    <string name="manual_capture_rules">MODE SILHOUETTES OBLIGATOIRES\n• Place le personnage exactement dans le contour affiché.\n• Garde la même pose, la même tenue, la même distance et le même zoom.\n• Tête et pieds entièrement visibles, sujet centré, fond simple.\n• Face, profils, dos et trois-quarts doivent être réellement différents.\n• Vert = valide. Rouge = photo à remplacer. Appui long pour effacer.</string>
+    <string name="manual_selection_counter_default">0 choisie • 0 validée / 8</string>
+    <string name="manual_selection_counter">%1$d choisie(s) • %2$d validée(s) / %3$d</string>
+    <string name="manual_sequence_waiting">Ajoute les photos en respectant chaque silhouette.</string>
+    <string name="manual_sequence_progress">Contrôle 360° : %1$d/%2$d silhouettes individuelles validées.</string>
+    <string name="manual_sequence_valid">✓ Tour 360° cohérent : face, profils, dos et trois-quarts validés.</string>
     <string name="manual_slot_empty">%1$s\nAppuyer pour choisir</string>
     <string name="manual_slot_selected">%1$s ✓\nAppuyer pour remplacer</string>
     <string name="manual_slot_content_description">Choisir l’image %1$s</string>
     <string name="manual_clear_all">Tout effacer</string>
-    <string name="manual_generate">Reconstruire la 3D</string>
-    <string name="manual_edit_photos">Photos</string>
-    <string name="manual_empty_viewer">Le modèle 3D apparaîtra ici.</string>
+    <string name="manual_generate">Reconstruire la 3D validée</string>
+    <string name="manual_edit_photos">Silhouettes</string>
+    <string name="manual_empty_viewer">Le modèle 3D validé apparaîtra ici.</string>
 
-    <string name="manual_status_ready">Prêt — reconstruction locale 8 vues • %1$s</string>
-    <string name="manual_status_ready_short">Place les 8 images dans les angles indiqués.</string>
+    <string name="manual_status_ready">Prêt — contrôle local des silhouettes V5.4 • %1$s</string>
+    <string name="manual_status_ready_short">Place chaque photo dans son gabarit de silhouette.</string>
     <string name="manual_status_slot_cleared">Vue effacée : %1$s</string>
+    <string name="manual_status_analyzing_view">Détourage et contrôle du gabarit : %1$s…</string>
+    <string name="manual_status_view_valid">%1$s validée • score %2$d%% • %3$s</string>
+    <string name="manual_status_view_invalid">%1$s refusée • score %2$d%% • %3$s</string>
+    <string name="manual_toast_replace_view">Remplace %1$s : %2$s</string>
     <string name="manual_status_preparing">Préparation des 8 images et activation de la puissance du téléphone…</string>
+    <string name="manual_status_preparing_v54">Les 8 silhouettes sont valides. Préparation des images normalisées V5.4…</string>
     <string name="manual_status_loading_view">Lecture de l’image %1$d/%2$d : %3$s…</string>
+    <string name="manual_status_loading_normalized_view">Copie de la silhouette normalisée %1$d/%2$d : %3$s…</string>
     <string name="manual_status_segmenting">Détourage local de la vue %1$d/%2$d…</string>
+    <string name="manual_status_segmenting_normalized">Vérification finale de la silhouette %1$d/%2$d…</string>
     <string name="manual_status_building_hull">Calcul de l’enveloppe 3D à partir des 8 angles…</string>
+    <string name="manual_status_building_hull_v54">Intersection des huit silhouettes alignées pour créer le volume 360°…</string>
     <string name="manual_status_meshing">Création du maillage 3D fermé…</string>
+    <string name="manual_status_meshing_v54">Création du maillage fermé depuis les profils contrôlés…</string>
     <string name="manual_status_texturing">Fusion des 8 textures autour du modèle…</string>
+    <string name="manual_status_texturing_v54">Fusion des textures normalisées sans étirement entre les angles…</string>
     <string name="manual_status_done">Modèle 3D manuel prêt.</string>
+    <string name="manual_status_done_v54">Modèle 3D guidé V5.4 prêt.</string>
+    <string name="manual_quality_v54">V5.4 Silhouettes guidées • 8 vues normalisées</string>
     <string name="manual_status_done_details">%1$s • %2$d cœurs • %3$d triangles • %4$d sommets • %5$d vues • %6$d vue(s) réparée(s) • total %7$.1f s</string>
     <string name="manual_status_editing">Modifie les images puis relance la reconstruction.</string>
+    <string name="manual_status_editing_v54">Remplace uniquement les cases rouges puis relance la reconstruction.</string>
     <string name="manual_status_exporting">Création du GLB 3D HD intact et de la copie mobile à 200 000 octets maximum…</string>
     <string name="manual_status_exported">GLB 3D HD et copie mobile 200 ko créés.</string>
     <string name="manual_status_exported_details">Export terminé • GLB mobile %1$.3f Mo • %2$d triangles • limite 200 ko vérifiée.</string>
 
     <string name="manual_error_not_image">Le fichier choisi n’est pas une image.</string>
+    <string name="manual_error_validation">Impossible de contrôler la silhouette %1$s.</string>
     <string name="manual_error_missing_view">Image manquante : %1$s</string>
-    <string name="manual_error_generation">La reconstruction 3D locale a échoué.</string>
+    <string name="manual_error_invalid_view">Vue refusée : %1$s • %2$s</string>
+    <string name="manual_error_sequence">Les huit angles ne forment pas un tour 360° cohérent.</string>
+    <string name="manual_error_generation">La reconstruction 3D guidée locale a échoué.</string>
     <string name="manual_error_export">L’export du modèle 3D ou de la copie mobile 200 ko a échoué.</string>
 
-    <string name="manual_share_subject">Modèle 3D manuel V5.3.1 — 8 vues</string>
-    <string name="manual_share_text">GLB 3D créé localement dans : %1$s\nCopie mobile : %2$d octets.</string>
+    <string name="manual_share_subject">Modèle 3D guidé V5.4 — 8 silhouettes</string>
+    <string name="manual_share_text">GLB 3D guidé créé localement dans : %1$s\nCopie mobile : %2$d octets.</string>
     <string name="manual_share_chooser">Partager ou enregistrer le modèle 3D</string>
 </resources>

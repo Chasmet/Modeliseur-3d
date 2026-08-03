@@ -55,11 +55,21 @@
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
+            <TextView
+                android:id="@+id/sequenceQualityText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:text="@string/manual_sequence_waiting"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
             <GridLayout
                 android:id="@+id/manualViewGrid"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="5dp"
                 android:alignmentMode="alignMargins"
                 android:columnCount="2"
                 android:orientation="horizontal"
@@ -110,6 +120,7 @@
             android:background="@drawable/bg_panel">
 
             <TextView
+                android:id="@+id/manualEmptyViewerText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
