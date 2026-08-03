@@ -51,13 +51,13 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache les réseaux locaux V4.8
+      - name: Mettre en cache les réseaux locaux V4.9
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
             app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v48-depth-afb6a5c2-isnet-fp32-6a92a19a
+          key: modeliseur-v49-depth-afb6a5c2-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -98,7 +98,7 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V4.8 entièrement mobile
+      - name: Vérifier l'architecture V4.9 Surface continue
         shell: bash
         run: |
           set -euo pipefail
@@ -106,8 +106,8 @@ jobs:
           grep -q "android.permission.WAKE_LOCK" app/src/main/AndroidManifest.xml
           ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai|render.com" \
             app/src/main/java app/src/main/res
-          grep -q "versionName '4.8.0'" app/build.gradle
-          grep -q "versionCode 14" app/build.gradle
+          grep -q "versionName '4.9.0'" app/build.gradle
+          grep -q "versionCode 15" app/build.gradle
           grep -q "DevicePerformanceProfile.detect" \
             app/src/main/java/com/chasmet/modeliseur3d/MainActivity.java
           grep -q "ProcessingPowerLock.acquire" \
@@ -116,11 +116,13 @@ jobs:
             app/src/main/java/com/chasmet/modeliseur3d/model/NeuralReconstructionEngineV47.java
           grep -q "VideoSubjectNormalizer.normalize" \
             app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV47.java
-          grep -q "VideoReconstructionEngineV48" \
-            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV47.java
-          grep -q "MultiViewTextureMapper.buildAtlas" \
+          grep -q "SilhouetteStripMesher.build" \
             app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
-          grep -q "VolumeTopologyCleaner.keepLargestComponent" \
+          grep -q "bakeCylindricalTexture" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
+          ! grep -q "MultiViewHullProjector.build" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
+          ! grep -q "MultiViewTextureMapper.buildAtlas" \
             app/src/main/java/com/chasmet/modeliseur3d/model/VideoReconstructionEngineV48.java
           grep -q "VIEW_COUNT = 8" \
             app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
@@ -147,7 +149,7 @@ jobs:
           java -cp build/view-grouping-tests \
             com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
 
-      - name: Tester la projection volumique huit vues
+      - name: Tester la projection volumique huit vues historique
         run: |
           mkdir -p build/multiview-hull-tests
           javac -encoding UTF-8 \
@@ -157,7 +159,7 @@ jobs:
           java -cp build/multiview-hull-tests \
             com.chasmet.modeliseur3d.model.MultiViewHullProjectorSelfTest
 
-      - name: Tester le nettoyage topologique du volume
+      - name: Tester le nettoyage topologique historique
         run: |
           mkdir -p build/volume-cleaner-tests
           javac -encoding UTF-8 \
@@ -177,6 +179,17 @@ jobs:
           java -cp build/view-phase-tests \
             com.chasmet.modeliseur3d.model.ViewPhaseEstimatorSelfTest
 
+      - name: Tester la surface continue par coupes
+        run: |
+          mkdir -p build/silhouette-strip-tests
+          javac -encoding UTF-8 \
+            -d build/silhouette-strip-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/SilhouetteStripMesher.java \
+            validation/java/com/chasmet/modeliseur3d/model/SilhouetteStripMesherSelfTest.java
+          java -cp build/silhouette-strip-tests \
+            com.chasmet.modeliseur3d.model.SilhouetteStripMesherSelfTest
+
       - name: Tester la simplification topologique mobile
         run: |
           mkdir -p build/mobile-mesh-tests
@@ -188,7 +201,7 @@ jobs:
           java -cp build/mobile-mesh-tests \
             com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
 
-      - name: Compiler et vérifier la V4.8 Multivue mobile
+      - name: Compiler et vérifier la V4.9 Surface continue
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' \
@@ -213,10 +226,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V4.8
+      - name: Publier l'APK V4.9
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.8-Multivue-Mobile-GLB1Mo-debug
+          name: Modeliseur3D-V4.9-Surface-Continue-GLB1Mo-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
