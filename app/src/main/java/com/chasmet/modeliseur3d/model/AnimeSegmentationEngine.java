@@ -27,19 +27,19 @@ import java.util.Map;
 /**
  * Segmentation anime locale optimisée pour Android.
  *
- * La V4.1.1 utilise une version INT8 de 44 Mo afin de réduire fortement la
- * mémoire nécessaire au chargement du réseau. L'image conserve son ratio et
- * est centrée dans une entrée 1024 x 1024, conformément au prétraitement du
- * modèle original.
+ * La V4.2 utilise le graphe FP32 officiel. Contrairement à la variante INT8,
+ * il ne contient aucun opérateur ConvInteger non pris en charge sur certains
+ * téléphones. La session reste volontairement sur le CPU ; NNAPI est réservé
+ * à Depth Anything V2.
  */
 public final class AnimeSegmentationEngine implements AutoCloseable {
-    public static final String MODEL_NAME = "IS-Net Anime INT8 mobile";
+    public static final String MODEL_NAME = "IS-Net Anime FP32 mobile";
 
-    private static final String MODEL_ASSET = "models/isnet_anime_int8.onnx";
-    private static final String MODEL_FILE = "isnet_anime_int8_v411.onnx";
+    private static final String MODEL_ASSET = "models/isnet_anime_fp32.onnx";
+    private static final String MODEL_FILE = "isnet_anime_fp32_v412.onnx";
+    private static final String LEGACY_INT8_FILE = "isnet_anime_int8_v411.onnx";
     private static final int INPUT_SIZE = 1024;
-    private static final float[] MEAN = {0.485f, 0.456f, 0.406f};
-    private static final long MINIMUM_MODEL_BYTES = 40_000_000L;
+    private static final long MINIMUM_MODEL_BYTES = 170_000_000L;
 
     private final OrtEnvironment environment;
     private final OrtSession session;
@@ -51,7 +51,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         environment = OrtEnvironment.getEnvironment();
         session = createCpuSession(model);
         inputName = session.getInputNames().iterator().next();
-        backend = "IS-Net Anime INT8 • CPU multi-cœurs";
+        backend = "IS-Net Anime FP32 • CPU pur multi-cœurs";
     }
 
     public Mask segment(Bitmap source) throws Exception {
@@ -60,8 +60,12 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         }
 
         PreparedInput prepared = prepareInput(source);
-        FloatBuffer inputBuffer = createInputBuffer(prepared.bitmap);
-        prepared.bitmap.recycle();
+        FloatBuffer inputBuffer;
+        try {
+            inputBuffer = createInputBuffer(prepared.bitmap);
+        } finally {
+            prepared.bitmap.recycle();
+        }
 
         long[] shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
         try (OnnxTensor input = OnnxTensor.createTensor(
@@ -94,7 +98,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                     System.arraycopy(raw, 0, primaryOutput, 0, expected);
                     raw = primaryOutput;
                 }
-                normalizeRobust(raw);
+                sanitizeProbabilities(raw);
                 return new Mask(
                         raw,
                         INPUT_SIZE,
@@ -127,8 +131,13 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
 
         OrtSession.SessionOptions options = new OrtSession.SessionOptions();
         options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+        options.setExecutionMode(
+                OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL
+        );
         options.setIntraOpNumThreads(threads);
         options.setInterOpNumThreads(1);
+        // Aucun fournisseur NNAPI/QNN n'est ajouté ici. Le CPU est le
+        // fournisseur par défaut d'ONNX Runtime et garantit Conv FP32.
         try {
             return environment.createSession(model.getAbsolutePath(), options);
         } finally {
@@ -152,7 +161,8 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 Bitmap.Config.ARGB_8888
         );
         Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(Color.WHITE);
+        // Le prétraitement d'origine d'IS-Net Anime centre l'image sur du noir.
+        canvas.drawColor(Color.BLACK);
         Paint paint = new Paint(
                 Paint.ANTI_ALIAS_FLAG
                         | Paint.FILTER_BITMAP_FLAG
@@ -193,7 +203,6 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 .asFloatBuffer();
 
         for (int channel = 0; channel < 3; channel++) {
-            float mean = MEAN[channel];
             for (int color : pixels) {
                 int component;
                 if (channel == 0) {
@@ -203,32 +212,28 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
                 } else {
                     component = color & 0xFF;
                 }
-                buffer.put(component / 255.0f - mean);
+                // IS-Net Anime est entraîné en RGB [0, 1], sans normalisation
+                // ImageNet supplémentaire.
+                buffer.put(component / 255.0f);
             }
         }
         buffer.rewind();
         return buffer;
     }
 
-    private static void normalizeRobust(float[] values) {
-        float minimum = Float.POSITIVE_INFINITY;
-        float maximum = Float.NEGATIVE_INFINITY;
-        for (float value : values) {
-            if (Float.isFinite(value)) {
-                minimum = Math.min(minimum, value);
-                maximum = Math.max(maximum, value);
-            }
-        }
-        if (!Float.isFinite(minimum) || !Float.isFinite(maximum)) {
-            throw new IllegalArgumentException("Masque IS-Net invalide");
-        }
-        float range = Math.max(1.0e-6f, maximum - minimum);
+    private static void sanitizeProbabilities(float[] values) {
+        boolean hasFiniteValue = false;
         for (int i = 0; i < values.length; i++) {
             float value = values[i];
-            if (!Float.isFinite(value)) {
-                value = minimum;
+            if (Float.isFinite(value)) {
+                hasFiniteValue = true;
+                values[i] = clamp01(value);
+            } else {
+                values[i] = 0.0f;
             }
-            values[i] = clamp01((value - minimum) / range);
+        }
+        if (!hasFiniteValue) {
+            throw new IllegalArgumentException("Masque IS-Net invalide");
         }
     }
 
@@ -236,12 +241,13 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         File directory = new File(context.getFilesDir(), "neural_models");
         if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
             throw new IllegalStateException(
-                    "Impossible de créer le dossier des réseaux V4.1.1"
+                    "Impossible de créer le dossier des réseaux V4.2"
             );
         }
 
         File destination = new File(directory, MODEL_FILE);
         if (destination.isFile() && destination.length() >= MINIMUM_MODEL_BYTES) {
+            deleteLegacyInt8Model(directory);
             return destination;
         }
 
@@ -266,7 +272,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         if (temporary.length() < MINIMUM_MODEL_BYTES) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Le réseau IS-Net Anime INT8 embarqué est incomplet"
+                    "Le réseau IS-Net Anime FP32 embarqué est incomplet"
             );
         }
         if (destination.exists() && !destination.delete()) {
@@ -278,10 +284,19 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         if (!temporary.renameTo(destination)) {
             temporary.delete();
             throw new IllegalStateException(
-                    "Installation de la segmentation V4.1.1 impossible"
+                    "Installation de la segmentation V4.2 impossible"
             );
         }
+        deleteLegacyInt8Model(directory);
         return destination;
+    }
+
+    private static void deleteLegacyInt8Model(File directory) {
+        File legacy = new File(directory, LEGACY_INT8_FILE);
+        if (legacy.isFile()) {
+            // Ce cache privé n'est plus utilisable et occupait environ 44 Mo.
+            legacy.delete();
+        }
     }
 
     private static float clamp01(float value) {

@@ -1,71 +1,105 @@
-# Modéliseur 3D V4 Neural — Android local
+# Modéliseur 3D V4.4 — Android local, image et vidéo
 
-Application Android Java spécialisée pour les **planches de rotation multivues** contenant le même personnage de face, de dos et de profil.
+Application Android Java qui transforme localement :
 
-La V4 ajoute un véritable réseau neuronal embarqué à la reconstruction géométrique. L’image reste sur le téléphone.
+- une image unique ;
+- une planche contenant plusieurs vues ;
+- une courte vidéo de rotation ;
 
-## Moteur V4
+en un modèle 3D texturé exportable en GLB.
 
-Le pipeline est hybride afin de rester utilisable sur Android :
+## Confidentialité et fonctionnement
 
-1. lecture de la planche jusqu’à 3072 px ;
-2. détection des silhouettes et sélection automatique des vues ;
-3. construction d’une enveloppe 3D multivue fermée ;
-4. extraction d’une surface triangulée lisse ;
-5. découpe de l’atlas en face, dos et profil ;
-6. trois inférences locales avec **Depth Anything V2 Small FP32** ;
-7. normalisation et filtrage des cartes de profondeur ;
-8. fusion des profondeurs selon l’orientation de chaque normale ;
-9. déformation bornée de la surface pour ajouter le relief neuronal ;
-10. recalcul des normales ;
-11. affichage OpenGL ES 3 ;
-12. export GLB 2.0, OBJ, MTL et PNG.
+La V4.4 n’utilise :
 
-## Intelligence artificielle embarquée
+- aucune API distante ;
+- aucune clé ;
+- aucun compte ;
+- aucun crédit ni abonnement ;
+- aucune permission Internet.
 
-- Modèle : Depth Anything V2 Small FP32 ;
-- taille du modèle : environ 99 Mo ;
-- licence du modèle Small : Apache-2.0 ;
-- runtime : ONNX Runtime Android 1.20.0, licence MIT ;
-- version du runtime choisie pour conserver `minSdkVersion 21` ;
-- accélération : NNAPI quand Android et le modèle le permettent ;
-- repli : CPU multi-cœurs avec optimisations ONNX ;
-- entrée du réseau : 518 × 518, normalisation ImageNet ;
-- aucune API distante et aucun serveur.
+Les images, les trames vidéo, les modèles neuronaux et les GLB restent sur le téléphone. Internet est seulement utilisé par GitHub Actions pendant la compilation pour télécharger les modèles open source avant de les intégrer à l’APK.
 
-Le modèle est téléchargé pendant la compilation, vérifié par SHA-256 puis inclus dans les assets de l’APK. Au premier lancement, il est copié dans le stockage privé de l’application pour permettre un chargement efficace par ONNX Runtime.
+## Vidéo locale en huit vues
 
-## Puissance du téléphone
+Pour une vidéo, l’application :
 
-La V4 utilise deux niveaux de calcul :
+1. vérifie que sa durée est comprise entre 1,2 seconde et 2 minutes ;
+2. répartit huit zones sur la rotation ;
+3. compare plusieurs trames dans chaque zone ;
+4. conserve la trame la plus nette et la mieux exposée ;
+5. corrige l’orientation de la vidéo ;
+6. compose localement une planche 4 × 2 ;
+7. transmet cette planche au moteur multivue embarqué.
 
-- le moteur géométrique répartit la création du volume et du maillage sur plusieurs cœurs ;
-- ONNX Runtime utilise NNAPI ou le CPU optimisé pour les trois inférences neuronales.
+Le MP4 n’est jamais envoyé ni copié sur un serveur.
 
-Résolution géométrique adaptative :
+## Reconstruction locale
 
-- Ultra propre : 112 × 224 × 84 voxels ;
-- Haute précision : 96 × 192 × 72 ;
-- Équilibrée : 80 × 160 × 60 ;
-- Compatible : 64 × 128 × 48.
+Pipeline principal :
 
-La V4 est actuellement compilée pour `arm64-v8a`, adapté aux téléphones Android modernes 64 bits et permettant de ne pas multiplier inutilement la taille des bibliothèques natives.
+1. décodage de l’entrée jusqu’à 2048 px ;
+2. détourage par **IS-Net Anime FP32** ;
+3. regroupement des morceaux appartenant au même sujet ;
+4. détection des vues réellement exploitables ;
+5. enveloppe volumique multivue ou volume monoculaire arrondi ;
+6. maillage lissé préservant les membres et accessoires ;
+7. relief par **Depth Anything V2 Small FP32** ;
+8. calcul NNAPI quand il est compatible, avec repli CPU multi-cœurs ;
+9. affichage OpenGL ES 3 ;
+10. export GLB, OBJ, MTL et texture.
 
-## Gestes
+## Deux GLB à chaque export
 
-- glisser avec un doigt : rotation 360° ;
-- pincer avec deux doigts : zoom ;
-- double appui ou bouton Recentrer : vue initiale.
+### GLB haute définition
 
-## Exports
+```text
+personnage_v44_local_hd.glb
+```
 
-- `personnage_v4_neural.glb` ;
-- `personnage_v4_neural.obj` ;
-- `personnage_v4_neural.mtl` ;
-- `texture_multivue_v4.png` ;
-- `informations.txt`.
+Il conserve le maillage complet et la texture PNG intégrée.
 
-Le GLB contient la géométrie, les normales, les UV et la texture intégrée. Il est importable dans Godot, Blender et Unity.
+### GLB mobile limité à 200 Ko
+
+```text
+personnage_v44_mobile_200ko.glb
+```
+
+L’application réduit progressivement :
+
+- le nombre de triangles ;
+- la taille de la texture ;
+- la qualité JPEG ;
+
+puis mesure le fichier réellement écrit. Le GLB mobile n’est accepté que si sa taille est comprise entre 1 et **200 000 octets**.
+
+Une limite de 200 Ko impose nécessairement une perte de détails. Le GLB HD reste disponible pour conserver la meilleure qualité produite par le téléphone.
+
+## Modèles embarqués
+
+### IS-Net Anime FP32
+
+```text
+SHA-256 : 6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
+```
+
+### Depth Anything V2 Small FP32
+
+```text
+SHA-256 : afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
+```
+
+Runtime : ONNX Runtime Android 1.20.0.
+
+## Configuration Android
+
+- langage : Java ;
+- `minSdkVersion 21` ;
+- `compileSdkVersion 34` ;
+- `targetSdkVersion 34` ;
+- ABI : `arm64-v8a` ;
+- version : `4.4.0` ;
+- versionCode : `10`.
 
 ## Compilation
 
@@ -74,42 +108,41 @@ chmod +x gradlew
 ./gradlew --no-daemon clean lintDebug assembleDebug
 ```
 
-Le premier build télécharge automatiquement le modèle neuronal et vérifie son SHA-256 :
-
-```text
-afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
-```
-
-APK généré :
+APK produit :
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` publie l’APK dans **Actions > Artifacts** sous le nom `Modeliseur3D-V4-Neural-debug`.
+Le workflow `.github/workflows/android.yml` exécute les tests Java, vérifie l’absence de permission Internet, compile l’APK, contrôle sa signature et les SHA-256 des deux modèles, puis publie l’artefact :
 
-## Structure principale
+```text
+Modeliseur3D-V4.4-Local-Video8-debug
+```
+
+## Principaux fichiers V4.4
 
 ```text
 app/src/main/java/com/chasmet/modeliseur3d/
 ├── MainActivity.java
-├── gl/
-│   ├── ModelGLSurfaceView.java
-│   └── ModelRenderer.java
+├── media/
+│   ├── VideoFrameExtractor.java
+│   └── VideoSheetComposer.java
 ├── model/
-│   ├── GlbExporter.java
-│   ├── ImageToMeshGenerator.java
-│   ├── MeshData.java
+│   ├── AnimeSegmentationEngine.java
 │   ├── NeuralDepthEngine.java
 │   ├── NeuralReconstructionEngine.java
-│   ├── ObjExporter.java
-│   └── SmoothHullMesher.java
-└── util/
-    └── BitmapUtils.java
+│   ├── MobileMeshOptimizer.java
+│   ├── MobileGlbExporter.java
+│   ├── GlbExporter.java
+│   └── ObjExporter.java
+└── gl/
+    ├── ModelGLSurfaceView.java
+    └── ModelRenderer.java
 ```
 
 ## Limites réelles
 
-Cette V4 utilise bien un réseau neuronal, mais elle ne prétend pas exécuter sur téléphone un grand modèle génératif 3D de plusieurs milliards de paramètres. Elle combine une enveloppe multivue fiable et une profondeur neuronale détaillée.
+Cette application n’exécute pas un grand générateur 3D distant. Elle combine segmentation, profondeur neuronale et reconstruction géométrique sur Android. La précision dépend directement de la qualité de l’image ou de la rotation vidéo : pose stable, sujet entier visible, fond propre, éclairage régulier et angles suffisamment différents.
 
-Les zones absentes de toutes les vues restent estimées. Les espaces très fins entre les doigts, l’intérieur des vêtements et les éléments cachés ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est encore généré.
+Les zones constamment cachées, l’intérieur des vêtements et les détails très fins ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est généré dans cette version.

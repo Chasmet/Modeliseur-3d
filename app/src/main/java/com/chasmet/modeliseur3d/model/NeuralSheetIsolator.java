@@ -5,7 +5,7 @@ import android.graphics.Color;
 
 /** Prépare une planche propre à partir du masque neuronal IS-Net Anime. */
 final class NeuralSheetIsolator {
-    private static final int BACKGROUND = Color.rgb(255, 0, 255);
+    private static final int BACKGROUND = Color.TRANSPARENT;
     private static final float FOREGROUND_THRESHOLD = 0.30f;
 
     private NeuralSheetIsolator() {

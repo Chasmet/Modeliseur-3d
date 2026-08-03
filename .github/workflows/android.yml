@@ -13,7 +13,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
+    env:
+      MODELISEUR_DEBUG_KEYSTORE: ${{ github.workspace }}/.ci-signing/debug.keystore
 
     steps:
       - name: Récupérer le dépôt
@@ -26,25 +28,48 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Mettre en cache les réseaux V4.1.1
+      - name: Conserver la signature APK de test
+        uses: actions/cache@v4
+        with:
+          path: .ci-signing/debug.keystore
+          key: modeliseur-debug-keystore-v1
+
+      - name: Préparer la signature APK de test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$MODELISEUR_DEBUG_KEYSTORE" ]; then
+            mkdir -p "$(dirname "$MODELISEUR_DEBUG_KEYSTORE")"
+            keytool -genkeypair -noprompt \
+              -keystore "$MODELISEUR_DEBUG_KEYSTORE" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10950
+          fi
+
+      - name: Mettre en cache les réseaux locaux V4.4
         uses: actions/cache@v4
         with:
           path: |
             app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
-            app/src/main/assets/models/isnet_anime_int8.onnx
-          key: modeliseur-v411-depth-afb6a5c2-isnet-int8-a6832786
+            app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v44-depth-afb6a5c2-isnet-fp32-6a92a19a
 
-      - name: Télécharger et vérifier IS-Net Anime INT8
+      - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
         run: |
           set -euo pipefail
-          MODEL="app/src/main/assets/models/isnet_anime_int8.onnx"
+          MODEL="app/src/main/assets/models/isnet_anime_fp32.onnx"
           PART="${MODEL}.part"
-          SHA="a6832786351b9a1283bb1cd4a2b9a77f1fe0330ad5e7324a6c4603db478b034e"
-          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model_int8.onnx?download=true"
+          SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
           if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime INT8 déjà présent dans le cache et vérifié."
+            echo "IS-Net Anime FP32 déjà présent dans le cache et vérifié."
           else
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 \
@@ -62,18 +87,70 @@ jobs:
       - name: Autoriser le script Gradle
         run: chmod +x gradlew
 
-      - name: Compiler et vérifier la V4.1.1 neuronale
-        run: ./gradlew --no-daemon clean lintDebug assembleDebug
-
-      - name: Vérifier la taille et le SHA-256 de l'APK
+      - name: Vérifier l'architecture entièrement locale
+        shell: bash
         run: |
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
+          ! grep -R -n -E "TripoCloudEngine|CloudCredentialStore|platform.tripo3d.ai" \
+            app/src/main/java app/src/main/res || false
+          grep -q "versionName '4.4.0'" app/build.gradle
+          grep -q "VIEW_COUNT = 8" \
+            app/src/main/java/com/chasmet/modeliseur3d/media/VideoFrameExtractor.java
+          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Publier l'APK V4.1.1
+      - name: Tester le regroupement des silhouettes
+        run: |
+          mkdir -p build/view-grouping-tests
+          javac -encoding UTF-8 \
+            -d build/view-grouping-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouper.java \
+            validation/java/com/chasmet/modeliseur3d/model/ViewCandidateGrouperSelfTest.java
+          java -cp build/view-grouping-tests \
+            com.chasmet.modeliseur3d.model.ViewCandidateGrouperSelfTest
+
+      - name: Tester la simplification du maillage mobile
+        run: |
+          mkdir -p build/mobile-mesh-tests
+          javac -encoding UTF-8 \
+            -d build/mobile-mesh-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizer.java \
+            validation/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizerSelfTest.java
+          java -cp build/mobile-mesh-tests \
+            com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
+
+      - name: Compiler et vérifier la V4.4 locale
+        run: |
+          ./gradlew --no-daemon clean lintDebug assembleDebug || {
+            find app/build/reports -name 'lint-results-debug.txt' \
+              -print -exec cat {} \; 2>/dev/null || true
+            exit 1
+          }
+
+      - name: Vérifier l'APK, sa signature et ses modèles
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          DEPTH_SHA="afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
+          ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+
+          ls -lh "$APK"
+          sha256sum "$APK"
+          test -f "$MODELISEUR_DEBUG_KEYSTORE"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
+
+          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$DEPTH_SHA"
+          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
+
+      - name: Publier l'APK V4.4
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur3D-V4.1.1-Neural-debug
+          name: Modeliseur3D-V4.4-Local-Video8-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

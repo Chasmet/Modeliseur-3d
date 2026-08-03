@@ -1,12 +1,12 @@
-MODÉLISEUR 3D V4.1.1 NEURAL — COMPOSANTS OPEN SOURCE
+MODÉLISEUR 3D V4.2 NEURAL — COMPOSANTS OPEN SOURCE
 
 1. IS-Net Anime / Anime Segmentation
 Projet d'origine : SkyTNT/anime-segmentation
-Modèle embarqué : variante ONNX INT8 publiée par onnx-community/anime-seg-ONNX
-Taille du modèle embarqué : 44 182 552 octets
+Modèle embarqué : variante ONNX FP32 publiée par onnx-community/anime-seg-ONNX
+Taille du modèle embarqué : 176 068 431 octets
 Licence du projet et du modèle d'origine : Apache License 2.0
 
-Le réseau est utilisé localement pour détourer les personnages dessinés. La variante INT8 réduit fortement la mémoire et la taille nécessaires sur Android par rapport au modèle FP32 de 176 Mo.
+Le réseau est utilisé localement pour détourer les personnages dessinés. La variante FP32 remplace la variante INT8 dont l'opérateur ConvInteger n'était pas disponible sur certains téléphones Android.
 
 2. Depth Anything V2 Small
 Projet : DepthAnything/Depth-Anything-V2
@@ -15,14 +15,14 @@ Licence du modèle Small : Apache License 2.0
 Copyright : auteurs et contributeurs de Depth Anything V2
 Article : Depth Anything V2: A More Capable Foundation Model for Monocular Depth Estimation
 
-Le modèle est utilisé localement pour estimer les cartes de profondeur de face, de dos et de profil après la reconstruction géométrique. Si le téléphone ne peut pas charger ce réseau, la V4.1.1 conserve automatiquement le maillage géométrique lissé.
+Le modèle est utilisé localement pour estimer les cartes de profondeur utiles après la reconstruction géométrique. Si le téléphone ne peut pas charger ce réseau, la V4.2 conserve automatiquement le maillage géométrique lissé.
 
 3. ONNX Runtime Android
 Projet : microsoft/onnxruntime
 Licence : MIT License
 Copyright (c) Microsoft Corporation et contributeurs
 
-ONNX Runtime exécute les réseaux sur Android. IS-Net Anime INT8 utilise le CPU multi-cœurs pour maximiser la compatibilité. Depth Anything V2 peut demander NNAPI quand l'appareil le permet. Les sessions sont chargées l'une après l'autre pour limiter le pic de mémoire.
+ONNX Runtime exécute les réseaux sur Android. IS-Net Anime FP32 utilise exclusivement le CPU multi-cœurs pour maximiser la compatibilité. Depth Anything V2 peut demander NNAPI quand l'appareil le permet. Les sessions sont chargées l'une après l'autre pour limiter le pic de mémoire.
 
 4. AndroidX
 Projets : Android Open Source Project et AndroidX
