@@ -170,16 +170,11 @@ tasks.named('preBuild').configure {
     dependsOn tasks.named('downloadAnimeSegmentationModel')
 }
 
-configurations.configureEach {
-    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-}
-
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
-    implementation 'com.google.android.filament:filament-utils-android:1.74.1'
-    implementation 'com.google.android.filament:gltfio-android:1.74.1'
+    implementation 'com.google.android.filament:filament-utils-android:1.74.0'
+    implementation 'com.google.android.filament:gltfio-android:1.74.0'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }

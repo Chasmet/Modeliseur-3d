@@ -163,6 +163,10 @@ public final class CloudCredentialStore {
     }
 
     private static String normalize(String value) {
-        return value == null ? "" : value.trim();
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return normalized.substring(7).trim();
+        }
+        return normalized;
     }
 }
