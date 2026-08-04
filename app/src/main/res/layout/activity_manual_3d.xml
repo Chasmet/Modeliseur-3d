@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9 — Orientation redressée"
+        android:text="3D locale V5.9.1 — Export GLB rapide"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le mode 3D remet la texture à l'endroit, redresse automatiquement les profils horizontaux et recalcule la profondeur avant de créer le volume. Le moteur 2.5D reste séparé et inchangé."
+        android:text="Le modèle reste redressé et le GLB 200 ko est maintenant préparé automatiquement pendant la prévisualisation. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage et corps entier sur les quatre images. Les profils peuvent être horizontaux : la V5.9 choisit automatiquement le bon sens de rotation à 90°."
+                android:text="Même personnage et corps entier sur les quatre images. Les profils peuvent être horizontaux : l'application choisit automatiquement le bon sens de rotation à 90°."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="La texture et le modèle doivent maintenant rester debout sans retourner le téléphone."
+                android:text="Après la génération, tu peux tourner le modèle pendant que le GLB est optimisé en arrière-plan. Dès que le bouton affiche ✓, le partage est immédiat."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
