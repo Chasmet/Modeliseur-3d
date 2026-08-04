@@ -73,7 +73,7 @@ public final class Fast3DGlbExporter {
             notifyProgress(listener, Stage.SIMPLIFYING, index + 1, ATTEMPTS.length);
             try {
                 if (current.getTriangleCount() > attempt.triangleBudget) {
-                    current = MobileMeshOptimizer.simplify(
+                    current = FastMobileMeshOptimizer.simplify(
                             current,
                             attempt.triangleBudget
                     );
