@@ -1,0 +1,6 @@
+V5.9.4 stable
+
+Base géométrique : commit V5.9.0 adc85a93a186de4060082721c4316a83e6f09d6b.
+Mode 3D : orientation, placement, profondeur et maillage identiques à la V5.9 fonctionnelle.
+Export 3D : un seul GLB original, sans compression, sans simplification et sans limite de taille.
+Mode 2.5D : comportement historique conservé.
