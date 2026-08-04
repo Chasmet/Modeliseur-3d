@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Modéliseur 3D V5.9.1"
+        android:text="Modéliseur 3D V5.9.2"
         android:textColor="@color/text_primary"
         android:textSize="30sp"
         android:textStyle="bold" />
@@ -45,10 +45,10 @@
         android:layout_marginTop="16dp"
         android:backgroundTint="@color/viewer_background"
         android:gravity="center"
-        android:text="3D redressée\nExport GLB rapide"
+        android:text="3D redressée\nExport GLB qualité complète"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
-        android:textSize="22sp"
+        android:textSize="21sp"
         android:textStyle="bold" />
 
 </LinearLayout>
