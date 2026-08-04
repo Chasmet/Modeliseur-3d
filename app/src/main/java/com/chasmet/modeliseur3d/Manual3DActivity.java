@@ -36,11 +36,11 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V5.9.1. Le mode 2.5D reste séparé et inchangé. */
+/** Mode 3D V5.9.2. Le mode 2.5D reste séparé et inchangé. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
-    private static final int[] REQUESTS = {5911, 5912, 5913, 5914};
+    private static final int[] REQUESTS = {5921, 5922, 5923, 5924};
     private static final int[] CARDS = {
             R.id.frontCard,
             R.id.rightCard,
@@ -448,8 +448,9 @@ public final class Manual3DActivity extends AppCompatActivity {
         preparedExport = null;
         exportPreparing = true;
         exportRequested = false;
-        export.setText("GLB en préparation…");
-        status.setText(modelSummary + " • préparation GLB 200 ko en arrière-plan…");
+        export.setText("GLB qualité en préparation…");
+        status.setText(modelSummary
+                + " • préparation du GLB qualité sans simplification…");
         worker.execute(() -> {
             try {
                 ProcessingPowerLock.favorCurrentThread();
@@ -462,10 +463,9 @@ public final class Manual3DActivity extends AppCompatActivity {
                                 return;
                             }
                             String action = stage == Fast3DGlbExporter.Stage.SIMPLIFYING
-                                    ? "optimisation du maillage"
-                                    : "encodage GLB";
-                            status.setText(modelSummary + " • " + action
-                                    + " " + current + "/" + total + "…");
+                                    ? "vérification du maillage complet"
+                                    : "encodage du GLB qualité";
+                            status.setText(modelSummary + " • " + action + "…");
                         })
                 );
                 runOnUiThread(() -> completeExportPreparation(generation, result));
@@ -484,10 +484,11 @@ public final class Manual3DActivity extends AppCompatActivity {
         }
         preparedExport = result;
         exportPreparing = false;
-        export.setText("Exporter GLB ✓");
+        export.setText("Exporter GLB qualité ✓");
         status.setText(modelSummary
-                + " • GLB prêt : " + result.getSizeBytes() / 1000L + " ko"
-                + " • " + result.getTriangleCount() + " triangles"
+                + " • GLB qualité prêt : " + formatFileSize(result.getSizeBytes())
+                + " • " + result.getTriangleCount() + " triangles conservés"
+                + " • texture " + result.getTextureMaximumSide() + " px"
                 + " • préparé en " + String.format(
                         Locale.FRANCE,
                         "%.1f s",
@@ -506,7 +507,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         exportPreparing = false;
         exportRequested = false;
         preparedExport = null;
-        export.setText("Réessayer GLB");
+        export.setText("Réessayer GLB qualité");
         String detail = error.getMessage() == null
                 ? "erreur inconnue"
                 : error.getMessage();
@@ -524,7 +525,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         exportPreparing = false;
         exportRequested = false;
         if (export != null) {
-            export.setText("Exporter GLB");
+            export.setText("Exporter GLB qualité");
         }
     }
 
@@ -548,14 +549,14 @@ public final class Manual3DActivity extends AppCompatActivity {
         }
         if (exportPreparing) {
             exportRequested = true;
-            export.setText("Partage dès que prêt…");
+            export.setText("Partage qualité dès que prêt…");
             status.setText(modelSummary
-                    + " • le GLB est encore en préparation, il s'ouvrira automatiquement.");
+                    + " • le GLB qualité est encore en préparation et s'ouvrira automatiquement.");
             return;
         }
         startExportPreparation(mesh, texture);
         exportRequested = true;
-        export.setText("Partage dès que prêt…");
+        export.setText("Partage qualité dès que prêt…");
     }
 
     private void sharePreparedExport(Fast3DGlbExporter.PreparedExport result) {
@@ -573,12 +574,19 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.1");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.2 qualité");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setClipData(ClipData.newRawUri("GLB", uri));
-        status.setText(modelSummary + " • partage GLB instantané : "
-                + result.getSizeBytes() / 1000L + " ko.");
-        startActivity(Intent.createChooser(intent, "Enregistrer le GLB"));
+        intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
+        status.setText(modelSummary + " • partage GLB qualité instantané : "
+                + formatFileSize(result.getSizeBytes()) + ".");
+        startActivity(Intent.createChooser(intent, "Enregistrer le GLB qualité"));
+    }
+
+    private static String formatFileSize(long bytes) {
+        if (bytes >= 1_000_000L) {
+            return String.format(Locale.FRANCE, "%.2f Mo", bytes / 1_000_000.0);
+        }
+        return String.format(Locale.FRANCE, "%.0f ko", bytes / 1000.0);
     }
 
     private void fail(String prefix, Throwable error) {
@@ -610,7 +618,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v591");
+                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v592");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
