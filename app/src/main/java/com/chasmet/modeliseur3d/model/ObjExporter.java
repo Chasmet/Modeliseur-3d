@@ -18,6 +18,8 @@ import java.util.Locale;
 
 public final class ObjExporter {
     public static final long MAXIMUM_MOBILE_GLB_BYTES = 200_000L;
+    private static final String MANUAL_3D_ACTIVITY =
+            "com.chasmet.modeliseur3d.Manual3DActivity";
 
     private static final MobilePreset[] MOBILE_PRESETS = {
             new MobilePreset(4_000, 256),
@@ -37,6 +39,55 @@ public final class ObjExporter {
     }
 
     public static ExportResult export(
+            Context context,
+            MeshData mesh,
+            Bitmap texture
+    ) throws IOException {
+        if (context != null
+                && MANUAL_3D_ACTIVITY.equals(context.getClass().getName())) {
+            return exportOriginal3D(context, mesh, texture);
+        }
+        return exportLegacy25D(context, mesh, texture);
+    }
+
+    /**
+     * Le mode 3D conserve désormais exactement le modèle affiché : un seul GLB,
+     * aucune compression, aucune limite de taille et aucune copie mobile.
+     */
+    private static ExportResult exportOriginal3D(
+            Context context,
+            MeshData mesh,
+            Bitmap texture
+    ) throws IOException {
+        Fast3DGlbExporter.PreparedExport prepared = Fast3DGlbExporter.prepare(
+                context,
+                mesh,
+                texture,
+                null
+        );
+        List<File> files = new ArrayList<>();
+        files.add(prepared.getFile());
+        MobilePreset originalPreset = new MobilePreset(
+                prepared.getTriangleCount(),
+                prepared.getTextureMaximumSide()
+        );
+        MobileResult original = new MobileResult(
+                prepared.getSizeBytes(),
+                prepared.getVertexCount(),
+                prepared.getTriangleCount(),
+                originalPreset
+        );
+        return new ExportResult(
+                prepared.getFile().getParentFile(),
+                files,
+                prepared.getFile(),
+                prepared.getFile(),
+                original
+        );
+    }
+
+    /** Comportement 2.5D historique conservé à l'identique. */
+    private static ExportResult exportLegacy25D(
             Context context,
             MeshData mesh,
             Bitmap texture
