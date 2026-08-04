@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache l'IA locale V5.9.3
+      - name: Mettre en cache le détourage local V5.9.4
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v593-neural-confidence-isnet-fp32-6a92a19a
+          key: modeliseur-v594-stable-projector-original-glb-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -88,24 +88,25 @@ jobs:
       - name: Autoriser Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.9.3 IA et export libre
+      - name: Vérifier la base stable V5.9 et l'export original
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.3" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.3'" app/build.gradle
-          grep -q "versionCode 29" app/build.gradle
-          grep -q "NeuralMaskConfidence.build" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
-          grep -q "class NeuralConfidenceHullBuilder" app/src/main/java/com/chasmet/modeliseur3d/model/NeuralConfidenceHullBuilder.java
-          grep -q "class NeuralMaskConfidence" app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMaskConfidence.java
-          grep -q "Fusion IA légère" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "sans limite de taille" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "Modéliseur 3D V5.9.4" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.9.4'" app/build.gradle
+          grep -q "versionCode 30" app/build.gradle
+          grep -q "RowEnvelope" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
+          grep -q "support >= 3 || envelope.accepts" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
+          ! grep -q "NeuralMaskConfidence.build" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
+          grep -q "FourViewBitmapOrientationNormalizer.normalize" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "MeshOrientationCorrector.correct" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "startExportPreparation" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
           grep -q "GlbExporter.write(temporary, source, texture)" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "MAXIMUM_QUALITY_GLB_BYTES" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
-          ! grep -q "25_000_000" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "MobileGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
+          grep -q "Base stable V5.9" app/src/main/res/layout/activity_manual_3d.xml
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
@@ -120,21 +121,16 @@ jobs:
           java -cp build/orientation-tests \
             com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
 
-      - name: Tester la fusion IA V5.9.3
+      - name: Tester le projecteur volumique stable
         shell: bash
         run: |
           mkdir -p build/stylized-3d-tests
           javac -encoding UTF-8 -d build/stylized-3d-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralConfidenceHullBuilder.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMaskConfidence.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
-            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java \
-            validation/java/com/chasmet/modeliseur3d/model/NeuralConfidenceHullSelfTest.java
+            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java
           java -cp build/stylized-3d-tests \
             com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
-          java -cp build/stylized-3d-tests \
-            com.chasmet.modeliseur3d.model.NeuralConfidenceHullSelfTest
 
       - name: Tester les composants Java existants
         shell: bash
@@ -155,7 +151,7 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
           java -cp build/face-back-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
 
-      - name: Compiler et vérifier la V5.9.3
+      - name: Compiler et vérifier la V5.9.4
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
@@ -175,10 +171,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V5.9.3
+      - name: Publier l'APK V5.9.4
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.3-Fusion-IA-GLB-Sans-Limite-debug
+          name: Modeliseur-V5.9.4-Projecteur-Stable-GLB-Original-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
