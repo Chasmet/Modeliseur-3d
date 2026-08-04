@@ -130,7 +130,7 @@ jobs:
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizer.java \
             validation/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizerSelfTest.java
-          java -cp build/manual-view-plan-tests com.chasmet.modeliseur3d.manualViewPlanSelfTest
+          java -cp build/mobile-mesh-tests com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
           javac -encoding UTF-8 -d build/face-back-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
