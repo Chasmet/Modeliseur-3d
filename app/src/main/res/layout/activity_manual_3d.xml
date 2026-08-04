@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9.1 — Export GLB rapide"
+        android:text="3D locale V5.9.2 — Export GLB qualité"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le modèle reste redressé et le GLB 200 ko est maintenant préparé automatiquement pendant la prévisualisation. Le moteur 2.5D reste séparé et inchangé."
+        android:text="La limite destructive de 200 ko est supprimée du mode 3D. Le GLB conserve maintenant le maillage complet et la texture affichés dans l'application. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="Après la génération, tu peux tourner le modèle pendant que le GLB est optimisé en arrière-plan. Dès que le bouton affiche ✓, le partage est immédiat."
+                android:text="Après la génération, le GLB qualité est préparé en arrière-plan sans simplifier les triangles. Le fichier sera plus lourd, mais identique au modèle propre visible dans l'application."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -305,7 +305,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="Exporter GLB"
+                android:text="GLB qualité"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
