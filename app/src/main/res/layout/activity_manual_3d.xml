@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9.4 — Base stable V5.9"
+        android:text="3D locale V5.9.7 — Volume anatomique"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le placement, l’orientation et le volume reviennent au moteur V5.9 fonctionnel. L’export GLB 3D reste totalement libre, sans limite de taille ni compression automatique. Le moteur 2.5D reste séparé et inchangé."
+        android:text="Le placement stable V5.9.5 est conservé. La profondeur est maintenant calculée localement pour affiner les bras, les jambes, les cheveux et les accessoires sans déplacer le personnage. L’export GLB reste complet et sans compression. Le moteur 2.5D reste inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage et corps entier sur les quatre images. Les profils peuvent être horizontaux : l'application choisit automatiquement le bon sens de rotation à 90°."
+                android:text="Même personnage, même pose et corps entier sur les quatre images. Les profils horizontaux sont automatiquement redressés à 90°."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="Le projecteur volumique stable V5.9 est utilisé. Le GLB original conserve tous les triangles et la texture complète, quelle que soit sa taille."
+                android:text="La V5.9.7 conserve le torse stable, réduit l’effet gonflé sur les membres, protège l’espace entre les jambes et retire les petits fragments parasites. Aucun voxel n’est ajouté hors des quatre silhouettes."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -241,7 +241,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D stable"
+                    android:text="Créer la 3D anatomique"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -305,7 +305,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="GLB original"
+                android:text="GLB anatomique"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
