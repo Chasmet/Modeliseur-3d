@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.6
+      - name: Mettre en cache le détourage local V5.7
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v56-volume-face-dos-isnet-fp32-6a92a19a
+          key: modeliseur-v57-stylized-3d-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -88,35 +88,35 @@ jobs:
       - name: Autoriser Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.6 Volume Face Dos
+      - name: Vérifier l'architecture V5.7 3D stylisée
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.6" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.6.0'" app/build.gradle
-          grep -q "versionCode 23" app/build.gradle
-          grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "MeshDepthScaler" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          ! grep -q "FaceBackAutoViewSynthesizer" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          ! grep -q "VideoReconstructionEngineV48" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "scaleDepth" app/src/main/java/com/chasmet/modeliseur3d/model/MeshDepthScaler.java
-          grep -q "frontPreview" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "backPreview" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "depthSeekBar" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "Le moteur ne fabrique plus six fausses vues" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "Modéliseur 3D V5.7" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.7.0'" app/build.gradle
+          grep -q "versionCode 24" app/build.gradle
+          grep -q "StylizedCharacter3DEngine" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          ! grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          ! grep -q "MeshDepthScaler" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "StylizedFourViewProjector" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "StylizedMaskTopology" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "rightPreview" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "leftPreview" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "sans réutiliser le moteur 2.5D" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Tester le réglage de profondeur V5.6
+      - name: Tester le moteur volumique stylisé V5.7
         shell: bash
         run: |
-          mkdir -p build/depth-scaler-tests
-          javac -encoding UTF-8 -d build/depth-scaler-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshDepthScaler.java \
-            validation/java/com/chasmet/modeliseur3d/model/MeshDepthScalerSelfTest.java
-          java -cp build/depth-scaler-tests \
-            com.chasmet.modeliseur3d.model.MeshDepthScalerSelfTest
+          mkdir -p build/stylized-3d-tests
+          javac -encoding UTF-8 -d build/stylized-3d-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedMaskTopology.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
+            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java
+          java -cp build/stylized-3d-tests \
+            com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
 
       - name: Tester les composants Java existants
         shell: bash
@@ -137,7 +137,7 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
           java -cp build/face-back-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
 
-      - name: Compiler et vérifier la V5.6
+      - name: Compiler et vérifier la V5.7
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
@@ -157,10 +157,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V5.6
+      - name: Publier l'APK V5.7
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.6-Volume-Face-Dos-Stable-GLB-200ko-debug
+          name: Modeliseur-V5.7-Personnages-Fictifs-3D-Local-GLB-200ko-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

@@ -36,7 +36,7 @@ def fileDigest = { File target, String algorithm ->
 
 tasks.register('downloadAnimeSegmentationModel') {
     group = 'machine learning'
-    description = 'Télécharge IS-Net Anime FP32 pour le détourage 2.5D et le volume Face Dos local.'
+    description = 'Télécharge IS-Net Anime FP32 pour le détourage 2.5D et la reconstruction 3D locale.'
     outputs.file(segmentationModelFile)
 
     doLast {
@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 23
-        versionName '5.6.0'
+        versionCode 24
+        versionName '5.7.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
