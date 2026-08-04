@@ -15,11 +15,12 @@ import java.util.Locale;
  * Export GLB qualité réservé au mode 3D quatre vues.
  *
  * Le fichier contient exactement le maillage, les normales, les UV et la
- * texture affichés dans l'application. Aucune limite de taille, aucune
- * simplification automatique et aucune compression destructive ne sont
- * appliquées. L'utilisateur pourra compresser le GLB séparément si nécessaire.
+ * résolution de texture affichés dans l'application. Aucune limite de taille,
+ * aucune simplification et aucune compression destructive ne sont appliquées.
  *
- * Le moteur 2.5D conserve volontairement son exporteur historique séparé.
+ * La V5.9.5 utilise un matériau spécifique aux visionneuses externes pour
+ * empêcher le mélange entre les quatre zones de l'atlas et les textures
+ * opposées. Le moteur 2.5D conserve son exporteur historique séparé.
  */
 public final class Fast3DGlbExporter {
     private Fast3DGlbExporter() {
@@ -49,26 +50,26 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V5_9_3_" + stamp
+                "Modeliseur3D/Personnage_3D_V5_9_5_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v5_9_3.tmp");
-        File output = new File(directory, "personnage_3d_v5_9_3_original.glb");
+        File temporary = new File(directory, "personnage_3d_v5_9_5.tmp");
+        File output = new File(directory, "personnage_3d_v5_9_5_google_propre.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 
         notifyProgress(listener, Stage.ENCODING, 1, 1);
         try {
-            GlbExporter.write(temporary, source, texture);
+            ExternalViewerGlbExporter.write(temporary, source, texture);
             long size = temporary.length();
             if (size <= 0L) {
                 throw new IOException("Le fichier GLB généré est vide");
             }
             if (!temporary.renameTo(output)) {
-                throw new IOException("Impossible de finaliser le fichier GLB original");
+                throw new IOException("Impossible de finaliser le fichier GLB externe");
             }
             return new PreparedExport(
                     output,
