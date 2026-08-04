@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9.2 — Export GLB qualité"
+        android:text="3D locale V5.9.3 — Fusion IA légère"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="La limite destructive de 200 ko est supprimée du mode 3D. Le GLB conserve maintenant le maillage complet et la texture affichés dans l'application. Le moteur 2.5D reste séparé et inchangé."
+        android:text="L’IA locale IS-Net guide maintenant la fusion des quatre silhouettes pour mieux conserver les détails fins et limiter les volumes fantômes. L’export GLB 3D est totalement libre, sans limite de taille ni compression automatique. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="Après la génération, le GLB qualité est préparé en arrière-plan sans simplifier les triangles. Le fichier sera plus lourd, mais identique au modèle propre visible dans l'application."
+                android:text="La fusion IA privilégie les zones confirmées par plusieurs vues, conserve les accessoires fins et rebouche les petites cassures. Le GLB original est exporté avec tous ses triangles et sa texture, quelle que soit sa taille."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -241,7 +241,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D redressée"
+                    android:text="Créer la 3D avec fusion IA"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -305,7 +305,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="GLB qualité"
+                android:text="GLB original"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
