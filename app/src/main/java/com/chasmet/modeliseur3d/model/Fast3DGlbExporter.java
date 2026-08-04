@@ -14,18 +14,14 @@ import java.util.Locale;
 /**
  * Export GLB qualité réservé au mode 3D quatre vues.
  *
- * La V5.9.1 imposait 200 ko et réduisait un modèle de plus de 26 000 triangles
- * à quelques centaines ou milliers de triangles. Le résultat pouvait sembler
- * correct dans l'aperçu, puis devenir un amas de facettes dans une visionneuse
- * GLB externe. La V5.9.2 exporte exactement le maillage et la texture affichés
- * dans l'application, sans simplification ni limite artificielle de 200 ko.
+ * Le fichier contient exactement le maillage, les normales, les UV et la
+ * texture affichés dans l'application. Aucune limite de taille, aucune
+ * simplification automatique et aucune compression destructive ne sont
+ * appliquées. L'utilisateur pourra compresser le GLB séparément si nécessaire.
  *
- * Le moteur 2.5D conserve volontairement son exporteur historique et sa copie
- * mobile 200 ko.
+ * Le moteur 2.5D conserve volontairement son exporteur historique séparé.
  */
 public final class Fast3DGlbExporter {
-    public static final long MAXIMUM_QUALITY_GLB_BYTES = 25_000_000L;
-
     private Fast3DGlbExporter() {
     }
 
@@ -53,14 +49,14 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V5_9_2_" + stamp
+                "Modeliseur3D/Personnage_3D_V5_9_3_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v5_9_2.tmp");
-        File output = new File(directory, "personnage_3d_v5_9_2_qualite.glb");
+        File temporary = new File(directory, "personnage_3d_v5_9_3.tmp");
+        File output = new File(directory, "personnage_3d_v5_9_3_original.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 
@@ -71,13 +67,8 @@ public final class Fast3DGlbExporter {
             if (size <= 0L) {
                 throw new IOException("Le fichier GLB généré est vide");
             }
-            if (size > MAXIMUM_QUALITY_GLB_BYTES) {
-                throw new IOException(
-                        "Le GLB qualité dépasse 25 Mo : " + formatMegabytes(size)
-                );
-            }
             if (!temporary.renameTo(output)) {
-                throw new IOException("Impossible de finaliser le fichier GLB qualité");
+                throw new IOException("Impossible de finaliser le fichier GLB original");
             }
             return new PreparedExport(
                     output,
@@ -108,10 +99,6 @@ public final class Fast3DGlbExporter {
                 throw new IOException("Indice de triangle invalide dans le maillage 3D");
             }
         }
-    }
-
-    private static String formatMegabytes(long bytes) {
-        return String.format(Locale.FRANCE, "%.1f Mo", bytes / 1_000_000.0);
     }
 
     private static void notifyProgress(
