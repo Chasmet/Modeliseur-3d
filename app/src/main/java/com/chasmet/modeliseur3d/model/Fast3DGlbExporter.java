@@ -12,26 +12,19 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * Export GLB rapide réservé au mode 3D quatre vues.
+ * Export GLB qualité réservé au mode 3D quatre vues.
  *
- * La V5.9 exportait successivement un GLB HD, jusqu'à onze variantes mobiles,
- * un OBJ, un MTL, une texture PNG et un fichier texte. Sur mobile, cette chaîne
- * pouvait durer plusieurs dizaines de secondes. La V5.9.1 prépare en arrière-
- * plan un seul GLB autonome inférieur ou égal à 200 ko, puis le partage
- * immédiatement lorsque l'utilisateur appuie sur le bouton.
+ * La V5.9.1 imposait 200 ko et réduisait un modèle de plus de 26 000 triangles
+ * à quelques centaines ou milliers de triangles. Le résultat pouvait sembler
+ * correct dans l'aperçu, puis devenir un amas de facettes dans une visionneuse
+ * GLB externe. La V5.9.2 exporte exactement le maillage et la texture affichés
+ * dans l'application, sans simplification ni limite artificielle de 200 ko.
  *
- * Le moteur 2.5D conserve volontairement son exporteur historique.
+ * Le moteur 2.5D conserve volontairement son exporteur historique et sa copie
+ * mobile 200 ko.
  */
 public final class Fast3DGlbExporter {
-    public static final long MAXIMUM_GLB_BYTES = 200_000L;
-
-    private static final Attempt[] ATTEMPTS = {
-            new Attempt(1_300, 192),
-            new Attempt(1_050, 160),
-            new Attempt(820, 144),
-            new Attempt(620, 128),
-            new Attempt(450, 96)
-    };
+    public static final long MAXIMUM_QUALITY_GLB_BYTES = 25_000_000L;
 
     private Fast3DGlbExporter() {
     }
@@ -46,6 +39,9 @@ public final class Fast3DGlbExporter {
             throw new IOException("Données 3D invalides pour l'export");
         }
         long started = SystemClock.elapsedRealtime();
+        notifyProgress(listener, Stage.SIMPLIFYING, 1, 1);
+        validateMesh(source);
+
         File documents = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
         if (documents == null) {
             throw new IOException("Stockage externe indisponible");
@@ -57,64 +53,65 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V5_9_1_" + stamp
+                "Modeliseur3D/Personnage_3D_V5_9_2_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v5_9_1.tmp");
-        File output = new File(directory, "personnage_3d_v5_9_1_200ko.glb");
-        MeshData current = source;
-        IOException lastError = null;
+        File temporary = new File(directory, "personnage_3d_v5_9_2.tmp");
+        File output = new File(directory, "personnage_3d_v5_9_2_qualite.glb");
+        deleteQuietly(temporary);
+        deleteQuietly(output);
 
-        for (int index = 0; index < ATTEMPTS.length; index++) {
-            Attempt attempt = ATTEMPTS[index];
-            notifyProgress(listener, Stage.SIMPLIFYING, index + 1, ATTEMPTS.length);
-            try {
-                if (current.getTriangleCount() > attempt.triangleBudget) {
-                    current = FastMobileMeshOptimizer.simplify(
-                            current,
-                            attempt.triangleBudget
-                    );
-                }
-                notifyProgress(listener, Stage.ENCODING, index + 1, ATTEMPTS.length);
-                MobileGlbExporter.write(
-                        temporary,
-                        current,
-                        texture,
-                        attempt.textureMaximumSide,
-                        100
+        notifyProgress(listener, Stage.ENCODING, 1, 1);
+        try {
+            GlbExporter.write(temporary, source, texture);
+            long size = temporary.length();
+            if (size <= 0L) {
+                throw new IOException("Le fichier GLB généré est vide");
+            }
+            if (size > MAXIMUM_QUALITY_GLB_BYTES) {
+                throw new IOException(
+                        "Le GLB qualité dépasse 25 Mo : " + formatMegabytes(size)
                 );
-                long size = temporary.length();
-                if (size > 0L && size <= MAXIMUM_GLB_BYTES) {
-                    if (output.exists() && !output.delete()) {
-                        throw new IOException("Ancien export GLB impossible à remplacer");
-                    }
-                    if (!temporary.renameTo(output)) {
-                        throw new IOException("Impossible de finaliser le fichier GLB");
-                    }
-                    return new PreparedExport(
-                            output,
-                            size,
-                            current.getTriangleCount(),
-                            current.getVertexCount(),
-                            attempt.textureMaximumSide,
-                            SystemClock.elapsedRealtime() - started
-                    );
-                }
-            } catch (IOException | RuntimeException error) {
-                lastError = error instanceof IOException
-                        ? (IOException) error
-                        : new IOException(error.getMessage(), error);
+            }
+            if (!temporary.renameTo(output)) {
+                throw new IOException("Impossible de finaliser le fichier GLB qualité");
+            }
+            return new PreparedExport(
+                    output,
+                    size,
+                    source.getTriangleCount(),
+                    source.getVertexCount(),
+                    Math.max(texture.getWidth(), texture.getHeight()),
+                    SystemClock.elapsedRealtime() - started
+            );
+        } catch (IOException | RuntimeException error) {
+            deleteQuietly(temporary);
+            deleteQuietly(output);
+            if (error instanceof IOException) {
+                throw (IOException) error;
+            }
+            throw new IOException(error.getMessage(), error);
+        }
+    }
+
+    private static void validateMesh(MeshData mesh) throws IOException {
+        if (mesh.getVertexCount() < 3 || mesh.getTriangleCount() < 1) {
+            throw new IOException("Le maillage 3D est vide");
+        }
+        int vertexCount = mesh.getVertexCount();
+        int[] indices = mesh.getIndices();
+        for (int index : indices) {
+            if (index < 0 || index >= vertexCount) {
+                throw new IOException("Indice de triangle invalide dans le maillage 3D");
             }
         }
+    }
 
-        deleteQuietly(temporary);
-        throw new IOException(
-                "Impossible de préparer un GLB inférieur ou égal à 200 ko",
-                lastError
-        );
+    private static String formatMegabytes(long bytes) {
+        return String.format(Locale.FRANCE, "%.1f Mo", bytes / 1_000_000.0);
     }
 
     private static void notifyProgress(
@@ -135,22 +132,13 @@ public final class Fast3DGlbExporter {
     }
 
     public enum Stage {
+        /** Conservé pour compatibilité : correspond désormais au contrôle du maillage. */
         SIMPLIFYING,
         ENCODING
     }
 
     public interface ProgressListener {
         void onProgress(Stage stage, int current, int total);
-    }
-
-    private static final class Attempt {
-        final int triangleBudget;
-        final int textureMaximumSide;
-
-        Attempt(int triangleBudget, int textureMaximumSide) {
-            this.triangleBudget = triangleBudget;
-            this.textureMaximumSide = textureMaximumSide;
-        }
     }
 
     public static final class PreparedExport {
