@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.7 — Personnages fictifs"
+        android:text="3D locale V5.8 — Auto-correction 4 vues"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Quatre vraies vues construisent une enveloppe volumique. Les membres, cheveux, ailes et accessoires séparés sont conservés sans réutiliser le moteur 2.5D."
+        android:text="Le mode 3D vérifie face, dos et profils, corrige automatiquement un profil miroir et adapte la profondeur aux accessoires longs. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage fictif, même pose, même taille et corps entier sur les quatre images. Utilise un fond transparent ou simple. Les profils doivent être de vrais profils, pas des vues inventées."
+                android:text="Utilise le même personnage, le corps entier et une pose aussi proche que possible. Après la quatrième image, l'application analyse les orientations avant d'activer la génération."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -181,6 +181,16 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_manual_help"
+                android:padding="9dp"
+                android:text="Statuts : ✓ correct • ⚠ corrigé automatiquement • remplace une vue seulement si l'analyse ne détecte pas le personnage."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="Épaisseur générale du personnage"
                 android:textColor="@color/text_primary"
@@ -231,7 +241,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer le personnage 3D"
+                    android:text="Créer la vraie 3D corrigée"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
