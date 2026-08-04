@@ -18,9 +18,8 @@ import java.util.Locale;
  * résolution de texture affichés dans l'application. Aucune limite de taille,
  * aucune simplification et aucune compression destructive ne sont appliquées.
  *
- * La V5.9.5 utilise un matériau spécifique aux visionneuses externes pour
- * empêcher le mélange entre les quatre zones de l'atlas et les textures
- * opposées. Le moteur 2.5D conserve son exporteur historique séparé.
+ * La V5.9.7 conserve le matériau propre pour les visionneuses externes et
+ * exporte le volume anatomique affiné. Le moteur 2.5D reste totalement séparé.
  */
 public final class Fast3DGlbExporter {
     private Fast3DGlbExporter() {
@@ -50,14 +49,14 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V5_9_5_" + stamp
+                "Modeliseur3D/Personnage_3D_V5_9_7_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v5_9_5.tmp");
-        File output = new File(directory, "personnage_3d_v5_9_5_google_propre.glb");
+        File temporary = new File(directory, "personnage_3d_v5_9_7.tmp");
+        File output = new File(directory, "personnage_3d_v5_9_7_anatomique.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 

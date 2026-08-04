@@ -3,10 +3,10 @@ package com.chasmet.modeliseur3d.model;
 /**
  * Projection volumique à quatre vues réelles.
  *
- * Base stable V5.9 : les profils disposent de leur propre résolution
- * horizontale. Le mode adaptatif utilise l'union des deux vues opposées sur
- * chaque axe puis limite les zones incertaines par une section elliptique.
- * Cela conserve le placement et les proportions de la version fonctionnelle.
+ * La base stable V5.9 conserve le placement et les proportions validés. La
+ * V5.9.7 ajoute ensuite un nettoyage anatomique strictement interne : elle
+ * affine localement la profondeur des membres et accessoires sans déplacer,
+ * agrandir ni faire pivoter le personnage.
  */
 public final class StylizedFourViewProjector {
     public static final int FRONT = 0;
@@ -37,7 +37,9 @@ public final class StylizedFourViewProjector {
             boolean adaptive
     ) {
         if (sideWidth != depth) {
-            throw new IllegalArgumentException("La largeur des profils doit correspondre à la profondeur");
+            throw new IllegalArgumentException(
+                    "La largeur des profils doit correspondre à la profondeur"
+            );
         }
         validate(masks, width, height, depth);
         boolean[] volume = new boolean[width * height * depth];
@@ -75,7 +77,17 @@ public final class StylizedFourViewProjector {
                 }
             }
         }
-        return volume;
+
+        // Le raffinement ne peut que retirer des voxels internes. Le placement
+        // stable V5.9 et les limites définies par les quatre silhouettes restent
+        // donc inchangés.
+        return HumanoidVolumeRefiner.refine(
+                volume,
+                masks,
+                width,
+                height,
+                depth
+        ).getVolume();
     }
 
     public static int countOccupied(boolean[] volume) {
@@ -198,7 +210,11 @@ public final class StylizedFourViewProjector {
             return nx * nx + nz * nz <= 1.12;
         }
 
-        static RowEnvelope blend(RowEnvelope previous, RowEnvelope current, RowEnvelope next) {
+        static RowEnvelope blend(
+                RowEnvelope previous,
+                RowEnvelope current,
+                RowEnvelope next
+        ) {
             if (!current.valid) {
                 return current;
             }
@@ -221,7 +237,13 @@ public final class StylizedFourViewProjector {
                 rz += next.radiusZ;
                 total += 1.0;
             }
-            return new RowEnvelope(cx / total, rx / total, cz / total, rz / total, true);
+            return new RowEnvelope(
+                    cx / total,
+                    rx / total,
+                    cz / total,
+                    rz / total,
+                    true
+            );
         }
     }
 }
