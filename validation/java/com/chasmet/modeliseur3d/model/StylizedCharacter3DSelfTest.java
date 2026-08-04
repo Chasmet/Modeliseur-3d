@@ -2,54 +2,76 @@ package com.chasmet.modeliseur3d.model;
 
 public final class StylizedCharacter3DSelfTest {
     public static void main(String[] args) {
-        testSeparatedPartsArePreserved();
-        testFourViewHull();
-        System.out.println("StylizedCharacter3DSelfTest OK");
+        testProfileMirrorCorrection();
+        testIndependentSideResolution();
+        testAdaptiveHullPreservesUncertainParts();
+        System.out.println("StylizedCharacter3DSelfTest V5.8 OK");
     }
 
-    private static void testSeparatedPartsArePreserved() {
+    private static void testProfileMirrorCorrection() {
+        int width = 24;
+        int height = 24;
+        boolean[] right = new boolean[width * height];
+        fill(right, width, 6, 4, 15, 19);
+        fill(right, width, 16, 8, 21, 11);
+        boolean[] wrongLeft = right.clone();
+        FourViewAutoCorrector.ProfileCorrection correction =
+                FourViewAutoCorrector.analyzeProfiles(right, wrongLeft, width, height);
+        if (!correction.shouldFlipLeft()) {
+            throw new AssertionError("Le profil gauche non inversé devait être corrigé");
+        }
+        boolean[] trueLeft = FourViewAutoCorrector.flipHorizontal(right, width, height);
+        correction = FourViewAutoCorrector.analyzeProfiles(right, trueLeft, width, height);
+        if (correction.shouldFlipLeft()) {
+            throw new AssertionError("Un vrai couple droite/gauche ne doit pas être retourné");
+        }
+    }
+
+    private static void testIndependentSideResolution() {
         int width = 20;
-        int height = 20;
-        boolean[] mask = new boolean[width * height];
-        fill(mask, width, 7, 3, 12, 14);
-        fill(mask, width, 3, 6, 4, 11);
-        fill(mask, width, 15, 6, 16, 11);
-        fill(mask, width, 7, 16, 8, 19);
-        fill(mask, width, 11, 16, 12, 19);
-        fill(mask, width, 17, 8, 18, 13);
-
-        boolean[] cleaned = StylizedMaskTopology.clean(mask, width, height, 12);
-        int components = StylizedMaskTopology.countComponents(cleaned, width, height);
-        if (components < 5) {
-            throw new AssertionError("Les membres/accessoires séparés ont été fusionnés ou supprimés");
-        }
-        if (!cleaned[10 * width + 17]) {
-            throw new AssertionError("L'accessoire détaché n'a pas été conservé");
+        int height = 32;
+        int depth = 42;
+        boolean[][] masks = new boolean[4][];
+        masks[StylizedFourViewProjector.FRONT] = new boolean[width * height];
+        masks[StylizedFourViewProjector.BACK] = new boolean[width * height];
+        masks[StylizedFourViewProjector.RIGHT] = new boolean[depth * height];
+        masks[StylizedFourViewProjector.LEFT] = new boolean[depth * height];
+        fill(masks[0], width, 6, 3, 13, 28);
+        fill(masks[2], width, 6, 3, 13, 28);
+        fill(masks[1], depth, 3, 3, 38, 28);
+        fill(masks[3], depth, 3, 3, 38, 28);
+        boolean[] volume = StylizedFourViewProjector.build(
+                masks, width, height, depth, depth, false
+        );
+        if (StylizedFourViewProjector.countOccupied(volume) <= 0) {
+            throw new AssertionError("Le volume à profondeur indépendante est vide");
         }
     }
 
-    private static void testFourViewHull() {
+    private static void testAdaptiveHullPreservesUncertainParts() {
         int width = 24;
         int height = 32;
-        int depth = 20;
-        boolean[][] masks = new boolean[4][width * height];
-        for (boolean[] mask : masks) {
-            fill(mask, width, 7, 4, 16, 27);
-        }
-        boolean[] strict = StylizedFourViewProjector.build(
-                masks, width, height, depth, false
+        int depth = 30;
+        boolean[][] masks = new boolean[4][];
+        masks[0] = new boolean[width * height];
+        masks[2] = new boolean[width * height];
+        masks[1] = new boolean[depth * height];
+        masks[3] = new boolean[depth * height];
+        fill(masks[0], width, 7, 4, 16, 27);
+        fill(masks[2], width, 7, 4, 16, 27);
+        fill(masks[1], depth, 8, 4, 21, 27);
+        fill(masks[3], depth, 8, 4, 21, 27);
+        // Accessoire visible seulement en face et à droite.
+        fill(masks[0], width, 17, 12, 22, 14);
+        fill(masks[1], depth, 22, 12, 28, 14);
+        int strict = StylizedFourViewProjector.countOccupied(
+                StylizedFourViewProjector.build(masks, width, height, depth, depth, false)
         );
-        int occupied = StylizedFourViewProjector.countOccupied(strict);
-        if (occupied <= 0) {
-            throw new AssertionError("Le volume strict est vide");
-        }
-
-        masks[StylizedFourViewProjector.LEFT][10 * width + 12] = false;
-        boolean[] tolerant = StylizedFourViewProjector.build(
-                masks, width, height, depth, true
+        int adaptive = StylizedFourViewProjector.countOccupied(
+                StylizedFourViewProjector.build(masks, width, height, depth, depth, true)
         );
-        if (StylizedFourViewProjector.countOccupied(tolerant) < occupied / 2) {
-            throw new AssertionError("Le mode tolérant supprime trop de volume");
+        if (adaptive <= strict) {
+            throw new AssertionError("Le mode adaptatif n'a pas conservé l'accessoire incertain");
         }
     }
 
