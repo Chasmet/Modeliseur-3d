@@ -4,9 +4,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -23,11 +21,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceViewV52;
-import com.chasmet.modeliseur3d.model.FaceBack25DEngine;
 import com.chasmet.modeliseur3d.model.MeshData;
-import com.chasmet.modeliseur3d.model.MeshDepthScaler;
 import com.chasmet.modeliseur3d.model.ObjExporter;
-import com.chasmet.modeliseur3d.model.Relief25DEngine;
+import com.chasmet.modeliseur3d.model.QuickFourViewValidator;
+import com.chasmet.modeliseur3d.model.StylizedCharacter3DEngine;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
@@ -35,148 +32,161 @@ import com.chasmet.modeliseur3d.util.BitmapUtils;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * V5.6 : volume Face + Dos stable.
- *
- * Le moteur n'invente plus six vues et n'utilise plus de texture cylindrique.
- * Il conserve les deux textures réelles, crée des côtés depuis leurs bords et
- * ajuste seulement la profondeur du maillage déjà stable du mode Face/Dos.
- */
+/** Mode 3D V5.8. Le mode 2.5D reste séparé et inchangé dans MainActivityV52. */
 public final class Manual3DActivity extends AppCompatActivity {
-    private static final String TAG = "ModeliseurVolumeV56";
-    private static final int REQUEST_FRONT = 5601;
-    private static final int REQUEST_BACK = 5602;
-    private static final int MAXIMUM_DECODE_SIDE = 1600;
+    private static final int MAX_SIDE = 1600;
+    private static final int QUICK_ANALYSIS_SIDE = 640;
+    private static final int[] REQUESTS = {5801, 5802, 5803, 5804};
+    private static final int[] CARDS = {
+            R.id.frontCard,
+            R.id.rightCard,
+            R.id.backCard,
+            R.id.leftCard
+    };
+    private static final int[] PREVIEWS = {
+            R.id.frontPreview,
+            R.id.rightPreview,
+            R.id.backPreview,
+            R.id.leftPreview
+    };
+    private static final int[] LABELS = {
+            R.id.frontLabel,
+            R.id.rightLabel,
+            R.id.backLabel,
+            R.id.leftLabel
+    };
+    private static final String[] NAMES = {
+            "FACE",
+            "PROFIL DROIT",
+            "DOS",
+            "PROFIL GAUCHE"
+    };
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final Uri[] uris = new Uri[4];
+    private final ImageView[] previews = new ImageView[4];
+    private final TextView[] labels = new TextView[4];
 
-    private DevicePerformanceProfile performanceProfile;
-    private ProcessingPowerLock processingPowerLock;
-    private FaceBack25DEngine faceBackEngine;
+    private DevicePerformanceProfile profile;
+    private ProcessingPowerLock powerLock;
+    private StylizedCharacter3DEngine engine;
     private ModelGLSurfaceViewV52 viewer;
-
     private ScrollView capturePanel;
     private View viewerPanel;
-    private ImageView frontPreview;
-    private ImageView backPreview;
-    private TextView frontLabel;
-    private TextView backLabel;
-    private TextView depthValueText;
-    private TextView statusText;
-    private ProgressBar progressBar;
-    private SeekBar depthSeekBar;
-    private Button clearButton;
-    private Button generateButton;
-    private Button editButton;
-    private Button resetButton;
-    private Button rotationButton;
-    private Button exportButton;
-
-    private Uri frontUri;
-    private Uri backUri;
-    private MeshData currentMesh;
-    private Bitmap currentTexture;
+    private TextView depthText;
+    private TextView status;
+    private ProgressBar progress;
+    private SeekBar depth;
+    private Button clear;
+    private Button generate;
+    private Button edit;
+    private Button reset;
+    private Button rotation;
+    private Button export;
+    private MeshData mesh;
+    private Bitmap texture;
     private boolean busy;
+    private boolean validationReady;
+    private int validationSequence;
 
     @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(@Nullable Bundle state) {
+        super.onCreate(state);
         setContentView(R.layout.activity_manual_3d);
-
-        performanceProfile = DevicePerformanceProfile.detect(this);
+        profile = DevicePerformanceProfile.detect(this);
+        engine = new StylizedCharacter3DEngine(this);
         capturePanel = findViewById(R.id.capturePanel);
         viewerPanel = findViewById(R.id.viewer3dPanel);
-        frontPreview = findViewById(R.id.frontPreview);
-        backPreview = findViewById(R.id.backPreview);
-        frontLabel = findViewById(R.id.frontLabel);
-        backLabel = findViewById(R.id.backLabel);
-        depthValueText = findViewById(R.id.depthValueText);
-        statusText = findViewById(R.id.manualStatusText);
-        progressBar = findViewById(R.id.manualProgressBar);
-        depthSeekBar = findViewById(R.id.depthSeekBar);
-        clearButton = findViewById(R.id.clearViewsButton);
-        generateButton = findViewById(R.id.generate3dButton);
-        editButton = findViewById(R.id.editViewsButton);
-        resetButton = findViewById(R.id.reset3dButton);
-        rotationButton = findViewById(R.id.rotation3dButton);
-        exportButton = findViewById(R.id.export3dButton);
-
-        FrameLayout viewerContainer = findViewById(R.id.viewer3dContainer);
+        depthText = findViewById(R.id.depthValueText);
+        status = findViewById(R.id.manualStatusText);
+        progress = findViewById(R.id.manualProgressBar);
+        depth = findViewById(R.id.depthSeekBar);
+        clear = findViewById(R.id.clearViewsButton);
+        generate = findViewById(R.id.generate3dButton);
+        edit = findViewById(R.id.editViewsButton);
+        reset = findViewById(R.id.reset3dButton);
+        rotation = findViewById(R.id.rotation3dButton);
+        export = findViewById(R.id.export3dButton);
+        for (int index = 0; index < 4; index++) {
+            previews[index] = findViewById(PREVIEWS[index]);
+            labels[index] = findViewById(LABELS[index]);
+            final int slot = index;
+            findViewById(CARDS[index]).setOnClickListener(view -> choose(slot));
+        }
+        FrameLayout container = findViewById(R.id.viewer3dContainer);
         viewer = new ModelGLSurfaceViewV52(this);
-        viewerContainer.addView(viewer, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-        ));
+        container.addView(viewer, new FrameLayout.LayoutParams(-1, -1));
         viewer.setVisibility(View.INVISIBLE);
-
-        findViewById(R.id.frontCard).setOnClickListener(view -> chooseImage(true));
-        findViewById(R.id.backCard).setOnClickListener(view -> chooseImage(false));
-        clearButton.setOnClickListener(view -> clearImages());
-        generateButton.setOnClickListener(view -> generateStableVolume());
-        editButton.setOnClickListener(view -> showCapturePanel());
-        resetButton.setOnClickListener(view -> {
+        clear.setOnClickListener(view -> clearViews());
+        generate.setOnClickListener(view -> generate());
+        edit.setOnClickListener(view -> showInputs());
+        reset.setOnClickListener(view -> {
             viewer.stopAutoRotation();
             viewer.resetView();
-            rotationButton.setText(R.string.rotation_start);
+            rotation.setText(R.string.rotation_start);
         });
-        rotationButton.setOnClickListener(view -> toggleRotation());
-        exportButton.setOnClickListener(view -> exportCurrentModel());
-
-        depthSeekBar.setMax(150);
-        depthSeekBar.setProgress(50);
-        depthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        rotation.setOnClickListener(view -> rotation.setText(
+                viewer.toggleAutoRotation()
+                        ? R.string.rotation_stop
+                        : R.string.rotation_start
+        ));
+        export.setOnClickListener(view -> export());
+        depth.setMax(70);
+        depth.setProgress(35);
+        depth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateDepthLabel();
+            public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
+                updateDepth();
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
+            public void onStartTrackingTouch(SeekBar bar) {
             }
 
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
+            public void onStopTrackingTouch(SeekBar bar) {
             }
         });
-
-        updateDepthLabel();
-        updateSelectionState();
-        statusText.setText("V5.6 prête — volume Face + Dos stable • "
-                + performanceProfile.describe());
+        updateDepth();
+        updateSelection();
     }
 
-    private void chooseImage(boolean front) {
+    private void choose(int slot) {
         if (busy) {
             return;
         }
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(intent, front ? REQUEST_FRONT : REQUEST_BACK);
+        intent.addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        );
+        startActivityForResult(intent, REQUESTS[slot]);
     }
 
     @Override
     protected void onActivityResult(
-            int requestCode,
-            int resultCode,
+            int request,
+            int result,
             @Nullable Intent data
     ) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if ((requestCode != REQUEST_FRONT && requestCode != REQUEST_BACK)
-                || resultCode != RESULT_OK
+        super.onActivityResult(request, result, data);
+        int slot = slot(request);
+        if (slot < 0
+                || result != RESULT_OK
                 || data == null
                 || data.getData() == null) {
             return;
         }
         Uri uri = data.getData();
-        String mimeType = getContentResolver().getType(uri);
-        if (mimeType != null && !mimeType.startsWith("image/")) {
-            Toast.makeText(this, "Le fichier choisi n’est pas une image.", Toast.LENGTH_LONG).show();
+        String type = getContentResolver().getType(uri);
+        if (type != null && !type.startsWith("image/")) {
+            Toast.makeText(this, "Fichier image requis.", Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -185,207 +195,263 @@ public final class Manual3DActivity extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
             );
         } catch (SecurityException ignored) {
-            // Une permission temporaire reste suffisante avec certains fournisseurs.
+            // Certains fournisseurs conservent uniquement une permission temporaire.
         }
-
-        if (requestCode == REQUEST_FRONT) {
-            frontUri = uri;
-            frontPreview.setImageURI(uri);
-            frontLabel.setText("FACE ✓ — Appuyer pour remplacer");
-        } else {
-            backUri = uri;
-            backPreview.setImageURI(uri);
-            backLabel.setText("DOS ✓ — Appuyer pour remplacer");
+        uris[slot] = uri;
+        previews[slot].setImageURI(uri);
+        labels[slot].setText(NAMES[slot] + " ✓ — à contrôler");
+        validationReady = false;
+        validationSequence++;
+        updateSelection();
+        if (selected() == 4) {
+            runQuickValidation(validationSequence);
         }
-        updateSelectionState();
     }
 
-    private void updateSelectionState() {
-        boolean complete = frontUri != null && backUri != null;
-        generateButton.setEnabled(!busy && complete);
+    private static int slot(int request) {
+        for (int index = 0; index < REQUESTS.length; index++) {
+            if (REQUESTS[index] == request) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private int selected() {
+        int count = 0;
+        for (Uri uri : uris) {
+            if (uri != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void updateSelection() {
+        int count = selected();
+        generate.setEnabled(!busy && count == 4 && validationReady);
         if (!busy) {
-            if (complete) {
-                statusText.setText("Face et dos prêts. Le moteur gardera leurs textures réelles.");
-            } else if (frontUri != null) {
-                statusText.setText("Face sélectionnée. Ajoute maintenant le dos.");
-            } else if (backUri != null) {
-                statusText.setText("Dos sélectionné. Ajoute maintenant la face.");
+            if (count < 4) {
+                status.setText("Vues réelles : " + count + "/4");
+            } else if (!validationReady) {
+                status.setText("Analyse automatique des orientations…");
             } else {
-                statusText.setText("Sélectionne une image de face et une image de dos.");
+                status.setText("Quatre vues contrôlées — génération prête.");
             }
         }
     }
 
-    private void clearImages() {
-        if (busy) {
-            return;
-        }
-        frontUri = null;
-        backUri = null;
-        frontPreview.setImageDrawable(null);
-        backPreview.setImageDrawable(null);
-        frontLabel.setText("FACE — Appuyer pour choisir");
-        backLabel.setText("DOS — Appuyer pour choisir");
-        updateSelectionState();
-    }
-
-    private float getDepthMultiplier() {
-        return 0.50f + depthSeekBar.getProgress() / 100.0f;
-    }
-
-    private void updateDepthLabel() {
-        int percent = Math.round(getDepthMultiplier() * 100.0f);
-        String label;
-        if (percent < 85) {
-            label = "Fin";
-        } else if (percent <= 125) {
-            label = "Normal";
-        } else {
-            label = "Large";
-        }
-        depthValueText.setText(label + " — " + percent + " %");
-    }
-
-    private void generateStableVolume() {
-        if (frontUri == null || backUri == null) {
-            Toast.makeText(this, "La face et le dos sont obligatoires.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        setBusy(true, "Lecture des deux vraies images…");
-        viewer.stopAutoRotation();
-        rotationButton.setText(R.string.rotation_start);
-
-        Uri selectedFront = frontUri;
-        Uri selectedBack = backUri;
-        float depthMultiplier = getDepthMultiplier();
-
+    private void runQuickValidation(int sequence) {
+        setBusy(true, "Contrôle face, dos, droite et gauche…");
+        Uri[] selectedUris = uris.clone();
         worker.execute(() -> {
-            ProcessingPowerLock.favorCurrentThread();
-            Bitmap front = null;
-            Bitmap back = null;
+            List<Bitmap> images = new ArrayList<>(4);
             try {
-                int maximumSide = Math.min(
-                        MAXIMUM_DECODE_SIDE,
-                        performanceProfile.getMaximumInputSide()
+                int side = Math.min(
+                        QUICK_ANALYSIS_SIDE,
+                        profile.getMaximumInputSide()
                 );
-                front = BitmapUtils.decodeBitmapFromUri(
-                        getContentResolver(),
-                        selectedFront,
-                        maximumSide
-                );
-                back = BitmapUtils.decodeBitmapFromUri(
-                        getContentResolver(),
-                        selectedBack,
-                        maximumSide
-                );
-                if (faceBackEngine == null) {
-                    faceBackEngine = new FaceBack25DEngine(
-                            getApplicationContext(),
-                            performanceProfile
-                    );
+                for (Uri uri : selectedUris) {
+                    images.add(BitmapUtils.decodeBitmapFromUri(
+                            getContentResolver(),
+                            uri,
+                            side
+                    ));
                 }
-                Relief25DEngine.Result result = faceBackEngine.generate(
-                        front,
-                        back,
-                        this::postFaceBackProgress
-                );
-                MeshData scaled = MeshDepthScaler.scaleDepth(
-                        result.getMesh(),
-                        depthMultiplier
-                );
-                showResult(result, scaled, depthMultiplier);
+                QuickFourViewValidator.Result result =
+                        QuickFourViewValidator.analyze(images);
+                runOnUiThread(() -> applyValidation(sequence, result));
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, "La création du volume Face + Dos a échoué.");
+                runOnUiThread(() -> {
+                    if (sequence != validationSequence) {
+                        return;
+                    }
+                    validationReady = false;
+                    setBusy(false, "Contrôle impossible : remplace la vue incorrecte.");
+                    Toast.makeText(
+                            this,
+                            error.getMessage() == null
+                                    ? "Une vue ne peut pas être analysée."
+                                    : error.getMessage(),
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
             } finally {
-                recycle(front);
-                recycle(back);
+                for (Bitmap bitmap : images) {
+                    recycle(bitmap);
+                }
             }
         });
     }
 
-    private void postFaceBackProgress(
-            Relief25DEngine.Stage stage,
+    private void applyValidation(
+            int sequence,
+            QuickFourViewValidator.Result result
+    ) {
+        if (sequence != validationSequence || selected() != 4) {
+            return;
+        }
+        labels[0].setText(result.hasFaceBackWarning()
+                ? "FACE ⚠ à vérifier"
+                : "FACE ✓");
+        labels[2].setText(result.hasFaceBackWarning()
+                ? "DOS ⚠ à vérifier"
+                : "DOS ✓");
+        labels[1].setText(result.hasProfileWarning()
+                ? "PROFIL DROIT ⚠"
+                : "PROFIL DROIT ✓");
+        if (result.hasMirrorCorrection()) {
+            labels[3].setText("PROFIL GAUCHE ⚠ MIROIR AUTO");
+        } else {
+            labels[3].setText(result.hasProfileWarning()
+                    ? "PROFIL GAUCHE ⚠"
+                    : "PROFIL GAUCHE ✓");
+        }
+        validationReady = true;
+        setBusy(false, result.getMessage() + " Cohérence "
+                + Math.round(result.getCoherence() * 100.0) + " %.");
+    }
+
+    private void clearViews() {
+        if (busy) {
+            return;
+        }
+        validationSequence++;
+        validationReady = false;
+        for (int index = 0; index < 4; index++) {
+            uris[index] = null;
+            previews[index].setImageDrawable(null);
+            labels[index].setText(NAMES[index]);
+        }
+        updateSelection();
+    }
+
+    private float depthMultiplier() {
+        return 0.65f + depth.getProgress() / 100f;
+    }
+
+    private void updateDepth() {
+        int percent = Math.round(depthMultiplier() * 100f);
+        depthText.setText((percent < 90
+                ? "Fin"
+                : percent <= 112 ? "Normal" : "Large")
+                + " — " + percent + " %");
+    }
+
+    private void generate() {
+        if (selected() != 4 || !validationReady) {
+            Toast.makeText(
+                    this,
+                    "Attends la validation automatique des quatre vues.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+        setBusy(true, "Lecture des quatre vues…");
+        viewer.stopAutoRotation();
+        Uri[] selectedUris = uris.clone();
+        float depthValue = depthMultiplier();
+        worker.execute(() -> {
+            ProcessingPowerLock.favorCurrentThread();
+            List<Bitmap> images = new ArrayList<>(4);
+            try {
+                int side = Math.min(MAX_SIDE, profile.getMaximumInputSide());
+                for (Uri uri : selectedUris) {
+                    images.add(BitmapUtils.decodeBitmapFromUri(
+                            getContentResolver(),
+                            uri,
+                            side
+                    ));
+                }
+                StylizedCharacter3DEngine.Result result = engine.generate(
+                        images,
+                        depthValue,
+                        this::engineProgress
+                );
+                showResult(result, depthValue);
+            } catch (Exception | OutOfMemoryError error) {
+                fail("Reconstruction 3D impossible", error);
+            } finally {
+                for (Bitmap bitmap : images) {
+                    recycle(bitmap);
+                }
+            }
+        });
+    }
+
+    private void engineProgress(
+            StylizedCharacter3DEngine.Stage stage,
             int current,
             int total
     ) {
-        String message;
+        String text;
         switch (stage) {
             case SEGMENTING:
-                message = "Détourage réel Face/Dos " + current + "/" + total + "…";
+                text = "Détourage " + current + "/" + total + "…";
                 break;
-            case ALIGNING:
-                message = "Alignement de la tête, du corps et des pieds…";
+            case ANALYSING:
+                text = "Auto-correction des profils et des proportions…";
                 break;
-            case TEXTURING:
-                message = "Conservation des textures avant, arrière et des bords…";
+            case CLEANING:
+                text = "Séparation des membres et accessoires…";
                 break;
-            case MESHING:
+            case BUILDING_HULL:
+                text = "Construction du volume adaptatif…";
+                break;
             default:
-                message = "Création du volume fermé sans six fausses vues…";
+                text = "Création du maillage et des textures…";
                 break;
         }
-        postStatus(message);
+        runOnUiThread(() -> status.setText(text));
     }
 
     private void showResult(
-            Relief25DEngine.Result result,
-            MeshData scaledMesh,
-            float depthMultiplier
+            StylizedCharacter3DEngine.Result result,
+            float depthValue
     ) {
         runOnUiThread(() -> {
-            Bitmap previousTexture = currentTexture;
-            currentMesh = scaledMesh;
-            currentTexture = result.getTexture();
-            viewer.setModel(currentMesh, currentTexture);
+            Bitmap old = texture;
+            mesh = result.getMesh();
+            texture = result.getTexture();
+            viewer.setModel(mesh, texture);
             viewer.resetView();
             viewer.setVisibility(View.VISIBLE);
-            if (previousTexture != null
-                    && previousTexture != currentTexture
-                    && !previousTexture.isRecycled()) {
-                previousTexture.recycle();
+            if (old != null && old != texture && !old.isRecycled()) {
+                old.recycle();
             }
             capturePanel.setVisibility(View.GONE);
             viewerPanel.setVisibility(View.VISIBLE);
-            setBusy(false, "Volume Face + Dos V5.6 prêt.");
-            statusText.setText(
-                    "V5.6 Volume Face + Dos stable • "
-                            + currentMesh.getTriangleCount() + " triangles • "
-                            + currentMesh.getVertexCount() + " sommets • profondeur "
-                            + Math.round(depthMultiplier * 100.0f) + "% • "
-                            + result.getProcessorCount() + " cœurs • total "
-                            + String.format(java.util.Locale.FRANCE, "%.1f s",
-                            result.getTotalDurationMs() / 1000.0)
-            );
+            setBusy(false, "Personnage 3D prêt.");
+            status.setText(result.getQualityLabel()
+                    + " • " + mesh.getTriangleCount() + " triangles"
+                    + " • " + result.getCorrectionSummary()
+                    + " • cohérence " + Math.round(result.getCoherence() * 100.0) + "%"
+                    + " • profondeur " + result.getDepthResolution() + " voxels / "
+                    + Math.round(depthValue * 100f) + "%"
+                    + " • " + String.format(
+                            Locale.FRANCE,
+                            "%.1f s",
+                            result.getTotalDurationMs() / 1000.0
+                    ));
         });
     }
 
-    private void showCapturePanel() {
+    private void showInputs() {
         if (busy) {
             return;
         }
         viewer.stopAutoRotation();
-        rotationButton.setText(R.string.rotation_start);
         viewerPanel.setVisibility(View.GONE);
         capturePanel.setVisibility(View.VISIBLE);
-        statusText.setText("Modifie la face, le dos ou la profondeur puis régénère.");
+        updateSelection();
     }
 
-    private void toggleRotation() {
-        boolean running = viewer.toggleAutoRotation();
-        rotationButton.setText(running
-                ? R.string.rotation_stop
-                : R.string.rotation_start);
-    }
-
-    private void exportCurrentModel() {
-        MeshData mesh = currentMesh;
-        Bitmap texture = currentTexture;
+    private void export() {
         if (mesh == null || texture == null || busy) {
             return;
         }
-        setBusy(true, "Création du GLB HD et de la copie mobile 200 ko…");
+        setBusy(true, "Export GLB…");
         worker.execute(() -> {
-            ProcessingPowerLock.favorCurrentThread();
             try {
                 ObjExporter.ExportResult result = ObjExporter.export(
                         this,
@@ -393,51 +459,42 @@ public final class Manual3DActivity extends AppCompatActivity {
                         texture
                 );
                 runOnUiThread(() -> {
-                    setBusy(false, "Export GLB terminé.");
-                    statusText.setText(
-                            "GLB mobile "
-                                    + String.format(java.util.Locale.FRANCE, "%.3f Mo",
-                                    result.getMobileSizeBytes() / 1_000_000.0)
-                                    + " • " + result.getMobileTriangleCount()
-                                    + " triangles • limite 200 ko vérifiée."
-                    );
-                    shareFiles(result);
+                    setBusy(false, "Export terminé.");
+                    share(result);
                 });
             } catch (Exception | OutOfMemoryError error) {
-                handleFailure(error, "L’export GLB a échoué.");
+                fail("Export impossible", error);
             }
         });
     }
 
-    private void shareFiles(ObjExporter.ExportResult result) {
-        ArrayList<Uri> uris = new ArrayList<>();
+    private void share(ObjExporter.ExportResult result) {
+        ArrayList<Uri> files = new ArrayList<>();
         String authority = getPackageName() + ".fileprovider";
         for (File file : result.getFiles()) {
-            uris.add(FileProvider.getUriForFile(this, authority, file));
+            files.add(FileProvider.getUriForFile(this, authority, file));
         }
-        if (uris.isEmpty()) {
+        if (files.isEmpty()) {
             return;
         }
-        Intent share = new Intent(Intent.ACTION_SEND_MULTIPLE);
-        share.setType("application/octet-stream");
-        share.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-        share.putExtra(Intent.EXTRA_SUBJECT, "Modèle V5.6 Face + Dos stable");
-        share.putExtra(Intent.EXTRA_TEXT,
-                "GLB créé localement dans : "
-                        + result.getDirectory().getAbsolutePath());
-        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        ClipData clipData = ClipData.newRawUri("Modèle V5.6", uris.get(0));
-        for (int index = 1; index < uris.size(); index++) {
-            clipData.addItem(new ClipData.Item(uris.get(index)));
+        Intent intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+        intent.setType("application/octet-stream");
+        intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, files);
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.8");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        ClipData clip = ClipData.newRawUri("GLB", files.get(0));
+        for (int index = 1; index < files.size(); index++) {
+            clip.addItem(new ClipData.Item(files.get(index)));
         }
-        share.setClipData(clipData);
-        startActivity(Intent.createChooser(share, "Partager ou enregistrer le GLB"));
+        intent.setClipData(clip);
+        startActivity(Intent.createChooser(intent, "Enregistrer le GLB"));
     }
 
-    private void handleFailure(Throwable error, String prefix) {
-        Log.e(TAG, prefix, error);
-        String message = prefix + " " + safeMessage(error);
-        Runtime.getRuntime().gc();
+    private void fail(String prefix, Throwable error) {
+        String detail = error instanceof OutOfMemoryError
+                ? "mémoire saturée"
+                : error.getMessage();
+        String message = prefix + (detail == null ? "" : " : " + detail);
         runOnUiThread(() -> {
             setBusy(false, message);
             capturePanel.setVisibility(View.VISIBLE);
@@ -446,82 +503,38 @@ public final class Manual3DActivity extends AppCompatActivity {
         });
     }
 
-    private void setBusy(boolean value, String message) {
+    private void setBusy(boolean value, String text) {
         busy = value;
-        progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
-        clearButton.setEnabled(!busy);
-        generateButton.setEnabled(!busy && frontUri != null && backUri != null);
-        editButton.setEnabled(!busy);
-        resetButton.setEnabled(!busy && currentMesh != null);
-        rotationButton.setEnabled(!busy && currentMesh != null);
-        exportButton.setEnabled(!busy && currentMesh != null);
-        depthSeekBar.setEnabled(!busy);
-        findViewById(R.id.frontCard).setEnabled(!busy);
-        findViewById(R.id.backCard).setEnabled(!busy);
-        statusText.setText(message);
-        configurePerformanceMode(busy);
-    }
-
-    private void configurePerformanceMode(boolean enabled) {
-        if (enabled) {
-            if (processingPowerLock == null) {
-                processingPowerLock = ProcessingPowerLock.acquire(
-                        this,
-                        "face-back-stable-volume-v56"
-                );
+        progress.setVisibility(value ? View.VISIBLE : View.GONE);
+        clear.setEnabled(!value);
+        generate.setEnabled(!value && selected() == 4 && validationReady);
+        edit.setEnabled(!value);
+        reset.setEnabled(!value && mesh != null);
+        rotation.setEnabled(!value && mesh != null);
+        export.setEnabled(!value && mesh != null);
+        depth.setEnabled(!value);
+        for (int id : CARDS) {
+            findViewById(id).setEnabled(!value);
+        }
+        status.setText(text);
+        if (value) {
+            if (powerLock == null) {
+                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v58");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
-            if (processingPowerLock != null) {
-                processingPowerLock.close();
-                processingPowerLock = null;
+            if (powerLock != null) {
+                powerLock.close();
+                powerLock = null;
             }
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-                && performanceProfile != null
-                && performanceProfile.isSustainedPerformanceSupported()) {
-            try {
-                getWindow().setSustainedPerformanceMode(enabled);
-            } catch (RuntimeException ignored) {
-                // Certaines surcouches refusent ce mode.
-            }
-        }
-    }
-
-    private void postStatus(String message) {
-        runOnUiThread(() -> statusText.setText(message));
     }
 
     private static void recycle(Bitmap bitmap) {
         if (bitmap != null && !bitmap.isRecycled()) {
             bitmap.recycle();
         }
-    }
-
-    private static String safeMessage(Throwable error) {
-        if (error instanceof OutOfMemoryError) {
-            return "(mémoire Android saturée ; ferme les autres applications puis réessaie)";
-        }
-        Throwable current = error;
-        String message = null;
-        while (current != null) {
-            if (current.getMessage() != null
-                    && !current.getMessage().trim().isEmpty()) {
-                message = current.getMessage().trim();
-            }
-            if (current.getCause() == current) {
-                break;
-            }
-            current = current.getCause();
-        }
-        if (message == null) {
-            return "(" + error.getClass().getSimpleName() + ")";
-        }
-        if (message.length() > 180) {
-            message = message.substring(0, 177) + "…";
-        }
-        return "(" + message + ")";
     }
 
     @Override
@@ -538,14 +551,11 @@ public final class Manual3DActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        validationSequence++;
         worker.shutdownNow();
-        configurePerformanceMode(false);
-        if (faceBackEngine != null) {
-            faceBackEngine.close();
-        }
-        if (currentTexture != null && !currentTexture.isRecycled()) {
-            currentTexture.recycle();
-        }
+        setBusy(false, "");
+        engine.close();
+        recycle(texture);
         super.onDestroy();
     }
 }

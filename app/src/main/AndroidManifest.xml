@@ -12,7 +12,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V5.6"
+        android:label="Modéliseur 3D V5.8"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 

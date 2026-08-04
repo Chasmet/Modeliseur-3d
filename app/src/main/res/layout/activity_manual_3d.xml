@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D stable V5.6 — Volume Face + Dos"
+        android:text="3D locale V5.8 — Auto-correction 4 vues"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le moteur ne fabrique plus six fausses vues. Il conserve les vraies textures de face et de dos, puis crée un volume fermé avec des côtés calculés depuis leurs bords."
+        android:text="Le mode 3D vérifie face, dos et profils, corrige automatiquement un profil miroir et adapte la profondeur aux accessoires longs. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,13 +40,13 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage, même pose et même hauteur. Corps entier visible. Les bras, les jambes et les accessoires doivent occuper la même position sur la face et le dos."
+                android:text="Utilise le même personnage, le corps entier et une pose aussi proche que possible. Après la quatrième image, l'application analyse les orientations avant d'activer la génération."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="280dp"
+                android:layout_height="190dp"
                 android:layout_marginTop="10dp"
                 android:orientation="horizontal">
 
@@ -73,17 +73,55 @@
                         android:layout_gravity="bottom"
                         android:background="#CC181C24"
                         android:gravity="center"
-                        android:padding="8dp"
+                        android:padding="7dp"
                         android:text="FACE — Appuyer pour choisir"
                         android:textColor="#FFFFFF"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
                 </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/rightCard"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_manual_slot"
+                    android:padding="5dp">
+
+                    <ImageView
+                        android:id="@+id/rightPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Aperçu profil droit"
+                        android:scaleType="fitCenter" />
+
+                    <TextView
+                        android:id="@+id/rightLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:background="#CC181C24"
+                        android:gravity="center"
+                        android:padding="7dp"
+                        android:text="PROFIL DROIT — Appuyer pour choisir"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="190dp"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
 
                 <FrameLayout
                     android:id="@+id/backCard"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="5dp"
+                    android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_manual_slot"
                     android:padding="5dp">
@@ -102,9 +140,40 @@
                         android:layout_gravity="bottom"
                         android:background="#CC181C24"
                         android:gravity="center"
-                        android:padding="8dp"
+                        android:padding="7dp"
                         android:text="DOS — Appuyer pour choisir"
                         android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/leftCard"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_manual_slot"
+                    android:padding="5dp">
+
+                    <ImageView
+                        android:id="@+id/leftPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Aperçu profil gauche"
+                        android:scaleType="fitCenter" />
+
+                    <TextView
+                        android:id="@+id/leftLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:background="#CC181C24"
+                        android:gravity="center"
+                        android:padding="7dp"
+                        android:text="PROFIL GAUCHE — Appuyer pour choisir"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
                 </FrameLayout>
             </LinearLayout>
@@ -112,8 +181,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_manual_help"
+                android:padding="9dp"
+                android:text="Statuts : ✓ correct • ⚠ corrigé automatiquement • remplace une vue seulement si l'analyse ne détecte pas le personnage."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Profondeur du volume"
+                android:text="Épaisseur générale du personnage"
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
@@ -121,8 +200,8 @@
                 android:id="@+id/depthSeekBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max="150"
-                android:progress="50" />
+                android:max="70"
+                android:progress="35" />
 
             <TextView
                 android:id="@+id/depthValueText"
@@ -137,7 +216,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:gravity="center"
-                android:text="50 % = très fin • 100 % = normal • 200 % = très profond"
+                android:text="65 % = fin • 100 % = normal • 135 % = large"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -162,7 +241,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer le volume stable"
+                    android:text="Créer la vraie 3D corrigée"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -196,7 +275,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Face / Dos"
+                android:text="4 vues"
                 android:textAllCaps="false" />
 
             <Button
@@ -251,7 +330,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Sélectionne la face et le dos."
+            android:text="Sélectionne les quatre vues du personnage."
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>
