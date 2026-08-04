@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.8 — Auto-correction 4 vues"
+        android:text="3D locale V5.9 — Orientation redressée"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le mode 3D vérifie face, dos et profils, corrige automatiquement un profil miroir et adapte la profondeur aux accessoires longs. Le moteur 2.5D reste séparé et inchangé."
+        android:text="Le mode 3D remet la texture à l'endroit, redresse automatiquement les profils horizontaux et recalcule la profondeur avant de créer le volume. Le moteur 2.5D reste séparé et inchangé."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Utilise le même personnage, le corps entier et une pose aussi proche que possible. Après la quatrième image, l'application analyse les orientations avant d'activer la génération."
+                android:text="Même personnage et corps entier sur les quatre images. Les profils peuvent être horizontaux : la V5.9 choisit automatiquement le bon sens de rotation à 90°."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -184,7 +184,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="Statuts : ✓ correct • ⚠ corrigé automatiquement • remplace une vue seulement si l'analyse ne détecte pas le personnage."
+                android:text="La texture et le modèle doivent maintenant rester debout sans retourner le téléphone."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -241,7 +241,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la vraie 3D corrigée"
+                    android:text="Créer la 3D redressée"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>

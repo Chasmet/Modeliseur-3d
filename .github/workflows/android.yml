@@ -51,11 +51,11 @@ jobs:
               -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.8
+      - name: Mettre en cache le détourage local V5.9
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v58-auto-correct-adaptive-hull-isnet-fp32-6a92a19a
+          key: modeliseur-v59-upright-orientation-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -88,27 +88,35 @@ jobs:
       - name: Autoriser Gradle
         run: chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.8 3D auto-corrigée
+      - name: Vérifier l'architecture V5.9 orientation redressée
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.8" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.8.0'" app/build.gradle
-          grep -q "versionCode 25" app/build.gradle
-          grep -q "QuickFourViewValidator" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "StylizedCharacter3DEngine" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "ANALYSING" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "FourViewAutoCorrector" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "height physical\|hauteur physique" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "RowEnvelope" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
-          grep -q "MIROIR AUTO" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "Auto-correction 4 vues" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "Modéliseur 3D V5.9" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.9.0'" app/build.gradle
+          grep -q "versionCode 26" app/build.gradle
+          grep -q "FourViewBitmapOrientationNormalizer.normalize" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "MeshOrientationCorrector.correct" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "postRotate(degrees)" app/src/main/java/com/chasmet/modeliseur3d/model/FourViewBitmapOrientationNormalizer.java
+          grep -q "texCoords\[index\] = clamp01(1.0f - texCoords\[index\])" app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java
+          grep -q "Orientation redressée" app/src/main/res/layout/activity_manual_3d.xml
           grep -q "Le moteur 2.5D reste séparé et inchangé" app/src/main/res/layout/activity_manual_3d.xml
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Tester le moteur volumique V5.8
+      - name: Tester l'orientation verticale V5.9
+        shell: bash
+        run: |
+          mkdir -p build/orientation-tests
+          javac -encoding UTF-8 -d build/orientation-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java \
+            validation/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrectorSelfTest.java
+          java -cp build/orientation-tests \
+            com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
+
+      - name: Tester le moteur volumique V5.9
         shell: bash
         run: |
           mkdir -p build/stylized-3d-tests
@@ -138,7 +146,7 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
           java -cp build/face-back-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
 
-      - name: Compiler et vérifier la V5.8
+      - name: Compiler et vérifier la V5.9
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
@@ -158,10 +166,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V5.8
+      - name: Publier l'APK V5.9
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.8-3D-4-Vues-Auto-Corrigees-GLB-200ko-debug
+          name: Modeliseur-V5.9-3D-Orientation-Redressee-GLB-200ko-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

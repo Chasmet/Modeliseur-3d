@@ -14,12 +14,11 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Moteur 3D local V5.8 réservé au mode quatre vues.
+ * Moteur 3D local V5.9 réservé au mode quatre vues.
  *
- * Changements principaux : hauteur physique commune aux quatre vues,
- * profondeur calculée depuis les profils, correction miroir automatique et
- * enveloppe adaptative quand les poses ne sont pas parfaitement cohérentes.
- * Le moteur 2.5D n'est jamais appelé depuis cette classe.
+ * La V5.9 redresse les profils horizontaux avant de calculer la profondeur,
+ * corrige l'orientation verticale des textures OpenGL et conserve le moteur
+ * 2.5D totalement séparé.
  */
 public final class StylizedCharacter3DEngine implements AutoCloseable {
     public static final int REQUIRED_VIEW_COUNT = 4;
@@ -58,6 +57,17 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         }
 
         notifyProgress(listener, Stage.ANALYSING, REQUIRED_VIEW_COUNT, REQUIRED_VIEW_COUNT);
+        FourViewBitmapOrientationNormalizer.Result orientationCorrection;
+        try {
+            orientationCorrection = FourViewBitmapOrientationNormalizer.normalize(
+                    isolated,
+                    bounds
+            );
+        } catch (RuntimeException | OutOfMemoryError error) {
+            recycleAll(isolated);
+            throw error;
+        }
+
         Profile profile = Profile.detect(depthMultiplier, bounds);
         boolean[][] masks = new boolean[REQUIRED_VIEW_COUNT][];
         int componentCount = 0;
@@ -190,20 +200,26 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             } catch (RuntimeException ignored) {
                 // Le maillage brut reste valide si l'optimisation facultative échoue.
             }
+            mesh = MeshOrientationCorrector.correct(mesh);
         } catch (Exception | OutOfMemoryError error) {
             recycle(atlas);
             throw error;
         }
 
         int averageComponents = Math.max(1, componentCount / REQUIRED_VIEW_COUNT);
-        String correctionSummary;
+        StringBuilder correctionSummary = new StringBuilder(
+                orientationCorrection.getSummary()
+        );
         if (profileCorrection.shouldFlipLeft()) {
-            correctionSummary = "profil gauche retourné automatiquement";
-        } else if (adaptive) {
-            correctionSummary = "poses harmonisées par enveloppe adaptative";
-        } else {
-            correctionSummary = "quatre vues cohérentes";
+            correctionSummary.append(" • profil gauche mis en miroir");
         }
+        if (adaptive) {
+            correctionSummary.append(" • volume adaptatif");
+        } else {
+            correctionSummary.append(" • quatre vues cohérentes");
+        }
+        correctionSummary.append(" • texture remise à l'endroit");
+
         return new Result(
                 mesh,
                 atlas,
@@ -216,7 +232,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 profileCorrection.shouldFlipLeft(),
                 coherence,
                 profile.depth,
-                correctionSummary,
+                correctionSummary.toString(),
                 SystemClock.elapsedRealtime() - started
         );
     }
@@ -274,11 +290,6 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         return new Rect(left, top, right + 1, bottom + 1);
     }
 
-    /**
-     * Normalise toutes les vues sur une hauteur physique commune. La V5.7
-     * utilisait un fitCenter global : un profil très large devenait minuscule
-     * en hauteur et écrasait toute l'intersection 3D.
-     */
     private static boolean[] normalizeMask(
             Bitmap isolated,
             Rect bounds,
@@ -688,17 +699,17 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
-                label = "3D V5.8 ultra adaptative";
+                label = "3D V5.9 ultra redressée";
             } else if (memoryMb >= 430L && processors >= 6) {
                 width = 96;
                 height = 192;
                 maximumDepth = 224;
-                label = "3D V5.8 haute précision";
+                label = "3D V5.9 haute précision";
             } else {
                 width = 80;
                 height = 160;
                 maximumDepth = 184;
-                label = "3D V5.8 compatible";
+                label = "3D V5.9 compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],
@@ -709,7 +720,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     bounds[StylizedFourViewProjector.LEFT]
             );
             double aspectRatio = sideAspect / Math.max(0.18, frontAspect);
-            aspectRatio = Math.max(0.65, Math.min(2.35, aspectRatio));
+            aspectRatio = Math.max(0.65, Math.min(1.75, aspectRatio));
             float multiplier = Math.max(0.65f, Math.min(1.35f, requestedDepth));
             int depth = Math.round((float) (width * aspectRatio * multiplier));
             depth = Math.max(48, Math.min(maximumDepth, depth));
