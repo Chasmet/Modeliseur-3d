@@ -16,6 +16,9 @@ final class NeuralMaskConfidence {
             int depth,
             boolean adaptive
     ) {
+        if (!adaptive) {
+            return strictIntersection(masks, width, height, depth);
+        }
         float[][] confidence = new float[4][];
         confidence[StylizedFourViewProjector.FRONT] = soften(
                 masks[StylizedFourViewProjector.FRONT], width, height
@@ -35,7 +38,48 @@ final class NeuralMaskConfidence {
                 width,
                 height,
                 depth,
-                adaptive
+                true
+        );
+    }
+
+    private static NeuralConfidenceHullBuilder.Result strictIntersection(
+            boolean[][] masks,
+            int width,
+            int height,
+            int depth
+    ) {
+        boolean[] volume = new boolean[width * height * depth];
+        int occupied = 0;
+        for (int y = 0; y < height; y++) {
+            int frontRow = y * width;
+            int sideRow = y * depth;
+            for (int x = 0; x < width; x++) {
+                boolean front = masks[StylizedFourViewProjector.FRONT][frontRow + x];
+                boolean back = masks[StylizedFourViewProjector.BACK][
+                        frontRow + width - 1 - x
+                ];
+                if (!front || !back) {
+                    continue;
+                }
+                for (int z = 0; z < depth; z++) {
+                    boolean right = masks[StylizedFourViewProjector.RIGHT][sideRow + z];
+                    boolean left = masks[StylizedFourViewProjector.LEFT][
+                            sideRow + depth - 1 - z
+                    ];
+                    if (right && left) {
+                        volume[(y * width + x) * depth + z] = true;
+                        occupied++;
+                    }
+                }
+            }
+        }
+        return new NeuralConfidenceHullBuilder.Result(
+                volume,
+                occupied,
+                occupied == 0 ? 0.0 : 1.0,
+                occupied,
+                0,
+                0
         );
     }
 
