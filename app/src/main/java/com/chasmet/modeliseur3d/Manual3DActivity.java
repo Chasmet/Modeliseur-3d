@@ -21,8 +21,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceViewV52;
+import com.chasmet.modeliseur3d.model.Fast3DGlbExporter;
 import com.chasmet.modeliseur3d.model.MeshData;
-import com.chasmet.modeliseur3d.model.ObjExporter;
 import com.chasmet.modeliseur3d.model.QuickFourViewValidator;
 import com.chasmet.modeliseur3d.model.StylizedCharacter3DEngine;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
@@ -36,11 +36,11 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V5.8. Le mode 2.5D reste séparé et inchangé dans MainActivityV52. */
+/** Mode 3D V5.9.1. Le mode 2.5D reste séparé et inchangé. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
-    private static final int[] REQUESTS = {5801, 5802, 5803, 5804};
+    private static final int[] REQUESTS = {5911, 5912, 5913, 5914};
     private static final int[] CARDS = {
             R.id.frontCard,
             R.id.rightCard,
@@ -89,9 +89,14 @@ public final class Manual3DActivity extends AppCompatActivity {
     private Button export;
     private MeshData mesh;
     private Bitmap texture;
+    private Fast3DGlbExporter.PreparedExport preparedExport;
     private boolean busy;
     private boolean validationReady;
+    private boolean exportPreparing;
+    private boolean exportRequested;
     private int validationSequence;
+    private int exportGeneration;
+    private String modelSummary = "";
 
     @Override
     protected void onCreate(@Nullable Bundle state) {
@@ -347,6 +352,7 @@ public final class Manual3DActivity extends AppCompatActivity {
             ).show();
             return;
         }
+        invalidatePreparedExport();
         setBusy(true, "Lecture des quatre vues…");
         viewer.stopAutoRotation();
         Uri[] selectedUris = uris.clone();
@@ -421,8 +427,7 @@ public final class Manual3DActivity extends AppCompatActivity {
             }
             capturePanel.setVisibility(View.GONE);
             viewerPanel.setVisibility(View.VISIBLE);
-            setBusy(false, "Personnage 3D prêt.");
-            status.setText(result.getQualityLabel()
+            modelSummary = result.getQualityLabel()
                     + " • " + mesh.getTriangleCount() + " triangles"
                     + " • " + result.getCorrectionSummary()
                     + " • cohérence " + Math.round(result.getCoherence() * 100.0) + "%"
@@ -432,8 +437,95 @@ public final class Manual3DActivity extends AppCompatActivity {
                             Locale.FRANCE,
                             "%.1f s",
                             result.getTotalDurationMs() / 1000.0
-                    ));
+                    );
+            setBusy(false, modelSummary);
+            startExportPreparation(mesh, texture);
         });
+    }
+
+    private void startExportPreparation(MeshData meshSnapshot, Bitmap textureSnapshot) {
+        int generation = ++exportGeneration;
+        preparedExport = null;
+        exportPreparing = true;
+        exportRequested = false;
+        export.setText("GLB en préparation…");
+        status.setText(modelSummary + " • préparation GLB 200 ko en arrière-plan…");
+        worker.execute(() -> {
+            try {
+                ProcessingPowerLock.favorCurrentThread();
+                Fast3DGlbExporter.PreparedExport result = Fast3DGlbExporter.prepare(
+                        this,
+                        meshSnapshot,
+                        textureSnapshot,
+                        (stage, current, total) -> runOnUiThread(() -> {
+                            if (generation != exportGeneration) {
+                                return;
+                            }
+                            String action = stage == Fast3DGlbExporter.Stage.SIMPLIFYING
+                                    ? "optimisation du maillage"
+                                    : "encodage GLB";
+                            status.setText(modelSummary + " • " + action
+                                    + " " + current + "/" + total + "…");
+                        })
+                );
+                runOnUiThread(() -> completeExportPreparation(generation, result));
+            } catch (Exception | OutOfMemoryError error) {
+                runOnUiThread(() -> failExportPreparation(generation, error));
+            }
+        });
+    }
+
+    private void completeExportPreparation(
+            int generation,
+            Fast3DGlbExporter.PreparedExport result
+    ) {
+        if (generation != exportGeneration) {
+            return;
+        }
+        preparedExport = result;
+        exportPreparing = false;
+        export.setText("Exporter GLB ✓");
+        status.setText(modelSummary
+                + " • GLB prêt : " + result.getSizeBytes() / 1000L + " ko"
+                + " • " + result.getTriangleCount() + " triangles"
+                + " • préparé en " + String.format(
+                        Locale.FRANCE,
+                        "%.1f s",
+                        result.getDurationMs() / 1000.0
+                ));
+        if (exportRequested) {
+            exportRequested = false;
+            sharePreparedExport(result);
+        }
+    }
+
+    private void failExportPreparation(int generation, Throwable error) {
+        if (generation != exportGeneration) {
+            return;
+        }
+        exportPreparing = false;
+        exportRequested = false;
+        preparedExport = null;
+        export.setText("Réessayer GLB");
+        String detail = error.getMessage() == null
+                ? "erreur inconnue"
+                : error.getMessage();
+        status.setText(modelSummary + " • préparation GLB impossible : " + detail);
+        Toast.makeText(
+                this,
+                "Export GLB impossible : " + detail,
+                Toast.LENGTH_LONG
+        ).show();
+    }
+
+    private void invalidatePreparedExport() {
+        exportGeneration++;
+        preparedExport = null;
+        exportPreparing = false;
+        exportRequested = false;
+        if (export != null) {
+            export.setText("Exporter GLB");
+        }
     }
 
     private void showInputs() {
@@ -450,43 +542,42 @@ public final class Manual3DActivity extends AppCompatActivity {
         if (mesh == null || texture == null || busy) {
             return;
         }
-        setBusy(true, "Export GLB…");
-        worker.execute(() -> {
-            try {
-                ObjExporter.ExportResult result = ObjExporter.export(
-                        this,
-                        mesh,
-                        texture
-                );
-                runOnUiThread(() -> {
-                    setBusy(false, "Export terminé.");
-                    share(result);
-                });
-            } catch (Exception | OutOfMemoryError error) {
-                fail("Export impossible", error);
-            }
-        });
-    }
-
-    private void share(ObjExporter.ExportResult result) {
-        ArrayList<Uri> files = new ArrayList<>();
-        String authority = getPackageName() + ".fileprovider";
-        for (File file : result.getFiles()) {
-            files.add(FileProvider.getUriForFile(this, authority, file));
-        }
-        if (files.isEmpty()) {
+        if (preparedExport != null) {
+            sharePreparedExport(preparedExport);
             return;
         }
-        Intent intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-        intent.setType("application/octet-stream");
-        intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, files);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.8");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        ClipData clip = ClipData.newRawUri("GLB", files.get(0));
-        for (int index = 1; index < files.size(); index++) {
-            clip.addItem(new ClipData.Item(files.get(index)));
+        if (exportPreparing) {
+            exportRequested = true;
+            export.setText("Partage dès que prêt…");
+            status.setText(modelSummary
+                    + " • le GLB est encore en préparation, il s'ouvrira automatiquement.");
+            return;
         }
-        intent.setClipData(clip);
+        startExportPreparation(mesh, texture);
+        exportRequested = true;
+        export.setText("Partage dès que prêt…");
+    }
+
+    private void sharePreparedExport(Fast3DGlbExporter.PreparedExport result) {
+        File file = result.getFile();
+        if (file == null || !file.isFile()) {
+            failExportPreparation(exportGeneration,
+                    new IllegalStateException("Fichier GLB absent"));
+            return;
+        }
+        Uri uri = FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                file
+        );
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("model/gltf-binary");
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.1");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(ClipData.newRawUri("GLB", uri));
+        status.setText(modelSummary + " • partage GLB instantané : "
+                + result.getSizeBytes() / 1000L + " ko.");
         startActivity(Intent.createChooser(intent, "Enregistrer le GLB"));
     }
 
@@ -519,7 +610,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v58");
+                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v591");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
@@ -552,6 +643,7 @@ public final class Manual3DActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         validationSequence++;
+        exportGeneration++;
         worker.shutdownNow();
         setBusy(false, "");
         engine.close();
