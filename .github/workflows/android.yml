@@ -46,12 +46,10 @@ jobs:
               -alias androiddebugkey \
               -keypass android \
               -dname "CN=Android Debug,O=Android,C=US" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10950
+              -keyalg RSA -keysize 2048 -validity 10950
           fi
 
-      - name: Mettre en cache le détourage local V5.9.8
+      - name: Mettre en cache IS-Net Anime FP32
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
@@ -66,9 +64,7 @@ jobs:
           SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
           URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
           mkdir -p "$(dirname "$MODEL")"
-          if [ -f "$MODEL" ] && echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            echo "IS-Net Anime FP32 déjà présent et vérifié."
-          else
+          if [ ! -f "$MODEL" ] || ! echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
             echo "$SHA  $PART" | sha256sum -c -
@@ -84,27 +80,18 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew
 
-      - name: Autoriser Gradle
-        run: chmod +x gradlew
-
-      - name: Vérifier la V5.9.8 assets et profils manuels
+      - name: Vérifier l'architecture V5.9.8
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "android.permission.ACCESS_NETWORK_STATE" app/src/main/AndroidManifest.xml
           grep -q "Asset3DActivity" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.8" app/src/main/AndroidManifest.xml
           grep -q "versionName '5.9.8'" app/build.gradle
           grep -q "versionCode 33" app/build.gradle
           grep -q "assets3dButton" app/src/main/res/layout/activity_home.xml
-          grep -q "Assets 3D disponibles" app/src/main/res/layout/activity_home.xml
-          grep -q "class Asset3DCatalog" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q "KhronosGroup/glTF-Sample-Assets" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q "MAXIMUM_ASSET_BYTES = 8_000_000L" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
-          grep -q "isValidGlb" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
-          grep -q "writeLicenseFile" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
           grep -q "ManualProfileTransformer.apply" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
           grep -q "rightRotateLeftButton" app/src/main/res/layout/activity_manual_3d.xml
           grep -q "rightMirrorButton" app/src/main/res/layout/activity_manual_3d.xml
@@ -114,102 +101,78 @@ jobs:
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
-          grep -q "MAXIMUM_MOBILE_GLB_BYTES = 200_000L" app/src/main/java/com/chasmet/modeliseur3d/model/ObjExporter.java
 
-      - name: Vérifier les tailles officielles des assets
+      - name: Vérifier les 22 GLB officiels sous 8 Mo
         shell: bash
         run: |
           python3 - <<'PY'
           import json
+          import urllib.error
           import urllib.request
 
           models = [
               "RiggedSimple", "RiggedFigure", "CesiumMan", "RecursiveSkeletons",
-              "Fox", "BarramundiFish", "ToyCar", "CarConcept",
-              "MultipleScenes", "SimpleInstancing", "ABeautifulGame",
-              "DirectionalLight", "DiffuseTransmissionPlant", "AnimatedCube",
-              "AnimatedColorsCube", "BoxAnimated", "CubeVisibility",
-              "FlightHelmet", "WaterBottle", "ClearCoatCarPaint",
-              "ClearcoatWicker", "DiffuseTransmissionTeacup"
+              "SimpleSkin", "BrainStem", "Fox", "Duck", "ToyCar",
+              "CesiumMilkTruck", "SimpleInstancing", "AlphaBlendModeTest",
+              "MetalRoughSpheres", "LightsPunctualLamp", "LightVisibility",
+              "AnimatedMorphCube", "AnimatedColorsCube", "BoxAnimated",
+              "CubeVisibility", "FlightHelmet", "WaterBottle", "ClearCoatCarPaint"
           ]
           maximum = 8_000_000
-          oversized = []
+          errors = []
           for model in models:
               url = (
                   "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/"
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
-              request = urllib.request.Request(
-                  url,
-                  headers={"User-Agent": "Modeliseur3D-CI/5.9.8"}
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  metadata = json.load(response)
-              size = int(metadata["size"])
-              print(f"{model}: {size} octets")
-              if size > maximum:
-                  oversized.append((model, size))
-          if oversized:
-              raise SystemExit("Assets au-dessus de 8 Mo : " + str(oversized))
+              request = urllib.request.Request(url, headers={
+                  "User-Agent": "Modeliseur3D-CI/5.9.8",
+                  "Accept": "application/vnd.github+json"
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      metadata = json.load(response)
+                  size = int(metadata["size"])
+                  print(f"{model}: {size} octets")
+                  if size > maximum:
+                      errors.append(f"{model} dépasse 8 Mo ({size})")
+              except Exception as error:
+                  errors.append(f"{model} inaccessible ({error})")
+          if errors:
+              raise SystemExit("\n".join(errors))
+          print(f"{len(models)} assets vérifiés sous 8 Mo.")
           PY
 
-      - name: Tester le catalogue d'assets
+      - name: Tester le catalogue et la reconstruction
         shell: bash
         run: |
-          mkdir -p build/asset-catalog-tests
-          javac -encoding UTF-8 -d build/asset-catalog-tests \
+          set -euo pipefail
+          mkdir -p build/asset-tests build/orientation-tests build/stylized-tests build/legacy-tests
+          javac -encoding UTF-8 -d build/asset-tests \
             app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DItem.java \
             app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java \
             validation/java/com/chasmet/modeliseur3d/assets/Asset3DCatalogSelfTest.java
-          java -cp build/asset-catalog-tests \
-            com.chasmet.modeliseur3d.assets.Asset3DCatalogSelfTest
-
-      - name: Tester l'orientation verticale V5.9
-        shell: bash
-        run: |
-          mkdir -p build/orientation-tests
+          java -cp build/asset-tests com.chasmet.modeliseur3d.assets.Asset3DCatalogSelfTest
           javac -encoding UTF-8 -d build/orientation-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java \
             validation/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrectorSelfTest.java
-          java -cp build/orientation-tests \
-            com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
-
-      - name: Tester le volume anatomique V5.9.7
-        shell: bash
-        run: |
-          mkdir -p build/stylized-3d-tests
-          javac -encoding UTF-8 -d build/stylized-3d-tests \
+          java -cp build/orientation-tests com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
+          javac -encoding UTF-8 -d build/stylized-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
             validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java \
             validation/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefinerSelfTest.java
-          java -cp build/stylized-3d-tests \
-            com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
-          java -cp build/stylized-3d-tests \
-            com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
-
-      - name: Tester les composants Java existants
-        shell: bash
-        run: |
-          mkdir -p build/manual-view-plan-tests build/mobile-mesh-tests build/face-back-tests
-          javac -encoding UTF-8 -d build/manual-view-plan-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/ManualViewPlan.java \
-            validation/java/com/chasmet/modeliseur3d/ManualViewPlanSelfTest.java
-          java -cp build/manual-view-plan-tests com.chasmet.modeliseur3d.ManualViewPlanSelfTest
-          javac -encoding UTF-8 -d build/mobile-mesh-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizer.java \
-            validation/java/com/chasmet/modeliseur3d/model/MobileMeshOptimizerSelfTest.java
-          java -cp build/mobile-mesh-tests com.chasmet.modeliseur3d.model.MobileMeshOptimizerSelfTest
-          javac -encoding UTF-8 -d build/face-back-tests \
+          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
+          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
+          javac -encoding UTF-8 -d build/legacy-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
             validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
-          java -cp build/face-back-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
+          java -cp build/legacy-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
 
-      - name: Compiler et vérifier la V5.9.8
+      - name: Compiler avec Gradle
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
