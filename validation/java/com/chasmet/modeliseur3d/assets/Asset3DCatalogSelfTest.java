@@ -7,9 +7,9 @@ import java.util.Set;
 public final class Asset3DCatalogSelfTest {
     public static void main(String[] args) {
         List<Asset3DItem> assets = Asset3DCatalog.all();
-        if (assets.size() < 150) {
+        if (assets.size() != 259) {
             throw new AssertionError(
-                    "Le catalogue V5.9.9 doit contenir au moins 150 assets : "
+                    "Le catalogue V5.9.10 doit contenir exactement 259 assets : "
                             + assets.size()
             );
         }
@@ -47,29 +47,34 @@ public final class Asset3DCatalogSelfTest {
                 animated++;
             }
         }
-        if (generated < 140) {
-            throw new AssertionError("Le catalogue doit être majoritairement généré hors ligne");
+        if (generated != 247) {
+            throw new AssertionError("247 assets locaux attendus : " + generated);
         }
-        if (animated < 80) {
-            throw new AssertionError("La section Animés doit contenir au moins 80 assets");
+        if (animated != 112) {
+            throw new AssertionError("112 assets animés attendus : " + animated);
         }
         if (Asset3DCatalog.filter(Asset3DCatalog.ANIMATED).size() != animated) {
             throw new AssertionError("Le filtre Animés ne correspond pas aux métadonnées");
         }
         requireCategory(Asset3DCatalog.ROADS, 18);
         requireCategory(Asset3DCatalog.WALLS, 18);
-        requireCategory(Asset3DCatalog.NATURE, 18);
-        requireCategory(Asset3DCatalog.WATER, 15);
-        requireCategory(Asset3DCatalog.CHARACTERS, 20);
+        requireCategory(Asset3DCatalog.NATURE, 19);
+        requireCategory(Asset3DCatalog.WATER, 17);
+        requireCategory(Asset3DCatalog.CHARACTERS, 21);
         requireCategory(Asset3DCatalog.ANIMALS, 19);
         requireCategory(Asset3DCatalog.FANTASY, 18);
+        requireCategory(Asset3DCatalog.WEAPONS, 20);
+        requireCategory(Asset3DCatalog.PORTS, 20);
+        requireCategory(Asset3DCatalog.FOOD, 20);
+        requireCategory(Asset3DCatalog.MAGIC, 20);
+        requireCategory(Asset3DCatalog.FURNITURE, 20);
         for (String category : Asset3DCatalog.categories()) {
             if (!Asset3DCatalog.ALL.equals(category)
                     && Asset3DCatalog.filter(category).isEmpty()) {
                 throw new AssertionError("Catégorie vide : " + category);
             }
         }
-        System.out.println("Asset3DCatalogSelfTest V5.9.9 OK : "
+        System.out.println("Asset3DCatalogSelfTest V5.9.10 OK : "
                 + assets.size() + " assets, " + animated + " animés, "
                 + generated + " générés hors ligne");
     }
