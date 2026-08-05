@@ -78,6 +78,26 @@ public final class Asset3DCatalog {
                 "RecursiveSkeletons",
                 true
         ));
+        assets.add(item(
+                "simple_skin",
+                "Mannequin articulé léger",
+                CHARACTERS,
+                "Petit personnage squeletté pour tester les articulations.",
+                "CC0 1.0",
+                "Khronos Group",
+                "SimpleSkin",
+                true
+        ));
+        assets.add(item(
+                "brain_stem",
+                "Créature organique animée",
+                CHARACTERS,
+                "Modèle organique complexe avec squelette et animation.",
+                "CC BY 4.0",
+                "Microsoft",
+                "BrainStem",
+                true
+        ));
 
         assets.add(item(
                 "fox_animated",
@@ -90,13 +110,13 @@ public final class Asset3DCatalog {
                 true
         ));
         assets.add(item(
-                "barramundi_fish",
-                "Poisson barramundi",
+                "duck",
+                "Canard",
                 ANIMALS,
-                "Poisson texturé léger pour les scènes marines.",
+                "Animal léger et texturé pour les îles, étangs et ports.",
                 "CC0 1.0",
-                "Microsoft",
-                "BarramundiFish",
+                "Khronos Group",
+                "Duck",
                 false
         ));
 
@@ -111,26 +131,16 @@ public final class Asset3DCatalog {
                 false
         ));
         assets.add(item(
-                "car_concept",
-                "Voiture concept",
+                "cesium_milk_truck",
+                "Camion Cesium animé",
                 VEHICLES,
-                "Concept-car détaillé avec variantes de matériaux. Logos Khronos présents.",
-                "CC BY 4.0",
-                "Darmstadt Graphics Group",
-                "CarConcept",
-                false
+                "Petit camion texturé avec animation. Logo Cesium présent.",
+                "CC BY 4.0 avec limites de marque",
+                "Cesium",
+                "CesiumMilkTruck",
+                true
         ));
 
-        assets.add(item(
-                "multiple_scenes",
-                "Décor à scènes multiples",
-                WORLDS,
-                "Petit environnement contenant plusieurs scènes glTF.",
-                "CC0 1.0",
-                "Public",
-                "MultipleScenes",
-                false
-        ));
         assets.add(item(
                 "simple_instancing",
                 "Décor avec objets répétés",
@@ -142,44 +152,54 @@ public final class Asset3DCatalog {
                 false
         ));
         assets.add(item(
-                "beautiful_game",
-                "Grande scène d'échecs",
+                "alpha_blend_scene",
+                "Décor transparences",
                 WORLDS,
-                "Échiquier complet utilisable comme décor ou scène d'intérieur.",
-                "CC BY 4.0",
-                "MaterialX Project / Ed Mackey",
-                "ABeautifulGame",
-                false
-        ));
-        assets.add(item(
-                "directional_light_scene",
-                "Scène éclairage directionnel",
-                WORLDS,
-                "Décor technique avec éclairage et objets de référence.",
+                "Scène de référence avec plusieurs objets transparents.",
                 "CC0 1.0",
-                "Rickard Sahlin",
-                "DirectionalLight",
+                "Khronos Group",
+                "AlphaBlendModeTest",
                 false
         ));
         assets.add(item(
-                "diffuse_plant",
-                "Plante décorative",
+                "metal_rough_world",
+                "Décor sphères métalliques",
                 WORLDS,
-                "Plante en pot pour ville, maison, port ou royaume naturel.",
-                "CC0 + CC BY 4.0",
-                "Rico Cilliers / Darmstadt Graphics Group",
-                "DiffuseTransmissionPlant",
+                "Environnement de sphères avec différents métaux et rugosités.",
+                "CC0 1.0",
+                "Khronos Group",
+                "MetalRoughSpheres",
+                false
+        ));
+        assets.add(item(
+                "punctual_lamp_scene",
+                "Décor avec lampes",
+                WORLDS,
+                "Petite scène équipée de plusieurs éclairages ponctuels.",
+                "CC0 1.0",
+                "Khronos Group",
+                "LightsPunctualLamp",
+                false
+        ));
+        assets.add(item(
+                "light_visibility_scene",
+                "Décor lumière animée",
+                WORLDS,
+                "Scène technique montrant l'apparition et la disparition de lumières.",
+                "CC0 1.0",
+                "Khronos Group",
+                "LightVisibility",
                 true
         ));
 
         assets.add(item(
-                "animated_cube",
-                "Cube animé",
+                "animated_morph_cube",
+                "Cube morphing animé",
                 OBJECTS,
-                "Objet simple animé par rotation et translation.",
+                "Objet simple qui change de forme par animation.",
                 "CC0 1.0",
-                "Microsoft",
-                "AnimatedCube",
+                "Khronos Group",
+                "AnimatedMorphCube",
                 true
         ));
         assets.add(item(
@@ -240,26 +260,6 @@ public final class Asset3DCatalog {
                 "CC0 1.0",
                 "Eric Chadwick",
                 "ClearCoatCarPaint",
-                false
-        ));
-        assets.add(item(
-                "clearcoat_wicker",
-                "Boule en osier verni",
-                OBJECTS,
-                "Objet décoratif avec matériau osier et vernis.",
-                "CC0 1.0",
-                "Eric Chadwick",
-                "ClearcoatWicker",
-                false
-        ));
-        assets.add(item(
-                "transmission_teacup",
-                "Tasse translucide",
-                OBJECTS,
-                "Tasse décorative avec matériau translucide.",
-                "CC0 1.0",
-                "Poly Haven / Eric Chadwick",
-                "DiffuseTransmissionTeacup",
                 false
         ));
 
