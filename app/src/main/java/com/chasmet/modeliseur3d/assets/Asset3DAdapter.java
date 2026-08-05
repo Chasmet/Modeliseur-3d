@@ -58,22 +58,29 @@ public final class Asset3DAdapter extends ArrayAdapter<Asset3DItem> {
                 + (item.isAnimated() ? " • ANIMÉ" : " • STATIQUE"));
         holder.description.setText(item.getDescription());
         holder.license.setText(item.getLicense() + " • " + item.getCredit());
-        boolean downloaded = Asset3DDownloader.isDownloaded(getContext(), item);
-        if (downloaded) {
+
+        boolean ready = Asset3DDownloader.isDownloaded(getContext(), item);
+        if (ready) {
             holder.action.setText("Ouvrir le GLB");
+            holder.export.setText("Exporter le GLB");
+        } else if (item.isGenerated()) {
+            holder.action.setText("Créer le GLB hors ligne");
+            holder.export.setText("Créer puis exporter");
         } else {
-            holder.action.setText(item.isGenerated()
-                    ? "Créer le GLB hors ligne"
-                    : "Télécharger");
+            holder.action.setText("Télécharger");
+            holder.export.setText("Télécharger puis exporter");
         }
         holder.source.setText(item.isGenerated() ? "Licence" : "Source");
         holder.action.setOnClickListener(view -> listener.onAssetAction(item));
+        holder.export.setOnClickListener(view -> listener.onExport(item));
         holder.source.setOnClickListener(view -> listener.onSource(item));
         return row;
     }
 
     public interface ActionListener {
         void onAssetAction(Asset3DItem item);
+
+        void onExport(Asset3DItem item);
 
         void onSource(Asset3DItem item);
     }
@@ -84,6 +91,7 @@ public final class Asset3DAdapter extends ArrayAdapter<Asset3DItem> {
         final TextView description;
         final TextView license;
         final Button action;
+        final Button export;
         final Button source;
 
         Holder(View row) {
@@ -92,6 +100,7 @@ public final class Asset3DAdapter extends ArrayAdapter<Asset3DItem> {
             description = row.findViewById(R.id.assetDescriptionText);
             license = row.findViewById(R.id.assetLicenseText);
             action = row.findViewById(R.id.assetDownloadButton);
+            export = row.findViewById(R.id.assetExportButton);
             source = row.findViewById(R.id.assetSourceButton);
         }
     }
