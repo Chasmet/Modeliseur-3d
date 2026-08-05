@@ -79,16 +79,6 @@ public final class Asset3DCatalog {
                 true
         ));
         assets.add(item(
-                "simple_skin",
-                "Mannequin articulé léger",
-                CHARACTERS,
-                "Petit personnage squeletté pour tester les articulations.",
-                "CC0 1.0",
-                "Khronos Group",
-                "SimpleSkin",
-                true
-        ));
-        assets.add(item(
                 "brain_stem",
                 "Créature organique animée",
                 CHARACTERS,
@@ -162,13 +152,13 @@ public final class Asset3DCatalog {
                 false
         ));
         assets.add(item(
-                "metal_rough_world",
-                "Décor sphères métalliques",
+                "textured_box_scene",
+                "Décor caisse texturée",
                 WORLDS,
-                "Environnement de sphères avec différents métaux et rugosités.",
+                "Petit élément de décor texturé, léger et réutilisable.",
                 "CC0 1.0",
                 "Khronos Group",
-                "MetalRoughSpheres",
+                "BoxTextured",
                 false
         ));
         assets.add(item(
@@ -192,6 +182,16 @@ public final class Asset3DCatalog {
                 true
         ));
 
+        assets.add(item(
+                "morph_stress",
+                "Forme morphing animée",
+                OBJECTS,
+                "Objet de test avec plusieurs transformations de forme animées.",
+                "CC0 1.0",
+                "Khronos Group",
+                "MorphStressTest",
+                true
+        ));
         assets.add(item(
                 "animated_morph_cube",
                 "Cube morphing animé",
@@ -233,23 +233,23 @@ public final class Asset3DCatalog {
                 true
         ));
         assets.add(item(
-                "flight_helmet",
-                "Casque de pilote",
+                "damaged_helmet",
+                "Casque de combat endommagé",
                 OBJECTS,
                 "Casque détaillé utilisable comme équipement ou décoration.",
                 "CC0 1.0",
-                "Gary Hsu",
-                "FlightHelmet",
+                "Leonardo Carrion / Khronos Group",
+                "DamagedHelmet",
                 false
         ));
         assets.add(item(
-                "water_bottle",
-                "Bouteille d'eau",
+                "box_vertex_colors",
+                "Caisse aux couleurs de sommets",
                 OBJECTS,
-                "Objet PBR léger pour les décors et inventaires.",
+                "Objet très léger avec couleurs intégrées au maillage.",
                 "CC0 1.0",
-                "Microsoft",
-                "WaterBottle",
+                "Khronos Group",
+                "BoxVertexColors",
                 false
         ));
         assets.add(item(
