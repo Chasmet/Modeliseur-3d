@@ -7,20 +7,38 @@ import java.util.Set;
 public final class Asset3DCatalogSelfTest {
     public static void main(String[] args) {
         List<Asset3DItem> assets = Asset3DCatalog.all();
-        if (assets.size() < 20) {
-            throw new AssertionError("Le catalogue doit contenir au moins 20 assets");
+        if (assets.size() < 150) {
+            throw new AssertionError(
+                    "Le catalogue V5.9.9 doit contenir au moins 150 assets : "
+                            + assets.size()
+            );
         }
         Set<String> ids = new HashSet<>();
         int animated = 0;
+        int generated = 0;
         for (Asset3DItem item : assets) {
             if (!ids.add(item.getId())) {
                 throw new AssertionError("Identifiant asset dupliqué : " + item.getId());
             }
-            if (!item.getDownloadUrl().startsWith("https://")) {
-                throw new AssertionError("URL non sécurisée : " + item.getName());
+            if (item.isGenerated()) {
+                generated++;
+                if (!item.getDownloadUrl().startsWith("generated://")) {
+                    throw new AssertionError("Générateur local invalide : " + item.getName());
+                }
+                if (!item.getLicense().contains("CC0")) {
+                    throw new AssertionError("Asset local non CC0 : " + item.getName());
+                }
+            } else {
+                if (!item.getDownloadUrl().startsWith("https://")) {
+                    throw new AssertionError("URL non sécurisée : " + item.getName());
+                }
+                if (!item.getDownloadUrl().endsWith(".glb")) {
+                    throw new AssertionError("GLB distant absent : " + item.getName());
+                }
             }
-            if (!item.getDownloadUrl().endsWith(".glb")) {
-                throw new AssertionError("Le catalogue doit proposer des GLB : " + item.getName());
+            String license = item.getLicense().toUpperCase();
+            if (license.contains("NC") || license.contains("EULA")) {
+                throw new AssertionError("Licence restrictive interdite : " + item.getName());
             }
             if (item.getLicense().trim().isEmpty() || item.getCredit().trim().isEmpty()) {
                 throw new AssertionError("Licence ou crédit absent : " + item.getName());
@@ -29,16 +47,38 @@ public final class Asset3DCatalogSelfTest {
                 animated++;
             }
         }
-        if (animated < 7) {
-            throw new AssertionError("Le catalogue doit contenir plusieurs assets animés");
+        if (generated < 140) {
+            throw new AssertionError("Le catalogue doit être majoritairement généré hors ligne");
         }
+        if (animated < 80) {
+            throw new AssertionError("La section Animés doit contenir au moins 80 assets");
+        }
+        if (Asset3DCatalog.filter(Asset3DCatalog.ANIMATED).size() != animated) {
+            throw new AssertionError("Le filtre Animés ne correspond pas aux métadonnées");
+        }
+        requireCategory(Asset3DCatalog.ROADS, 18);
+        requireCategory(Asset3DCatalog.WALLS, 18);
+        requireCategory(Asset3DCatalog.NATURE, 18);
+        requireCategory(Asset3DCatalog.WATER, 15);
+        requireCategory(Asset3DCatalog.CHARACTERS, 20);
+        requireCategory(Asset3DCatalog.ANIMALS, 19);
+        requireCategory(Asset3DCatalog.FANTASY, 18);
         for (String category : Asset3DCatalog.categories()) {
             if (!Asset3DCatalog.ALL.equals(category)
                     && Asset3DCatalog.filter(category).isEmpty()) {
                 throw new AssertionError("Catégorie vide : " + category);
             }
         }
-        System.out.println("Asset3DCatalogSelfTest V5.9.8 OK : "
-                + assets.size() + " assets, " + animated + " animés");
+        System.out.println("Asset3DCatalogSelfTest V5.9.9 OK : "
+                + assets.size() + " assets, " + animated + " animés, "
+                + generated + " générés hors ligne");
+    }
+
+    private static void requireCategory(String category, int minimum) {
+        int count = Asset3DCatalog.filter(category).size();
+        if (count < minimum) {
+            throw new AssertionError(category + " doit contenir au moins "
+                    + minimum + " assets : " + count);
+        }
     }
 }
