@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Troisième onglet : catalogue d'assets GLB libres et prêts à télécharger. */
+/** Troisième onglet : catalogue d'assets GLB libres et prêts à utiliser. */
 public final class Asset3DActivity extends AppCompatActivity
         implements Asset3DAdapter.ActionListener {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -79,8 +79,15 @@ public final class Asset3DActivity extends AppCompatActivity
         List<Asset3DItem> items = Asset3DCatalog.filter(category);
         adapter = new Asset3DAdapter(this, items, this);
         list.setAdapter(adapter);
-        status.setText(items.size()
-                + " assets disponibles • téléchargement direct • limite stricte 8 Mo");
+        if (Asset3DCatalog.ALL.equals(category)) {
+            status.setText(items.size()
+                    + " assets libres • " + Asset3DCatalog.countAnimated()
+                    + " animés • " + Asset3DCatalog.countGenerated()
+                    + " générés hors ligne • maximum 8 Mo");
+        } else {
+            status.setText(items.size() + " assets dans « " + category
+                    + " » • génération locale ou téléchargement direct");
+        }
     }
 
     @Override
@@ -95,13 +102,21 @@ public final class Asset3DActivity extends AppCompatActivity
                 return;
             }
         } catch (Exception ignored) {
-            // Le téléchargement affichera une erreur plus précise si le stockage manque.
+            // L'opération affichera une erreur plus précise si le stockage manque.
         }
-        download(item);
+        prepare(item);
     }
 
     @Override
     public void onSource(Asset3DItem item) {
+        if (item.isGenerated()) {
+            Toast.makeText(
+                    this,
+                    "Asset créé hors ligne par l'application • licence CC0 1.0 • utilisable et modifiable librement.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
         Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(item.getSourceUrl()));
         try {
             startActivity(browser);
@@ -114,24 +129,33 @@ public final class Asset3DActivity extends AppCompatActivity
         }
     }
 
-    private void download(Asset3DItem item) {
-        setBusy(true, "Téléchargement de " + item.getName() + "…");
+    private void prepare(Asset3DItem item) {
+        String start = item.isGenerated()
+                ? "Création locale de " + item.getName() + "…"
+                : "Téléchargement de " + item.getName() + "…";
+        setBusy(true, start);
         worker.execute(() -> {
             try {
                 File file = Asset3DDownloader.download(
                         this,
                         item,
                         (downloaded, total) -> runOnUiThread(() -> {
-                            String text = "Téléchargement " + item.getName()
-                                    + " • " + Asset3DDownloader.formatBytes(downloaded);
-                            if (total > 0L) {
-                                text += " / " + Asset3DDownloader.formatBytes(total);
+                            if (item.isGenerated()) {
+                                status.setText("Génération du GLB texturé : "
+                                        + item.getName() + "…");
+                            } else {
+                                String text = "Téléchargement " + item.getName()
+                                        + " • " + Asset3DDownloader.formatBytes(downloaded);
+                                if (total > 0L) {
+                                    text += " / " + Asset3DDownloader.formatBytes(total);
+                                }
+                                status.setText(text);
                             }
-                            status.setText(text);
                         })
                 );
                 runOnUiThread(() -> {
-                    setBusy(false, item.getName() + " téléchargé : "
+                    String verb = item.isGenerated() ? "généré" : "téléchargé";
+                    setBusy(false, item.getName() + " " + verb + " : "
                             + Asset3DDownloader.formatBytes(file.length())
                             + " • licence enregistrée dans le même dossier.");
                     if (adapter != null) {
@@ -144,10 +168,10 @@ public final class Asset3DActivity extends AppCompatActivity
                     String detail = error.getMessage() == null
                             ? "erreur inconnue"
                             : error.getMessage();
-                    setBusy(false, "Téléchargement impossible : " + detail);
+                    setBusy(false, "Création impossible : " + detail);
                     Toast.makeText(
                             this,
-                            "Asset non téléchargé : " + detail,
+                            "Asset non préparé : " + detail,
                             Toast.LENGTH_LONG
                     ).show();
                 });
@@ -168,7 +192,8 @@ public final class Asset3DActivity extends AppCompatActivity
         try {
             startActivity(viewer);
             status.setText(item.getName() + " ouvert • "
-                    + Asset3DDownloader.formatBytes(file.length()));
+                    + Asset3DDownloader.formatBytes(file.length())
+                    + (item.isAnimated() ? " • animation intégrée" : ""));
         } catch (Exception unavailable) {
             Intent share = new Intent(Intent.ACTION_SEND);
             share.setType("model/gltf-binary");
