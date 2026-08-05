@@ -59,14 +59,14 @@ public final class Asset3DCatalog {
                 true
         ));
         assets.add(item(
-                "corset_character",
-                "Mannequin avec corset",
+                "cesium_man",
+                "Personnage Cesium animé",
                 CHARACTERS,
-                "Personnage féminin habillé, utile pour tester les vêtements.",
-                "CC0 1.0",
-                "Microsoft / UX3D",
-                "Corset",
-                false
+                "Personnage texturé avec squelette et animation. Logo Cesium présent.",
+                "CC BY 4.0 avec limites de marque",
+                "Cesium",
+                "CesiumMan",
+                true
         ));
         assets.add(item(
                 "recursive_skeletons",
