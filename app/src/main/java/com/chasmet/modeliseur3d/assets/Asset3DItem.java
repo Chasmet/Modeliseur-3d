@@ -2,6 +2,8 @@ package com.chasmet.modeliseur3d.assets;
 
 /** Métadonnées d'un asset GLB proposé directement dans l'application. */
 public final class Asset3DItem {
+    private static final String GENERATED_PREFIX = "generated://";
+
     private final String id;
     private final String name;
     private final String category;
@@ -68,6 +70,10 @@ public final class Asset3DItem {
 
     public boolean isAnimated() {
         return animated;
+    }
+
+    public boolean isGenerated() {
+        return downloadUrl != null && downloadUrl.startsWith(GENERATED_PREFIX);
     }
 
     public String fileName() {

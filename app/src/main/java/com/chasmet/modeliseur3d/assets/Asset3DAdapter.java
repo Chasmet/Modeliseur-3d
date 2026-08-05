@@ -52,12 +52,21 @@ public final class Asset3DAdapter extends ArrayAdapter<Asset3DItem> {
             return row;
         }
         holder.name.setText(item.getName());
+        String origin = item.isGenerated() ? "LOCAL CC0" : "KHRONOS";
         holder.category.setText(item.getCategory()
+                + " • " + origin
                 + (item.isAnimated() ? " • ANIMÉ" : " • STATIQUE"));
         holder.description.setText(item.getDescription());
         holder.license.setText(item.getLicense() + " • " + item.getCredit());
         boolean downloaded = Asset3DDownloader.isDownloaded(getContext(), item);
-        holder.action.setText(downloaded ? "Ouvrir le GLB" : "Télécharger");
+        if (downloaded) {
+            holder.action.setText("Ouvrir le GLB");
+        } else {
+            holder.action.setText(item.isGenerated()
+                    ? "Créer le GLB hors ligne"
+                    : "Télécharger");
+        }
+        holder.source.setText(item.isGenerated() ? "Licence" : "Source");
         holder.action.setOnClickListener(view -> listener.onAssetAction(item));
         holder.source.setOnClickListener(view -> listener.onSource(item));
         return row;
