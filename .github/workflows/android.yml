@@ -107,16 +107,16 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
-          import urllib.error
           import urllib.request
 
           models = [
               "RiggedSimple", "RiggedFigure", "CesiumMan", "RecursiveSkeletons",
-              "SimpleSkin", "BrainStem", "Fox", "Duck", "ToyCar",
-              "CesiumMilkTruck", "SimpleInstancing", "AlphaBlendModeTest",
-              "MetalRoughSpheres", "LightsPunctualLamp", "LightVisibility",
+              "BrainStem", "Fox", "Duck", "ToyCar", "CesiumMilkTruck",
+              "SimpleInstancing", "AlphaBlendModeTest", "BoxTextured",
+              "LightsPunctualLamp", "LightVisibility", "MorphStressTest",
               "AnimatedMorphCube", "AnimatedColorsCube", "BoxAnimated",
-              "CubeVisibility", "FlightHelmet", "WaterBottle", "ClearCoatCarPaint"
+              "CubeVisibility", "DamagedHelmet", "BoxVertexColors",
+              "ClearCoatCarPaint"
           ]
           maximum = 8_000_000
           errors = []
