@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="Modéliseur 3D V5.9.9"
+            android:text="Modéliseur 3D V5.9.10"
             android:textColor="@color/text_primary"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Choisis une reconstruction ou ouvre le catalogue de plus de 150 assets."
+            android:text="Choisis une reconstruction ou ouvre le catalogue de 259 assets exportables."
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
 
@@ -63,7 +63,7 @@
             android:layout_marginTop="14dp"
             android:backgroundTint="@color/launcher_background"
             android:gravity="center"
-            android:text="Assets 3D disponibles\n150+ modèles • section Animés"
+            android:text="Assets 3D disponibles\n259 modèles • ouverture + export"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
