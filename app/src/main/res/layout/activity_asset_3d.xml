@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Plus de 150 GLB libres : personnages, animaux, créatures fantastiques, véhicules, routes, sols, murs, bâtiments, montagnes, nature, eau et objets. La section Animés regroupe tous les modèles contenant une animation. La majorité est créée hors ligne sur le téléphone sous licence CC0 ; les modèles officiels restants viennent de Khronos. Aucun fichier ne peut dépasser 8 Mo."
+        android:text="259 GLB libres : personnages, animaux, créatures fantastiques, véhicules, routes, murs, ports, nourriture, magie, mobilier, montagnes, eau et objets. Chaque modèle possède maintenant un bouton Exporter le GLB pour choisir son dossier et son nom de fichier. La section Animés regroupe tous les modèles contenant une animation. Aucun fichier ne peut dépasser 8 Mo."
         android:textColor="@color/text_secondary"
         android:textSize="13sp" />
 
