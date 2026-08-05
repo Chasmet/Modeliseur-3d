@@ -39,18 +39,27 @@
         android:textColor="@color/text_secondary"
         android:textSize="11sp" />
 
-    <LinearLayout
+    <Button
+        android:id="@+id/assetDownloadButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:text="Créer ou télécharger"
+        android:textAllCaps="false"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
         android:orientation="horizontal">
 
         <Button
-            android:id="@+id/assetDownloadButton"
+            android:id="@+id/assetExportButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="2"
-            android:text="Télécharger"
+            android:text="Exporter le GLB"
             android:textAllCaps="false"
             android:textStyle="bold" />
 
