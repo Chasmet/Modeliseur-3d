@@ -59,7 +59,8 @@ public final class Asset3DDownloader {
             if (status < 200 || status >= 300) {
                 throw new IOException("Serveur asset indisponible : HTTP " + status);
             }
-            long announced = connection.getContentLengthLong();
+            int announcedInt = connection.getContentLength();
+            long announced = announcedInt < 0 ? -1L : announcedInt;
             if (announced > MAXIMUM_ASSET_BYTES) {
                 throw new IOException("Asset refusé : plus de 8 Mo");
             }
