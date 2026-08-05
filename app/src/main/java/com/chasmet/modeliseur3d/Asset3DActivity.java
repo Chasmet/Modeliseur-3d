@@ -13,6 +13,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
@@ -22,15 +24,29 @@ import com.chasmet.modeliseur3d.assets.Asset3DCatalog;
 import com.chasmet.modeliseur3d.assets.Asset3DDownloader;
 import com.chasmet.modeliseur3d.assets.Asset3DItem;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.Normalizer;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Troisième onglet : catalogue d'assets GLB libres et prêts à utiliser. */
+/** Troisième onglet : catalogue d'assets GLB libres, ouvrables et exportables. */
 public final class Asset3DActivity extends AppCompatActivity
         implements Asset3DAdapter.ActionListener {
+    private static final int COPY_BUFFER_SIZE = 64 * 1024;
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ActivityResultLauncher<String> exportDocumentLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.CreateDocument("model/gltf-binary"),
+                    this::onExportDocumentSelected
+            );
 
     private Spinner categorySpinner;
     private ListView list;
@@ -38,6 +54,8 @@ public final class Asset3DActivity extends AppCompatActivity
     private TextView status;
     private Asset3DAdapter adapter;
     private boolean busy;
+    private File pendingExportFile;
+    private Asset3DItem pendingExportItem;
 
     @Override
     protected void onCreate(@Nullable Bundle state) {
@@ -83,10 +101,10 @@ public final class Asset3DActivity extends AppCompatActivity
             status.setText(items.size()
                     + " assets libres • " + Asset3DCatalog.countAnimated()
                     + " animés • " + Asset3DCatalog.countGenerated()
-                    + " générés hors ligne • maximum 8 Mo");
+                    + " générés hors ligne • ouvrir ou exporter en GLB");
         } else {
             status.setText(items.size() + " assets dans « " + category
-                    + " » • génération locale ou téléchargement direct");
+                    + " » • bouton Exporter disponible sur chaque modèle");
         }
     }
 
@@ -104,7 +122,24 @@ public final class Asset3DActivity extends AppCompatActivity
         } catch (Exception ignored) {
             // L'opération affichera une erreur plus précise si le stockage manque.
         }
-        prepare(item);
+        prepare(item, NextAction.OPEN);
+    }
+
+    @Override
+    public void onExport(Asset3DItem item) {
+        if (busy) {
+            return;
+        }
+        try {
+            File existing = Asset3DDownloader.fileFor(this, item);
+            if (Asset3DDownloader.isDownloaded(this, item)) {
+                beginExport(existing, item);
+                return;
+            }
+        } catch (Exception ignored) {
+            // La préparation affichera une erreur détaillée.
+        }
+        prepare(item, NextAction.EXPORT);
     }
 
     @Override
@@ -129,7 +164,7 @@ public final class Asset3DActivity extends AppCompatActivity
         }
     }
 
-    private void prepare(Asset3DItem item) {
+    private void prepare(Asset3DItem item, NextAction nextAction) {
         String start = item.isGenerated()
                 ? "Création locale de " + item.getName() + "…"
                 : "Téléchargement de " + item.getName() + "…";
@@ -156,12 +191,15 @@ public final class Asset3DActivity extends AppCompatActivity
                 runOnUiThread(() -> {
                     String verb = item.isGenerated() ? "généré" : "téléchargé";
                     setBusy(false, item.getName() + " " + verb + " : "
-                            + Asset3DDownloader.formatBytes(file.length())
-                            + " • licence enregistrée dans le même dossier.");
+                            + Asset3DDownloader.formatBytes(file.length()));
                     if (adapter != null) {
                         adapter.notifyDataSetChanged();
                     }
-                    openAsset(file, item);
+                    if (nextAction == NextAction.EXPORT) {
+                        beginExport(file, item);
+                    } else {
+                        openAsset(file, item);
+                    }
                 });
             } catch (Exception error) {
                 runOnUiThread(() -> {
@@ -177,6 +215,92 @@ public final class Asset3DActivity extends AppCompatActivity
                 });
             }
         });
+    }
+
+    private void beginExport(File file, Asset3DItem item) {
+        if (file == null || !file.isFile()) {
+            Toast.makeText(this, "Le GLB à exporter est introuvable.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        pendingExportFile = file;
+        pendingExportItem = item;
+        status.setText("Choisis le dossier et le nom du fichier GLB…");
+        exportDocumentLauncher.launch(exportFileName(item));
+    }
+
+    private void onExportDocumentSelected(Uri destination) {
+        if (destination == null) {
+            pendingExportFile = null;
+            pendingExportItem = null;
+            if (status != null) {
+                status.setText("Export annulé. Le GLB reste disponible dans l'application.");
+            }
+            return;
+        }
+        File source = pendingExportFile;
+        Asset3DItem item = pendingExportItem;
+        pendingExportFile = null;
+        pendingExportItem = null;
+        if (source == null || item == null || !source.isFile()) {
+            Toast.makeText(this, "Le fichier source n'est plus disponible.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        setBusy(true, "Export de " + item.getName() + "…");
+        worker.execute(() -> {
+            try {
+                copyToDocument(source, destination);
+                runOnUiThread(() -> {
+                    setBusy(false, item.getName() + " exporté en GLB • "
+                            + Asset3DDownloader.formatBytes(source.length()));
+                    Toast.makeText(
+                            this,
+                            "GLB exporté avec succès.",
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    String detail = error.getMessage() == null
+                            ? "écriture impossible"
+                            : error.getMessage();
+                    setBusy(false, "Export impossible : " + detail);
+                    Toast.makeText(
+                            this,
+                            "Le GLB n'a pas été exporté : " + detail,
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            }
+        });
+    }
+
+    private void copyToDocument(File source, Uri destination) throws IOException {
+        OutputStream rawOutput = getContentResolver().openOutputStream(destination, "w");
+        if (rawOutput == null) {
+            throw new IOException("Le dossier choisi refuse l'écriture");
+        }
+        try (InputStream input = new BufferedInputStream(new FileInputStream(source));
+             OutputStream output = new BufferedOutputStream(rawOutput)) {
+            byte[] buffer = new byte[COPY_BUFFER_SIZE];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+            output.flush();
+        }
+    }
+
+    private static String exportFileName(Asset3DItem item) {
+        String normalized = Normalizer.normalize(
+                item.getName(),
+                Normalizer.Form.NFD
+        ).replaceAll("\\p{M}+", "");
+        String safe = normalized.replaceAll("[^A-Za-z0-9_-]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (safe.isEmpty()) {
+            safe = item.getId();
+        }
+        return safe + ".glb";
     }
 
     private void openAsset(File file, Asset3DItem item) {
@@ -220,5 +344,10 @@ public final class Asset3DActivity extends AppCompatActivity
     protected void onDestroy() {
         worker.shutdownNow();
         super.onDestroy();
+    }
+
+    private enum NextAction {
+        OPEN,
+        EXPORT
     }
 }
