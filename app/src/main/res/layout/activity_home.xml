@@ -1,54 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="22dp">
+    android:fillViewport="true">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="Modéliseur 3D V5.9.7"
-        android:textColor="@color/text_primary"
-        android:textSize="30sp"
-        android:textStyle="bold" />
+        android:orientation="vertical"
+        android:padding="22dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:gravity="center"
-        android:text="Choisis le type de reconstruction à utiliser."
-        android:textColor="@color/text_secondary"
-        android:textSize="15sp" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Modéliseur 3D V5.9.8"
+            android:textColor="@color/text_primary"
+            android:textSize="30sp"
+            android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/mode25dButton"
-        android:layout_width="match_parent"
-        android:layout_height="132dp"
-        android:layout_marginTop="34dp"
-        android:backgroundTint="@color/launcher_background"
-        android:gravity="center"
-        android:text="2.5D\nFace + Dos"
-        android:textAllCaps="false"
-        android:textColor="#FFFFFF"
-        android:textSize="24sp"
-        android:textStyle="bold" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="Choisis une reconstruction ou ouvre le catalogue d’assets."
+            android:textColor="@color/text_secondary"
+            android:textSize="15sp" />
 
-    <Button
-        android:id="@+id/mode3dButton"
-        android:layout_width="match_parent"
-        android:layout_height="132dp"
-        android:layout_marginTop="16dp"
-        android:backgroundTint="@color/viewer_background"
-        android:gravity="center"
-        android:text="3D anatomique\nMembres affinés + GLB propre"
-        android:textAllCaps="false"
-        android:textColor="#FFFFFF"
-        android:textSize="21sp"
-        android:textStyle="bold" />
+        <Button
+            android:id="@+id/mode25dButton"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="26dp"
+            android:backgroundTint="@color/launcher_background"
+            android:gravity="center"
+            android:text="2.5D\nFace + Dos"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="23sp"
+            android:textStyle="bold" />
 
-</LinearLayout>
+        <Button
+            android:id="@+id/mode3dButton"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="14dp"
+            android:backgroundTint="@color/viewer_background"
+            android:gravity="center"
+            android:text="3D anatomique\nMembres affinés + GLB propre"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/assets3dButton"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="14dp"
+            android:backgroundTint="@color/launcher_background"
+            android:gravity="center"
+            android:text="Assets 3D disponibles\nPersonnages • véhicules • mondes"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</ScrollView>

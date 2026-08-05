@@ -6,7 +6,7 @@ import android.os.Bundle;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-/** Écran d'accueil volontairement limité aux deux modes de reconstruction. */
+/** Accueil des deux moteurs de reconstruction et du catalogue d'assets 3D. */
 public final class HomeActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -18,6 +18,9 @@ public final class HomeActivity extends AppCompatActivity {
         );
         findViewById(R.id.mode3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Manual3DActivity.class))
+        );
+        findViewById(R.id.assets3dButton).setOnClickListener(view ->
+                startActivity(new Intent(this, Asset3DActivity.class))
         );
     }
 }

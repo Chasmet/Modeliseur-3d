@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9.7 — Volume anatomique"
+        android:text="3D locale V5.9.8 — Profils manuels"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le placement stable V5.9.5 est conservé. La profondeur est maintenant calculée localement pour affiner les bras, les jambes, les cheveux et les accessoires sans déplacer le personnage. L’export GLB reste complet et sans compression. Le moteur 2.5D reste inchangé."
+        android:text="Le volume anatomique et l’export GLB propre sont conservés. Les profils droit et gauche peuvent maintenant être tournés ou mis en miroir manuellement, avec l’état affiché directement."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage, même pose et corps entier sur les quatre images. Les profils horizontaux sont automatiquement redressés à 90°."
+                android:text="Même personnage et corps entier sur les quatre images. Utilise les boutons sous les profils jusqu’à voir le personnage debout et orienté dans le bon sens."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -181,10 +181,110 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Réglage manuel du profil droit"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/rightRotateLeftButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="-90°"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/rightRotateRightButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:text="+90°"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/rightMirrorButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:text="Miroir"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/rightTransformStateText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Rotation 0° • NORMAL"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
+                android:text="Réglage manuel du profil gauche"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/leftRotateLeftButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="-90°"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/leftRotateRightButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:text="+90°"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/leftMirrorButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:text="Miroir"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/leftTransformStateText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Rotation 0° • NORMAL"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/bg_manual_help"
                 android:padding="9dp"
-                android:text="La V5.9.7 conserve le torse stable, réduit l’effet gonflé sur les membres, protège l’espace entre les jambes et retire les petits fragments parasites. Aucun voxel n’est ajouté hors des quatre silhouettes."
+                android:text="La rotation et le miroir visibles dans l’aperçu sont appliqués aux images avant la validation et avant la reconstruction 3D."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -305,7 +405,7 @@
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="GLB anatomique"
+                android:text="GLB original"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
