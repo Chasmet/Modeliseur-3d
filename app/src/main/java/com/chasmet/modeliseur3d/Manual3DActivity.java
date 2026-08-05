@@ -22,6 +22,7 @@ import androidx.core.content.FileProvider;
 
 import com.chasmet.modeliseur3d.gl.ModelGLSurfaceViewV52;
 import com.chasmet.modeliseur3d.model.Fast3DGlbExporter;
+import com.chasmet.modeliseur3d.model.ManualProfileTransformer;
 import com.chasmet.modeliseur3d.model.MeshData;
 import com.chasmet.modeliseur3d.model.QuickFourViewValidator;
 import com.chasmet.modeliseur3d.model.StylizedCharacter3DEngine;
@@ -36,10 +37,12 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V5.9.2. Le mode 2.5D reste séparé et inchangé. */
+/** Mode 3D V5.9.8 avec rotation et miroir manuels des deux profils. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
+    private static final int RIGHT_PROFILE = 1;
+    private static final int LEFT_PROFILE = 3;
     private static final int[] REQUESTS = {5921, 5922, 5923, 5924};
     private static final int[] CARDS = {
             R.id.frontCard,
@@ -70,6 +73,8 @@ public final class Manual3DActivity extends AppCompatActivity {
     private final Uri[] uris = new Uri[4];
     private final ImageView[] previews = new ImageView[4];
     private final TextView[] labels = new TextView[4];
+    private final int[] manualRotations = new int[4];
+    private final boolean[] manualMirrors = new boolean[4];
 
     private DevicePerformanceProfile profile;
     private ProcessingPowerLock powerLock;
@@ -79,6 +84,8 @@ public final class Manual3DActivity extends AppCompatActivity {
     private View viewerPanel;
     private TextView depthText;
     private TextView status;
+    private TextView rightTransformState;
+    private TextView leftTransformState;
     private ProgressBar progress;
     private SeekBar depth;
     private Button clear;
@@ -87,6 +94,12 @@ public final class Manual3DActivity extends AppCompatActivity {
     private Button reset;
     private Button rotation;
     private Button export;
+    private Button rightRotateLeft;
+    private Button rightRotateRight;
+    private Button rightMirror;
+    private Button leftRotateLeft;
+    private Button leftRotateRight;
+    private Button leftMirror;
     private MeshData mesh;
     private Bitmap texture;
     private Fast3DGlbExporter.PreparedExport preparedExport;
@@ -116,12 +129,30 @@ public final class Manual3DActivity extends AppCompatActivity {
         reset = findViewById(R.id.reset3dButton);
         rotation = findViewById(R.id.rotation3dButton);
         export = findViewById(R.id.export3dButton);
+
+        rightRotateLeft = findViewById(R.id.rightRotateLeftButton);
+        rightRotateRight = findViewById(R.id.rightRotateRightButton);
+        rightMirror = findViewById(R.id.rightMirrorButton);
+        rightTransformState = findViewById(R.id.rightTransformStateText);
+        leftRotateLeft = findViewById(R.id.leftRotateLeftButton);
+        leftRotateRight = findViewById(R.id.leftRotateRightButton);
+        leftMirror = findViewById(R.id.leftMirrorButton);
+        leftTransformState = findViewById(R.id.leftTransformStateText);
+
         for (int index = 0; index < 4; index++) {
             previews[index] = findViewById(PREVIEWS[index]);
             labels[index] = findViewById(LABELS[index]);
             final int slot = index;
             findViewById(CARDS[index]).setOnClickListener(view -> choose(slot));
         }
+
+        rightRotateLeft.setOnClickListener(view -> rotateProfile(RIGHT_PROFILE, -90));
+        rightRotateRight.setOnClickListener(view -> rotateProfile(RIGHT_PROFILE, 90));
+        rightMirror.setOnClickListener(view -> toggleProfileMirror(RIGHT_PROFILE));
+        leftRotateLeft.setOnClickListener(view -> rotateProfile(LEFT_PROFILE, -90));
+        leftRotateRight.setOnClickListener(view -> rotateProfile(LEFT_PROFILE, 90));
+        leftMirror.setOnClickListener(view -> toggleProfileMirror(LEFT_PROFILE));
+
         FrameLayout container = findViewById(R.id.viewer3dContainer);
         viewer = new ModelGLSurfaceViewV52(this);
         container.addView(viewer, new FrameLayout.LayoutParams(-1, -1));
@@ -157,6 +188,7 @@ public final class Manual3DActivity extends AppCompatActivity {
             }
         });
         updateDepth();
+        refreshManualTransformUi();
         updateSelection();
     }
 
@@ -203,10 +235,16 @@ public final class Manual3DActivity extends AppCompatActivity {
             // Certains fournisseurs conservent uniquement une permission temporaire.
         }
         uris[slot] = uri;
+        manualRotations[slot] = 0;
+        manualMirrors[slot] = false;
         previews[slot].setImageURI(uri);
-        labels[slot].setText(NAMES[slot] + " ✓ — à contrôler");
+        applyPreviewTransform(slot);
+        labels[slot].setText(isProfile(slot)
+                ? profileLabel(slot, "✓ — à contrôler")
+                : NAMES[slot] + " ✓ — à contrôler");
         validationReady = false;
         validationSequence++;
+        refreshManualTransformUi();
         updateSelection();
         if (selected() == 4) {
             runQuickValidation(validationSequence);
@@ -222,6 +260,74 @@ public final class Manual3DActivity extends AppCompatActivity {
         return -1;
     }
 
+    private static boolean isProfile(int slot) {
+        return slot == RIGHT_PROFILE || slot == LEFT_PROFILE;
+    }
+
+    private void rotateProfile(int slot, int delta) {
+        if (busy || uris[slot] == null) {
+            return;
+        }
+        manualRotations[slot] = ManualProfileTransformer.normalizeRotation(
+                manualRotations[slot] + delta
+        );
+        profileTransformChanged(slot);
+    }
+
+    private void toggleProfileMirror(int slot) {
+        if (busy || uris[slot] == null) {
+            return;
+        }
+        manualMirrors[slot] = !manualMirrors[slot];
+        profileTransformChanged(slot);
+    }
+
+    private void profileTransformChanged(int slot) {
+        validationSequence++;
+        validationReady = false;
+        applyPreviewTransform(slot);
+        labels[slot].setText(profileLabel(slot, "✓ — réglage manuel"));
+        refreshManualTransformUi();
+        updateSelection();
+        if (selected() == 4) {
+            runQuickValidation(validationSequence);
+        }
+    }
+
+    private void applyPreviewTransform(int slot) {
+        previews[slot].setRotation(manualRotations[slot]);
+        previews[slot].setScaleX(manualMirrors[slot] ? -1.0f : 1.0f);
+        previews[slot].setScaleY(1.0f);
+    }
+
+    private void refreshManualTransformUi() {
+        rightTransformState.setText(ManualProfileTransformer.stateLabel(
+                manualRotations[RIGHT_PROFILE],
+                manualMirrors[RIGHT_PROFILE]
+        ));
+        leftTransformState.setText(ManualProfileTransformer.stateLabel(
+                manualRotations[LEFT_PROFILE],
+                manualMirrors[LEFT_PROFILE]
+        ));
+        rightMirror.setText(manualMirrors[RIGHT_PROFILE] ? "Miroir ✓" : "Miroir");
+        leftMirror.setText(manualMirrors[LEFT_PROFILE] ? "Miroir ✓" : "Miroir");
+
+        boolean rightEnabled = !busy && uris[RIGHT_PROFILE] != null;
+        boolean leftEnabled = !busy && uris[LEFT_PROFILE] != null;
+        rightRotateLeft.setEnabled(rightEnabled);
+        rightRotateRight.setEnabled(rightEnabled);
+        rightMirror.setEnabled(rightEnabled);
+        leftRotateLeft.setEnabled(leftEnabled);
+        leftRotateRight.setEnabled(leftEnabled);
+        leftMirror.setEnabled(leftEnabled);
+    }
+
+    private String profileLabel(int slot, String state) {
+        return NAMES[slot] + " " + state + " • R"
+                + ManualProfileTransformer.normalizeRotation(manualRotations[slot])
+                + "°" + (manualMirrors[slot] ? " • MIROIR" : "");
+    }
+
     private int selected() {
         int count = 0;
         for (Uri uri : uris) {
@@ -235,11 +341,12 @@ public final class Manual3DActivity extends AppCompatActivity {
     private void updateSelection() {
         int count = selected();
         generate.setEnabled(!busy && count == 4 && validationReady);
+        refreshManualTransformUi();
         if (!busy) {
             if (count < 4) {
                 status.setText("Vues réelles : " + count + "/4");
             } else if (!validationReady) {
-                status.setText("Analyse automatique des orientations…");
+                status.setText("Analyse des orientations manuelles et automatiques…");
             } else {
                 status.setText("Quatre vues contrôlées — génération prête.");
             }
@@ -249,6 +356,8 @@ public final class Manual3DActivity extends AppCompatActivity {
     private void runQuickValidation(int sequence) {
         setBusy(true, "Contrôle face, dos, droite et gauche…");
         Uri[] selectedUris = uris.clone();
+        int[] rotations = manualRotations.clone();
+        boolean[] mirrors = manualMirrors.clone();
         worker.execute(() -> {
             List<Bitmap> images = new ArrayList<>(4);
             try {
@@ -256,11 +365,13 @@ public final class Manual3DActivity extends AppCompatActivity {
                         QUICK_ANALYSIS_SIDE,
                         profile.getMaximumInputSide()
                 );
-                for (Uri uri : selectedUris) {
-                    images.add(BitmapUtils.decodeBitmapFromUri(
-                            getContentResolver(),
-                            uri,
-                            side
+                for (int index = 0; index < selectedUris.length; index++) {
+                    images.add(decodeTransformed(
+                            selectedUris[index],
+                            index,
+                            side,
+                            rotations,
+                            mirrors
                     ));
                 }
                 QuickFourViewValidator.Result result =
@@ -272,7 +383,7 @@ public final class Manual3DActivity extends AppCompatActivity {
                         return;
                     }
                     validationReady = false;
-                    setBusy(false, "Contrôle impossible : remplace la vue incorrecte.");
+                    setBusy(false, "Contrôle impossible : remplace ou tourne la vue incorrecte.");
                     Toast.makeText(
                             this,
                             error.getMessage() == null
@@ -289,6 +400,32 @@ public final class Manual3DActivity extends AppCompatActivity {
         });
     }
 
+    private Bitmap decodeTransformed(
+            Uri uri,
+            int slot,
+            int maximumSide,
+            int[] rotations,
+            boolean[] mirrors
+    ) throws Exception {
+        Bitmap decoded = BitmapUtils.decodeBitmapFromUri(
+                getContentResolver(),
+                uri,
+                maximumSide
+        );
+        if (!isProfile(slot)) {
+            return decoded;
+        }
+        Bitmap transformed = ManualProfileTransformer.apply(
+                decoded,
+                rotations[slot],
+                mirrors[slot]
+        );
+        if (transformed != decoded) {
+            recycle(decoded);
+        }
+        return transformed;
+    }
+
     private void applyValidation(
             int sequence,
             QuickFourViewValidator.Result result
@@ -302,15 +439,17 @@ public final class Manual3DActivity extends AppCompatActivity {
         labels[2].setText(result.hasFaceBackWarning()
                 ? "DOS ⚠ à vérifier"
                 : "DOS ✓");
-        labels[1].setText(result.hasProfileWarning()
-                ? "PROFIL DROIT ⚠"
-                : "PROFIL DROIT ✓");
+        labels[1].setText(profileLabel(
+                RIGHT_PROFILE,
+                result.hasProfileWarning() ? "⚠" : "✓"
+        ));
         if (result.hasMirrorCorrection()) {
-            labels[3].setText("PROFIL GAUCHE ⚠ MIROIR AUTO");
+            labels[3].setText(profileLabel(LEFT_PROFILE, "⚠ MIROIR AUTO"));
         } else {
-            labels[3].setText(result.hasProfileWarning()
-                    ? "PROFIL GAUCHE ⚠"
-                    : "PROFIL GAUCHE ✓");
+            labels[3].setText(profileLabel(
+                    LEFT_PROFILE,
+                    result.hasProfileWarning() ? "⚠" : "✓"
+            ));
         }
         validationReady = true;
         setBusy(false, result.getMessage() + " Cohérence "
@@ -325,9 +464,13 @@ public final class Manual3DActivity extends AppCompatActivity {
         validationReady = false;
         for (int index = 0; index < 4; index++) {
             uris[index] = null;
+            manualRotations[index] = 0;
+            manualMirrors[index] = false;
             previews[index].setImageDrawable(null);
+            applyPreviewTransform(index);
             labels[index].setText(NAMES[index]);
         }
+        refreshManualTransformUi();
         updateSelection();
     }
 
@@ -353,20 +496,24 @@ public final class Manual3DActivity extends AppCompatActivity {
             return;
         }
         invalidatePreparedExport();
-        setBusy(true, "Lecture des quatre vues…");
+        setBusy(true, "Lecture des quatre vues et réglages manuels…");
         viewer.stopAutoRotation();
         Uri[] selectedUris = uris.clone();
+        int[] rotations = manualRotations.clone();
+        boolean[] mirrors = manualMirrors.clone();
         float depthValue = depthMultiplier();
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
             List<Bitmap> images = new ArrayList<>(4);
             try {
                 int side = Math.min(MAX_SIDE, profile.getMaximumInputSide());
-                for (Uri uri : selectedUris) {
-                    images.add(BitmapUtils.decodeBitmapFromUri(
-                            getContentResolver(),
-                            uri,
-                            side
+                for (int index = 0; index < selectedUris.length; index++) {
+                    images.add(decodeTransformed(
+                            selectedUris[index],
+                            index,
+                            side,
+                            rotations,
+                            mirrors
                     ));
                 }
                 StylizedCharacter3DEngine.Result result = engine.generate(
@@ -396,13 +543,13 @@ public final class Manual3DActivity extends AppCompatActivity {
                 text = "Détourage " + current + "/" + total + "…";
                 break;
             case ANALYSING:
-                text = "Auto-correction des profils et des proportions…";
+                text = "Auto-correction après réglages manuels…";
                 break;
             case CLEANING:
                 text = "Séparation des membres et accessoires…";
                 break;
             case BUILDING_HULL:
-                text = "Construction du volume adaptatif…";
+                text = "Construction du volume anatomique…";
                 break;
             default:
                 text = "Création du maillage et des textures…";
@@ -574,7 +721,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.2 qualité");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.8 qualité");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
         status.setText(modelSummary + " • partage GLB qualité instantané : "
@@ -615,10 +762,11 @@ public final class Manual3DActivity extends AppCompatActivity {
         for (int id : CARDS) {
             findViewById(id).setEnabled(!value);
         }
+        refreshManualTransformUi();
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v592");
+                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v598");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
