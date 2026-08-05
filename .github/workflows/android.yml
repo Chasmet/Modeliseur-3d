@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v598-assets-profils-isnet-fp32-6a92a19a
+          key: modeliseur-v599-160-assets-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -82,27 +82,33 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.9.8
+      - name: Vérifier l'architecture V5.9.9
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Asset3DActivity" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.8'" app/build.gradle
-          grep -q "versionCode 33" app/build.gradle
-          grep -q "assets3dButton" app/src/main/res/layout/activity_home.xml
+          grep -q "Modéliseur 3D V5.9.9" app/src/main/AndroidManifest.xml
+          grep -q "versionName '5.9.9'" app/build.gradle
+          grep -q "versionCode 34" app/build.gradle
+          grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'FANTASY = "Animaux fantastiques"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'ROADS = "Routes et sols"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'WALLS = "Murs et bâtiments"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'NATURE = "Montagnes et nature"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'WATER = "Eau et mer"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q "class ProceduralAsset3DGenerator" app/src/main/java/com/chasmet/modeliseur3d/assets/ProceduralAsset3DGenerator.java
+          grep -q "generated://" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q "KHR_materials_unlit" app/src/main/java/com/chasmet/modeliseur3d/assets/ProceduralAsset3DGenerator.java
+          grep -q "Animation légère" app/src/main/java/com/chasmet/modeliseur3d/assets/ProceduralAsset3DGenerator.java
           grep -q "MAXIMUM_ASSET_BYTES = 8_000_000L" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
+          grep -q "ProceduralAsset3DGenerator.write" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
           grep -q "ManualProfileTransformer.apply" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "rightRotateLeftButton" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "rightMirrorButton" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "leftRotateRightButton" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "leftMirrorButton" app/src/main/res/layout/activity_manual_3d.xml
           grep -q "HumanoidVolumeRefiner.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
 
-      - name: Vérifier les 22 GLB officiels sous 8 Mo
+      - name: Vérifier les GLB officiels libres sous 8 Mo
         shell: bash
         run: |
           python3 - <<'PY'
@@ -110,13 +116,10 @@ jobs:
           import urllib.request
 
           models = [
-              "RiggedSimple", "RiggedFigure", "CesiumMan", "RecursiveSkeletons",
-              "BrainStem", "Fox", "Duck", "ToyCar", "CesiumMilkTruck",
-              "SimpleInstancing", "AlphaBlendModeTest", "BoxTextured",
-              "LightsPunctualLamp", "LightVisibility", "MorphStressTest",
-              "AnimatedMorphCube", "AnimatedColorsCube", "BoxAnimated",
-              "CubeVisibility", "DamagedHelmet", "BoxVertexColors",
-              "ClearCoatCarPaint"
+              "RiggedSimple", "RiggedFigure", "RecursiveSkeletons", "Fox",
+              "ToyCar", "SimpleInstancing", "AlphaBlendModeTest",
+              "AnimatedColorsCube", "BoxAnimated", "CubeVisibility",
+              "BoxVertexColors", "ClearCoatCarPaint"
           ]
           maximum = 8_000_000
           errors = []
@@ -126,7 +129,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/5.9.8",
+                  "User-Agent": "Modeliseur3D-CI/5.9.9",
                   "Accept": "application/vnd.github+json"
               })
               try:
@@ -140,7 +143,7 @@ jobs:
                   errors.append(f"{model} inaccessible ({error})")
           if errors:
               raise SystemExit("\n".join(errors))
-          print(f"{len(models)} assets vérifiés sous 8 Mo.")
+          print(f"{len(models)} GLB officiels vérifiés sous 8 Mo.")
           PY
 
       - name: Tester le catalogue et la reconstruction
@@ -192,10 +195,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V5.9.8
+      - name: Publier l'APK V5.9.9
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.8-Assets-3D-Profils-Manuels-debug
+          name: Modeliseur-V5.9.9-159-Assets-92-Animes-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
