@@ -124,7 +124,7 @@ jobs:
           import urllib.request
 
           models = [
-              "RiggedSimple", "RiggedFigure", "Corset", "RecursiveSkeletons",
+              "RiggedSimple", "RiggedFigure", "CesiumMan", "RecursiveSkeletons",
               "Fox", "BarramundiFish", "ToyCar", "CarConcept",
               "MultipleScenes", "SimpleInstancing", "ABeautifulGame",
               "DirectionalLight", "DiffuseTransmissionPlant", "AnimatedCube",
@@ -133,6 +133,7 @@ jobs:
               "ClearcoatWicker", "DiffuseTransmissionTeacup"
           ]
           maximum = 8_000_000
+          oversized = []
           for model in models:
               url = (
                   "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/"
@@ -147,7 +148,9 @@ jobs:
               size = int(metadata["size"])
               print(f"{model}: {size} octets")
               if size > maximum:
-                  raise SystemExit(f"{model} dépasse 8 Mo: {size}")
+                  oversized.append((model, size))
+          if oversized:
+              raise SystemExit("Assets au-dessus de 8 Mo : " + str(oversized))
           PY
 
       - name: Tester le catalogue d'assets
