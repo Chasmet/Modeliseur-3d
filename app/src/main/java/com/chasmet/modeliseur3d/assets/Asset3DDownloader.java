@@ -16,7 +16,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-/** Téléchargement direct et sécurisé des assets du catalogue. */
+/** Téléchargement ou génération sécurisée des assets du catalogue. */
 public final class Asset3DDownloader {
     public static final long MAXIMUM_ASSET_BYTES = 8_000_000L;
     private static final int BUFFER_SIZE = 64 * 1024;
@@ -53,6 +53,53 @@ public final class Asset3DDownloader {
         deleteQuietly(temporary);
         deleteQuietly(output);
 
+        if (ProceduralAsset3DGenerator.supports(item)) {
+            return generateLocal(item, output, temporary, listener);
+        }
+        return downloadRemote(item, output, temporary, listener);
+    }
+
+    private static File generateLocal(
+            Asset3DItem item,
+            File output,
+            File temporary,
+            ProgressListener listener
+    ) throws IOException {
+        try {
+            if (listener != null) {
+                listener.onProgress(0L, 1L);
+            }
+            ProceduralAsset3DGenerator.write(temporary, item);
+            if (temporary.length() > MAXIMUM_ASSET_BYTES) {
+                throw new IOException("Asset généré refusé : plus de 8 Mo");
+            }
+            if (!isValidGlb(temporary)) {
+                throw new IOException("Le générateur local a produit un GLB invalide");
+            }
+            if (!temporary.renameTo(output)) {
+                throw new IOException("Impossible de finaliser l'asset généré");
+            }
+            writeLicenseFile(output.getParentFile(), item);
+            if (listener != null) {
+                listener.onProgress(output.length(), output.length());
+            }
+            return output;
+        } catch (IOException | RuntimeException error) {
+            deleteQuietly(temporary);
+            deleteQuietly(output);
+            if (error instanceof IOException) {
+                throw (IOException) error;
+            }
+            throw new IOException(error.getMessage(), error);
+        }
+    }
+
+    private static File downloadRemote(
+            Asset3DItem item,
+            File output,
+            File temporary,
+            ProgressListener listener
+    ) throws IOException {
         HttpURLConnection connection = open(item.getDownloadUrl());
         try {
             int status = connection.getResponseCode();
@@ -120,7 +167,7 @@ public final class Asset3DDownloader {
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(20_000);
             connection.setReadTimeout(45_000);
-            connection.setRequestProperty("User-Agent", "Modeliseur3D-Android/5.9.8");
+            connection.setRequestProperty("User-Agent", "Modeliseur3D-Android/5.9.9");
             connection.setRequestProperty("Accept", "model/gltf-binary,application/octet-stream,*/*");
             int status = connection.getResponseCode();
             if (status == HttpURLConnection.HTTP_MOVED_PERM
@@ -141,7 +188,7 @@ public final class Asset3DDownloader {
         throw new IOException("Trop de redirections pendant le téléchargement");
     }
 
-    private static boolean isValidGlb(File file) {
+    static boolean isValidGlb(File file) {
         if (file == null || !file.isFile() || file.length() < 20L
                 || file.length() > MAXIMUM_ASSET_BYTES) {
             return false;
@@ -179,12 +226,19 @@ public final class Asset3DDownloader {
     private static void writeLicenseFile(File directory, Asset3DItem item)
             throws IOException {
         File license = new File(directory, item.getId() + "_LICENCE.txt");
+        String source = item.isGenerated()
+                ? "Générateur local intégré à Modéliseur 3D"
+                : item.getSourceUrl();
+        String action = item.isGenerated()
+                ? "Généré localement"
+                : "Téléchargé depuis la source officielle";
         String text = "Asset : " + item.getName() + "\n"
                 + "Catégorie : " + item.getCategory() + "\n"
+                + "Animation : " + (item.isAnimated() ? "oui" : "non") + "\n"
                 + "Licence : " + item.getLicense() + "\n"
                 + "Crédit : " + item.getCredit() + "\n"
-                + "Source : " + item.getSourceUrl() + "\n"
-                + "Téléchargé depuis le catalogue Modéliseur 3D V5.9.8.\n";
+                + "Source : " + source + "\n"
+                + action + " avec Modéliseur 3D V5.9.9.\n";
         try (OutputStream output = new FileOutputStream(license)) {
             output.write(text.getBytes(StandardCharsets.UTF_8));
         }
