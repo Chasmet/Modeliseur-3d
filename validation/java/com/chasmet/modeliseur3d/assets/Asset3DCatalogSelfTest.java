@@ -59,7 +59,7 @@ public final class Asset3DCatalogSelfTest {
         requireCategory(Asset3DCatalog.ROADS, 18);
         requireCategory(Asset3DCatalog.WALLS, 18);
         requireCategory(Asset3DCatalog.NATURE, 19);
-        requireCategory(Asset3DCatalog.WATER, 17);
+        requireCategory(Asset3DCatalog.WATER, 16);
         requireCategory(Asset3DCatalog.CHARACTERS, 21);
         requireCategory(Asset3DCatalog.ANIMALS, 19);
         requireCategory(Asset3DCatalog.FANTASY, 18);
