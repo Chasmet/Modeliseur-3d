@@ -8,6 +8,7 @@ public final class TextureHoleFillerSelfTest {
     public static void main(String[] args) {
         fillsTheWholeCellFromNearestColours();
         preservesForegroundRgb();
+        limitsRepeatedDetailsToTheContour();
         rejectsAnEmptyTexture();
         System.out.println("TextureHoleFillerSelfTest: OK");
     }
@@ -43,6 +44,18 @@ public final class TextureHoleFillerSelfTest {
                 "Foreground RGB must remain unchanged");
         check(pixels[1] == 0xFF123456,
                 "Transparent neighbour must inherit foreground RGB");
+    }
+
+    private static void limitsRepeatedDetailsToTheContour() {
+        int width = 9;
+        int[] pixels = new int[width];
+        pixels[0] = 0xFFFF0000;
+        pixels[1] = 0xFF0000FF;
+        TextureHoleFiller.fillLocalOpaque(pixels, width, 1, 24, 1);
+        check(pixels[2] == 0xFF0000FF,
+                "Le bord proche doit recevoir la couleur voisine");
+        check(pixels[8] == 0xFF7F007F,
+                "Le fond lointain doit recevoir une teinte moyenne, pas un détail répété");
     }
 
     private static void rejectsAnEmptyTexture() {

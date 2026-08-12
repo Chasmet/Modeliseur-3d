@@ -127,10 +127,14 @@ public final class ContinuousVisualHullSelfTest {
 
         // Conducteur étroit au-dessus d'un kart large en trois volumes.
         fill(masks[0], width, 15, 4, 24, 23);
+        fill(masks[0], width, 10, 11, 12, 18);
+        fill(masks[0], width, 27, 11, 29, 18);
         fill(masks[0], width, 3, 24, 10, 43);
         fill(masks[0], width, 12, 24, 27, 43);
         fill(masks[0], width, 29, 24, 36, 43);
         fillMirrored(masks[2], width, 15, 4, 24, 23);
+        fillMirrored(masks[2], width, 10, 11, 12, 18);
+        fillMirrored(masks[2], width, 27, 11, 29, 18);
         fillMirrored(masks[2], width, 3, 24, 10, 43);
         fillMirrored(masks[2], width, 12, 24, 27, 43);
         fillMirrored(masks[2], width, 29, 24, 36, 43);
@@ -151,10 +155,17 @@ public final class ContinuousVisualHullSelfTest {
         boolean[] occupancy = result.getOccupancy();
         int wheelDepth = depthCount(occupancy, width, depth, 6, 34);
         int chassisDepth = depthCount(occupancy, width, depth, 20, 34);
+        int armDepth = depthCount(occupancy, width, depth, 11, 15);
         if (wheelDepth < chassisDepth * 0.80f) {
             throw new AssertionError(
                     "La roue latérale est encore aplatie en feuille : "
                             + wheelDepth + "/" + chassisDepth
+            );
+        }
+        if (armDepth <= 0 || armDepth >= chassisDepth * 0.82f) {
+            throw new AssertionError(
+                    "Le bras du conducteur est encore extrudé dans tout le véhicule : "
+                            + armDepth + "/" + chassisDepth
             );
         }
     }

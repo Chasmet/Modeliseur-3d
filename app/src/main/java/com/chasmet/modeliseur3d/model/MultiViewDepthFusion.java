@@ -14,11 +14,7 @@ import java.util.Arrays;
 public final class MultiViewDepthFusion {
     private static final int VIEW_COUNT = 4;
     private static final float BASE_ISO = 0.50f;
-    private static final float MAXIMUM_INSET_FRACTION = 0.29f;
     private static final float SURFACE_TRANSITION = 0.90f;
-    private static final float MINIMUM_RETAINED_FRACTION = 0.60f;
-    private static final float MINIMUM_NEURAL_INFLUENCE = 0.68f;
-    private static final float CONFIDENCE_INFLUENCE = 0.22f;
 
     private MultiViewDepthFusion() {
     }
@@ -32,6 +28,28 @@ public final class MultiViewDepthFusion {
             int height,
             int depth
     ) {
+        return refine(
+                baseDensity,
+                masks,
+                rawDepth,
+                rawConfidence,
+                width,
+                height,
+                depth,
+                SubjectCategory.CHARACTER
+        );
+    }
+
+    public static Result refine(
+            float[] baseDensity,
+            boolean[][] masks,
+            float[][] rawDepth,
+            float[][] rawConfidence,
+            int width,
+            int height,
+            int depth,
+            SubjectCategory category
+    ) {
         validate(
                 baseDensity,
                 masks,
@@ -41,6 +59,7 @@ public final class MultiViewDepthFusion {
                 height,
                 depth
         );
+        FusionPolicy policy = FusionPolicy.forCategory(category);
         int[] viewWidths = {width, depth, width, depth};
         PreparedDepth[] views = new PreparedDepth[VIEW_COUNT];
         int validViews = 0;
@@ -91,7 +110,8 @@ public final class MultiViewDepthFusion {
                         views[StylizedFourViewProjector.FRONT],
                         frontIndex,
                         views[StylizedFourViewProjector.BACK],
-                        backIndex
+                        backIndex,
+                        policy.maximumInsetFraction
                 );
                 zSurfaces[frontIndex] = pair;
                 totalShift += pair.totalInset;
@@ -121,7 +141,8 @@ public final class MultiViewDepthFusion {
                         views[StylizedFourViewProjector.LEFT],
                         leftIndex,
                         views[StylizedFourViewProjector.RIGHT],
-                        rightIndex
+                        rightIndex,
+                        policy.maximumInsetFraction
                 );
                 xSurfaces[rightIndex] = pair;
                 totalShift += pair.totalInset;
@@ -152,7 +173,10 @@ public final class MultiViewDepthFusion {
                     float support;
                     float confidence;
                     if (zSupport.valid && xSupport.valid) {
-                        support = Math.min(zSupport.value, xSupport.value);
+                        float minimum = Math.min(zSupport.value, xSupport.value);
+                        float maximum = Math.max(zSupport.value, xSupport.value);
+                        support = minimum * (1.0f - policy.ambiguityProtection)
+                                + maximum * policy.ambiguityProtection;
                         confidence = (zSupport.confidence + xSupport.confidence) * 0.5f;
                     } else if (zSupport.valid) {
                         support = zSupport.value;
@@ -167,8 +191,8 @@ public final class MultiViewDepthFusion {
                         }
                         continue;
                     }
-                    float influence = MINIMUM_NEURAL_INFLUENCE
-                            + CONFIDENCE_INFLUENCE * clamp01(confidence);
+                    float influence = policy.minimumInfluence
+                            + policy.confidenceInfluence * clamp01(confidence);
                     float value = base * (1.0f - influence + influence * support);
                     refined[voxel] = clamp01(value);
                     if (Math.abs(refined[voxel] - base) > 0.08f) {
@@ -182,7 +206,9 @@ public final class MultiViewDepthFusion {
         }
 
         boolean collapseGuard = baseOccupied > 0
-                && refinedOccupied < Math.round(baseOccupied * MINIMUM_RETAINED_FRACTION);
+                && refinedOccupied < Math.round(
+                        baseOccupied * policy.minimumRetainedFraction
+                );
         if (collapseGuard) {
             refinedOccupied = 0;
             changed = 0;
@@ -223,10 +249,11 @@ public final class MultiViewDepthFusion {
             PreparedDepth lowView,
             int lowIndex,
             PreparedDepth highView,
-            int highIndex
+            int highIndex,
+            float maximumInsetFraction
     ) {
         float span = Math.max(1.0f, maximum - minimum);
-        float maximumInset = Math.max(0.45f, span * MAXIMUM_INSET_FRACTION);
+        float maximumInset = Math.max(0.45f, span * maximumInsetFraction);
         float lowInset = inset(lowView, lowIndex, maximumInset);
         float highInset = inset(highView, highIndex, maximumInset);
         float low = minimum + lowInset;
@@ -542,6 +569,48 @@ public final class MultiViewDepthFusion {
             this.highConfidence = highConfidence;
             this.totalInset = totalInset;
             this.shiftedCount = shiftedCount;
+        }
+    }
+
+    private static final class FusionPolicy {
+        final float maximumInsetFraction;
+        final float minimumRetainedFraction;
+        final float minimumInfluence;
+        final float confidenceInfluence;
+        final float ambiguityProtection;
+
+        FusionPolicy(
+                float maximumInsetFraction,
+                float minimumRetainedFraction,
+                float minimumInfluence,
+                float confidenceInfluence,
+                float ambiguityProtection
+        ) {
+            this.maximumInsetFraction = maximumInsetFraction;
+            this.minimumRetainedFraction = minimumRetainedFraction;
+            this.minimumInfluence = minimumInfluence;
+            this.confidenceInfluence = confidenceInfluence;
+            this.ambiguityProtection = ambiguityProtection;
+        }
+
+        static FusionPolicy forCategory(SubjectCategory category) {
+            if (category == SubjectCategory.COMPOSITE_VEHICLE) {
+                // Une profondeur unique ne sait pas associer une main, un
+                // guidon et un châssis qui se chevauchent. La fusion reste
+                // donc mesurée et mélange les deux axes au lieu de laisser
+                // une seule carte creuser toute la pièce.
+                return new FusionPolicy(0.16f, 0.78f, 0.52f, 0.16f, 0.35f);
+            }
+            if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
+                return new FusionPolicy(0.12f, 0.82f, 0.48f, 0.16f, 0.25f);
+            }
+            if (category == SubjectCategory.ANIMAL) {
+                return new FusionPolicy(0.25f, 0.68f, 0.63f, 0.20f, 0.10f);
+            }
+            if (category == SubjectCategory.PLANT) {
+                return new FusionPolicy(0.22f, 0.70f, 0.58f, 0.20f, 0.15f);
+            }
+            return new FusionPolicy(0.29f, 0.60f, 0.68f, 0.22f, 0.0f);
         }
     }
 

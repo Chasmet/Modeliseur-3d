@@ -39,7 +39,7 @@ public final class NeuralMultiViewDepthEngine implements AutoCloseable {
     private static final String MODEL_ASSET =
             "models/da3_small_four_view_224.onnx";
     private static final String MODEL_FILE =
-            "da3_small_four_view_224_v7_1.onnx";
+            "da3_small_four_view_224_v7_2.onnx";
     private static final int VIEW_COUNT = 4;
     private static final int INPUT_SIZE = 224;
     private static final int CONTENT_MARGIN = 7;

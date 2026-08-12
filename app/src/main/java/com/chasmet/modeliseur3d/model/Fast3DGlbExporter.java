@@ -18,7 +18,7 @@ import java.util.Locale;
  * résolution de texture affichés dans l'application. Aucune limite de taille,
  * aucune simplification et aucune compression destructive ne sont appliquées.
  *
- * La V7.1 conserve le matériau propre pour les visionneuses externes et exporte
+ * La V7.2 conserve le matériau propre pour les visionneuses externes et exporte
  * sans simplification le champ multivue continu. Le moteur 2.5D reste séparé.
  */
 public final class Fast3DGlbExporter {
@@ -49,14 +49,14 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V7_1_DA3_" + stamp
+                "Modeliseur3D/Modele_3D_V7_2_DA3_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v7_1_da3.tmp");
-        File output = new File(directory, "personnage_3d_v7_1_da3_multivue.glb");
+        File temporary = new File(directory, "modele_3d_v7_2_da3.tmp");
+        File output = new File(directory, "modele_3d_v7_2_da3_multiformes.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 

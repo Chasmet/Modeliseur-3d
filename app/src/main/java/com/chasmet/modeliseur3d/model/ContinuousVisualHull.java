@@ -31,7 +31,35 @@ public final class ContinuousVisualHull {
             int depth,
             boolean adaptive
     ) {
+        return build(
+                confidences,
+                masks,
+                width,
+                height,
+                depth,
+                adaptive,
+                SubjectCategory.AUTO
+        );
+    }
+
+    public static Result build(
+            float[][] confidences,
+            boolean[][] masks,
+            int width,
+            int height,
+            int depth,
+            boolean adaptive,
+            SubjectCategory requestedCategory
+    ) {
         validate(confidences, masks, width, height, depth);
+
+        SubjectCategory category = SubjectCategoryClassifier.resolve(
+                requestedCategory,
+                masks,
+                width,
+                height,
+                depth
+        );
 
         float[][] signed = new float[4][];
         signed[StylizedFourViewProjector.FRONT] = signedDistance(
@@ -59,18 +87,14 @@ public final class ContinuousVisualHull {
                 depth,
                 height
         );
-        boolean complexShapeMode = isComplexLowerBody(
-                frontUnion,
-                width,
-                height
-        );
+        boolean complexShapeMode = category == SubjectCategory.COMPOSITE_VEHICLE;
         RowShape[] rows = buildRows(
                 frontUnion,
                 sideUnion,
                 width,
                 height,
                 depth,
-                complexShapeMode
+                category
         );
 
         int size = width * height * depth;
@@ -196,7 +220,8 @@ public final class ContinuousVisualHull {
                 roundedAway,
                 adaptivelyRecovered,
                 silhouetteScore,
-                complexShapeMode
+                complexShapeMode,
+                category
         );
     }
 
@@ -254,7 +279,7 @@ public final class ContinuousVisualHull {
             int width,
             int height,
             int depth,
-            boolean complexShapeMode
+            SubjectCategory category
     ) {
         int top = firstOccupiedRow(frontUnion, width, height);
         int bottom = lastOccupiedRow(frontUnion, width, height);
@@ -270,86 +295,10 @@ public final class ContinuousVisualHull {
                     depth,
                     y,
                     progress,
-                    complexShapeMode
+                    category
             );
         }
         return rows;
-    }
-
-    /**
-     * Un personnage assis dans un kart, une voiture ou un meuble possède un
-     * bas large et plein. Le réglage anatomique bras/jambes de la V6 réduisait
-     * alors chaque pièce à une lame. Ce détecteur bascule seulement les formes
-     * dont la partie basse reste aussi dense que le centre.
-     */
-    private static boolean isComplexLowerBody(
-            boolean[] front,
-            int width,
-            int height
-    ) {
-        int top = firstOccupiedRow(front, width, height);
-        int bottom = lastOccupiedRow(front, width, height);
-        if (top < 0 || bottom - top < 8) {
-            return false;
-        }
-        double middle = averageRowFill(
-                front,
-                width,
-                top,
-                bottom,
-                0.22,
-                0.58
-        );
-        double lower = averageRowFill(
-                front,
-                width,
-                top,
-                bottom,
-                0.58,
-                0.96
-        );
-        int left = width;
-        int right = -1;
-        for (int y = top; y <= bottom; y++) {
-            int row = y * width;
-            for (int x = 0; x < width; x++) {
-                if (front[row + x]) {
-                    left = Math.min(left, x);
-                    right = Math.max(right, x);
-                }
-            }
-        }
-        double aspect = right < left
-                ? 0.0
-                : (right - left + 1) / (double) (bottom - top + 1);
-        return aspect >= 0.42
-                && lower >= 0.38
-                && lower >= middle * 0.92;
-    }
-
-    private static double averageRowFill(
-            boolean[] mask,
-            int width,
-            int top,
-            int bottom,
-            double startFraction,
-            double endFraction
-    ) {
-        int span = Math.max(1, bottom - top);
-        int start = top + (int) Math.floor(span * startFraction);
-        int end = top + (int) Math.ceil(span * endFraction);
-        start = Math.max(top, Math.min(bottom, start));
-        end = Math.max(start, Math.min(bottom, end));
-        long foreground = 0L;
-        int rows = 0;
-        for (int y = start; y <= end; y++) {
-            int row = y * width;
-            for (int x = 0; x < width; x++) {
-                foreground += mask[row + x] ? 1L : 0L;
-            }
-            rows++;
-        }
-        return foreground / Math.max(1.0, rows * (double) width);
     }
 
     private static int firstOccupiedRow(boolean[] mask, int width, int height) {
@@ -623,7 +572,7 @@ public final class ContinuousVisualHull {
                 int depth,
                 int y,
                 float bodyProgress,
-                boolean complexShapeMode
+                SubjectCategory category
         ) {
             int[] starts = new int[width];
             int[] ends = new int[width];
@@ -685,11 +634,32 @@ public final class ContinuousVisualHull {
                         && Math.abs(centerX - overallCenter) <= maximumRun * 0.28f;
                 float depthScale;
                 float exponent;
-                if (complexShapeMode) {
+                boolean vehicleLayer = category == SubjectCategory.COMPOSITE_VEHICLE
+                        && bodyProgress >= 0.46f;
+                if (vehicleLayer) {
                     depthScale = runCount == 1
                             ? 0.98f
                             : 0.82f + 0.16f * (float) Math.sqrt(ratio);
                     exponent = 2.70f;
+                } else if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
+                    depthScale = 1.0f;
+                    exponent = 7.0f;
+                } else if (category == SubjectCategory.ANIMAL) {
+                    if (runCount == 1 || dominant) {
+                        depthScale = 1.0f;
+                        exponent = 3.35f;
+                    } else {
+                        depthScale = 0.60f + 0.25f * (float) Math.sqrt(ratio);
+                        if (bodyProgress >= 0.56f) {
+                            depthScale = Math.min(depthScale, 0.78f);
+                        }
+                        exponent = 2.25f;
+                    }
+                } else if (category == SubjectCategory.PLANT) {
+                    depthScale = runCount == 1
+                            ? 0.88f
+                            : 0.46f + 0.24f * (float) Math.sqrt(ratio);
+                    exponent = 2.05f;
                 } else if (runCount == 1) {
                     depthScale = bodyProgress < 0.24f ? 0.94f : 0.98f;
                     exponent = 3.20f;
@@ -764,6 +734,7 @@ public final class ContinuousVisualHull {
         private final int adaptivelyRecoveredVoxels;
         private final double silhouetteScore;
         private final boolean complexShapeMode;
+        private final SubjectCategory category;
 
         Result(
                 float[] density,
@@ -773,7 +744,8 @@ public final class ContinuousVisualHull {
                 int roundedVoxels,
                 int adaptivelyRecoveredVoxels,
                 double silhouetteScore,
-                boolean complexShapeMode
+                boolean complexShapeMode,
+                SubjectCategory category
         ) {
             this.density = density;
             this.occupancy = occupancy;
@@ -783,6 +755,7 @@ public final class ContinuousVisualHull {
             this.adaptivelyRecoveredVoxels = adaptivelyRecoveredVoxels;
             this.silhouetteScore = silhouetteScore;
             this.complexShapeMode = complexShapeMode;
+            this.category = category;
         }
 
         public float[] getDensity() {
@@ -815,6 +788,10 @@ public final class ContinuousVisualHull {
 
         public boolean isComplexShapeMode() {
             return complexShapeMode;
+        }
+
+        public SubjectCategory getCategory() {
+            return category;
         }
     }
 }

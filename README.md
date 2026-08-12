@@ -1,14 +1,14 @@
-# Modéliseur 3D V7.1 DA3 — Android Java
+# Modéliseur 3D V7.2 DA3 multi-formes — Android Java
 
-Application Android qui transforme quatre vues réelles d'un même personnage
+Application Android qui transforme quatre vues réelles d'un même sujet
 (face, profil droit, dos et profil gauche) en un modèle 3D texturé exportable en
 GLB. Le dépôt contient aussi une vraie reconstruction vidéo 360° à huit angles,
 le moteur 2.5D Face/Dos et un catalogue de 259 assets 3D.
 
-## Reconstruction V7.1 « modeleur de surfaces multivue »
+## Reconstruction V7.2 « modeleur multi-formes »
 
-La V7.1 conserve DA3-SMALL, corrige les régressions observées sur les animaux
-larges et garantit que le réseau multivue participe réellement à la géométrie :
+La V7.2 conserve DA3-SMALL et ajoute des priors structurels vérifiables pour les
+animaux, personnages, sujets composés, objets rigides et végétaux :
 
 1. détourage local de chaque vue avec IS-Net Anime FP32 ;
 2. conservation de la confiance alpha du réseau au bord du sujet ;
@@ -31,12 +31,18 @@ larges et garantit que le réseau multivue participe réellement à la géométr
    axes différents ;
 16. arrondi local des sections du torse, des membres et des accessoires afin de
    supprimer les coins artificiels de l'intersection orthographique ;
-17. mode de profondeur séparé pour les formes larges comme un kart ou un siège ;
-18. champ de densité sous-pixel transmis directement au mailleur ;
-19. remplissage de chaque cellule de texture par la couleur la plus proche du
-   sujet, jusque dans les zones UV auparavant transparentes/noires ;
-20. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
-21. export du maillage complet sans simplification destructive.
+17. choix Auto ou manuel entre Personnage, Animal, Personnage + véhicule,
+   Habitation/objet rigide et Arbre/fleur/plante ;
+18. traitement du conducteur articulé séparé de la zone basse large du véhicule ;
+19. fusion DA3 plus prudente sur les chevauchements main/guidon/siège/châssis ;
+20. profondeur maximale accrue pour les animaux et objets réellement allongés ;
+21. mode de profondeur séparé pour les formes larges comme un kart ou un siège ;
+22. champ de densité sous-pixel transmis directement au mailleur ;
+23. sélection UV contrôlée par les quatre silhouettes ;
+24. dilatation locale des bords de texture, puis couleur moyenne neutre dans les
+   zones lointaines afin d'éviter les visages ou détails répétés ;
+25. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
+26. export du maillage complet sans simplification destructive.
 
 Le mode haute précision utilise une grille allant jusqu'à 128 × 256 × 304 sur
 les appareils disposant de suffisamment de mémoire. Un profil compatible réduit
@@ -57,7 +63,9 @@ automatiquement la grille et l'atlas pour éviter une saturation mémoire.
   affiché avec le résultat ;
 - un profil presque vide ne peut plus aplatir l'ensemble du sujet ;
 - la géométrie et la texture utilisent exactement le même profil de secours ;
-- un kart ou un objet large n'est plus aminci comme un membre humain.
+- un kart ou un objet large n'est plus aminci comme un membre humain ;
+- dans un sujet composé, les membres du conducteur ne sont plus extrudés sur
+  toute la longueur du véhicule ;
 - la profondeur du visage, du vêtement, du siège et des pièces mécaniques peut
   désormais modifier la surface au lieu de rester uniquement dans la texture ;
 - le profil d'un cheval n'est plus redressé à tort à 90° ;
@@ -83,7 +91,7 @@ Pour exploiter la précision du moteur :
 Le mode 3D crée un fichier autonome :
 
 ```text
-personnage_3d_v7_1_da3_multivue.glb
+modele_3d_v7_2_da3_multiformes.glb
 ```
 
 L'export conserve le nombre complet de triangles, les normales, les UV et la
@@ -115,7 +123,7 @@ images à un serveur.
 - ONNX Runtime Android 1.20.0 (compatible minSdk 21) ;
 - IS-Net Anime FP32 pour le détourage ;
 - DA3-SMALL quatre vues 224 px pour la profondeur ;
-- version `7.1.0` (`versionCode 39`).
+- version `7.2.0` (`versionCode 40`).
 
 ## Compilation
 
@@ -140,12 +148,12 @@ Le workflow `.github/workflows/android.yml` :
   fusion de profondeur ;
 - lance `lintDebug` et `assembleDebug` ;
 - vérifie la signature et les deux modèles ONNX inclus ;
-- publie l'artefact `Modeliseur-V7-1-DA3-Modeleur-Multivue-debug`.
+- publie l'artefact `Modeliseur-V7-2-DA3-Multi-Formes-debug`.
 
 ## Limite physique
 
 Quatre images ne contiennent aucune information sur une zone cachée dans les
-quatre vues. La V7.1 améliore l'enveloppe, les profils, les contours et la surface,
+quatre vues. La V7.2 améliore l'enveloppe, les profils, les contours et la surface,
 mais elle ne peut pas inventer avec certitude l'intérieur d'un vêtement, un
 dessous invisible ou une micro-géométrie absente des photos. Une reconstruction
 photogrammétrique complète nécessiterait davantage d'angles et des

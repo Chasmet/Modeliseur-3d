@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V7.1 — modeleur Depth Anything 3 multivue"
+        android:text="3D locale V7.2 — modeleur DA3 multi-formes"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Les quatre vues sont analysées ensemble par DA3 puis projetées selon leurs poses face, droite, dos et gauche pour modeler les surfaces. Les profils naturellement larges restent intacts et la texture est remplie sans zones noires."
+        android:text="Les quatre vues sont analysées ensemble par DA3. Le moteur adapte maintenant le volume et la texture aux personnages, animaux, véhicules composés, habitations, objets, arbres et fleurs."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage et corps entier sur les quatre images. Utilise les boutons sous les profils jusqu’à voir le personnage debout et orienté dans le bon sens."
+                android:text="Même sujet entier et même pose sur les quatre images. Utilise les boutons sous les profils jusqu’à voir le sujet orienté dans le bon sens."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -292,7 +292,33 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Épaisseur générale du personnage"
+                android:text="Famille de forme à modéliser"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/subjectCategorySpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:contentDescription="Famille de forme 3D"
+                android:minHeight="48dp"
+                android:spinnerMode="dialog" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:background="@drawable/bg_manual_help"
+                android:padding="8dp"
+                android:text="Auto convient aux sujets simples. Pour un cheval, choisis Animal. Pour un conducteur sur moto, kart ou siège, choisis Personnage + véhicule afin de séparer le haut articulé de la base large."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Épaisseur générale du modèle"
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
@@ -341,7 +367,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D anatomique"
+                    android:text="Créer la 3D multi-formes"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -430,7 +456,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Sélectionne les quatre vues du personnage."
+            android:text="Sélectionne les quatre vues du même sujet."
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>

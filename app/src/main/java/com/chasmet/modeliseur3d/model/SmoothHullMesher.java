@@ -79,7 +79,8 @@ public final class SmoothHullMesher {
                 depth,
                 atlas,
                 availableProcessors,
-                BINARY_ISO_LEVEL
+                BINARY_ISO_LEVEL,
+                null
         );
     }
 
@@ -114,7 +115,53 @@ public final class SmoothHullMesher {
                 depth,
                 atlas,
                 availableProcessors,
-                CONTINUOUS_ISO_LEVEL
+                CONTINUOUS_ISO_LEVEL,
+                null
+        );
+    }
+
+    /**
+     * Extrait la surface avec une projection UV consciente des silhouettes.
+     * Les surfaces horizontales ou ambiguës ne peuvent plus sélectionner une
+     * vue dans laquelle le point 3D tombe hors du sujet détouré.
+     */
+    public static MeshData build(
+            float[] density,
+            int width,
+            int height,
+            int depth,
+            AtlasLayout atlas,
+            int availableProcessors,
+            boolean[][] masks,
+            SubjectCategory category
+    ) throws Exception {
+        if (density == null || density.length != width * height * depth) {
+            throw new IllegalArgumentException("Champ 3D continu invalide");
+        }
+        if (width < 4 || height < 4 || depth < 4) {
+            throw new IllegalArgumentException("Résolution 3D trop faible");
+        }
+        for (float value : density) {
+            if (!Float.isFinite(value) || value < 0.0f || value > 1.0f) {
+                throw new IllegalArgumentException("Densité 3D hors limites");
+            }
+        }
+        ProjectionGuide guide = new ProjectionGuide(
+                masks,
+                width,
+                height,
+                depth,
+                category
+        );
+        return buildField(
+                density,
+                width,
+                height,
+                depth,
+                atlas,
+                availableProcessors,
+                CONTINUOUS_ISO_LEVEL,
+                guide
         );
     }
 
@@ -125,7 +172,8 @@ public final class SmoothHullMesher {
             int depth,
             AtlasLayout atlas,
             int availableProcessors,
-            float isoLevel
+            float isoLevel,
+            ProjectionGuide projectionGuide
     ) throws Exception {
         GradientField gradient = createGradientField(field, width, height, depth);
 
@@ -149,6 +197,7 @@ public final class SmoothHullMesher {
                             depth,
                             atlas,
                             isoLevel,
+                            projectionGuide,
                             from,
                             to
                     );
@@ -294,6 +343,7 @@ public final class SmoothHullMesher {
             int depth,
             AtlasLayout atlas,
             float isoLevel,
+            ProjectionGuide projectionGuide,
             int startY,
             int endY
     ) {
@@ -381,15 +431,18 @@ public final class SmoothHullMesher {
                         if (intersectionCount == 3) {
                             emitTriangle(result, atlas, width, height, depth,
                                     pointX, pointY, pointZ, normalX, normalY, normalZ,
+                                    projectionGuide,
                                     0, 1, 2);
                         } else if (intersectionCount == 4) {
                             int[] ordered = orderQuad(pointX, pointY, pointZ,
                                     normalX, normalY, normalZ);
                             emitTriangle(result, atlas, width, height, depth,
                                     pointX, pointY, pointZ, normalX, normalY, normalZ,
+                                    projectionGuide,
                                     ordered[0], ordered[1], ordered[2]);
                             emitTriangle(result, atlas, width, height, depth,
                                     pointX, pointY, pointZ, normalX, normalY, normalZ,
+                                    projectionGuide,
                                     ordered[0], ordered[2], ordered[3]);
                         }
                     }
@@ -491,6 +544,7 @@ public final class SmoothHullMesher {
             float[] nx,
             float[] ny,
             float[] nz,
+            ProjectionGuide projectionGuide,
             int first,
             int second,
             int third
@@ -533,7 +587,21 @@ public final class SmoothHullMesher {
         averageNx = nx[first] + nx[second] + nx[third];
         averageNy = ny[first] + ny[second] + ny[third];
         averageNz = nz[first] + nz[second] + nz[third];
-        int projection = chooseProjection(averageNx, averageNy, averageNz);
+        float centerGridX = (x[first] + x[second] + x[third]) / 3.0f;
+        float centerGridY = (y[first] + y[second] + y[third]) / 3.0f;
+        float centerGridZ = (z[first] + z[second] + z[third]) / 3.0f;
+        int projection = chooseProjection(
+                averageNx,
+                averageNy,
+                averageNz,
+                centerGridX,
+                centerGridY,
+                centerGridZ,
+                width,
+                height,
+                depth,
+                projectionGuide
+        );
 
         addVertex(output, atlas, projection, width, height, depth,
                 x[first], y[first], z[first], ax, ay, az,
@@ -571,13 +639,54 @@ public final class SmoothHullMesher {
         atlas.addUv(output.texCoords, projection, xNorm, yNorm, zNorm);
     }
 
-    private static int chooseProjection(float nx, float ny, float nz) {
+    static int chooseProjection(
+            float nx,
+            float ny,
+            float nz,
+            float gridX,
+            float gridY,
+            float gridZ,
+            int width,
+            int height,
+            int depth,
+            ProjectionGuide guide
+    ) {
         float absoluteX = Math.abs(nx);
+        float absoluteY = Math.abs(ny);
         float absoluteZ = Math.abs(nz);
-        if (absoluteZ >= absoluteX * 0.82f) {
-            return nz >= 0.0f ? AtlasLayout.FRONT : AtlasLayout.BACK;
+        float[] alignment = {
+                Math.max(0.0f, nz),
+                Math.max(0.0f, -nz),
+                Math.max(0.0f, nx),
+                Math.max(0.0f, -nx)
+        };
+
+        // Aucune vue du dessus n'est fournie. Pour un capot, une selle ou le
+        // haut d'une tête, la direction radiale est plus stable que le bruit
+        // minuscule de la normale X/Z produit par les tétraèdres.
+        if (absoluteY > Math.max(absoluteX, absoluteZ) * 1.18f) {
+            float radialX = gridX / Math.max(1.0f, width - 1.0f) * 2.0f - 1.0f;
+            float radialZ = gridZ / Math.max(1.0f, depth - 1.0f) * 2.0f - 1.0f;
+            alignment[AtlasLayout.FRONT] = Math.max(0.0f, radialZ);
+            alignment[AtlasLayout.BACK] = Math.max(0.0f, -radialZ);
+            alignment[AtlasLayout.RIGHT] = Math.max(0.0f, radialX);
+            alignment[AtlasLayout.LEFT] = Math.max(0.0f, -radialX);
         }
-        return nx >= 0.0f ? AtlasLayout.RIGHT : AtlasLayout.LEFT;
+
+        int best = AtlasLayout.FRONT;
+        float bestScore = Float.NEGATIVE_INFINITY;
+        for (int projection = 0; projection < 4; projection++) {
+            float support = guide == null
+                    ? 1.0f
+                    : guide.support(projection, gridX, gridY, gridZ);
+            float score = (0.10f + alignment[projection])
+                    * (0.08f + 0.92f * support);
+            if (score > bestScore) {
+                bestScore = score;
+                best = projection;
+            }
+        }
+        return best;
     }
 
     private static MeshData merge(List<MeshPart> parts) {
@@ -728,6 +837,80 @@ public final class SmoothHullMesher {
             float v = (padding + clamp01(yNorm)
                     * Math.max(1.0f, atlasHeight - padding * 2.0f)) / atlasHeight;
             builder.add(u, v);
+        }
+    }
+
+    static final class ProjectionGuide {
+        private final boolean[][] masks;
+        private final int width;
+        private final int height;
+        private final int depth;
+        private final float edgeWeight;
+
+        ProjectionGuide(
+                boolean[][] masks,
+                int width,
+                int height,
+                int depth,
+                SubjectCategory category
+        ) {
+            if (masks == null || masks.length != 4
+                    || masks[0] == null || masks[0].length != width * height
+                    || masks[2] == null || masks[2].length != width * height
+                    || masks[1] == null || masks[1].length != depth * height
+                    || masks[3] == null || masks[3].length != depth * height) {
+                throw new IllegalArgumentException("Guide de texture multivue invalide");
+            }
+            this.masks = masks;
+            this.width = width;
+            this.height = height;
+            this.depth = depth;
+            this.edgeWeight = category == SubjectCategory.COMPOSITE_VEHICLE
+                    ? 0.72f
+                    : 0.58f;
+        }
+
+        float support(
+                int projection,
+                float gridX,
+                float gridY,
+                float gridZ
+        ) {
+            int x = Math.round(gridX);
+            int y = Math.round(gridY);
+            int z = Math.round(gridZ);
+            if (!inside(projection, x, y, z)) {
+                return 0.0f;
+            }
+            int neighbours = 0;
+            for (int radius = 1; radius <= 2; radius++) {
+                neighbours += inside(projection, x - radius, y, z) ? 1 : 0;
+                neighbours += inside(projection, x + radius, y, z) ? 1 : 0;
+                neighbours += inside(projection, x, y - radius, z) ? 1 : 0;
+                neighbours += inside(projection, x, y + radius, z) ? 1 : 0;
+            }
+            float interior = neighbours / 8.0f;
+            return edgeWeight + (1.0f - edgeWeight) * interior;
+        }
+
+        private boolean inside(int projection, int x, int y, int z) {
+            if (y < 0 || y >= height) {
+                return false;
+            }
+            if (projection == AtlasLayout.FRONT) {
+                return x >= 0 && x < width && masks[0][y * width + x];
+            }
+            if (projection == AtlasLayout.BACK) {
+                int mirroredX = width - 1 - x;
+                return mirroredX >= 0 && mirroredX < width
+                        && masks[2][y * width + mirroredX];
+            }
+            if (projection == AtlasLayout.RIGHT) {
+                return z >= 0 && z < depth && masks[1][y * depth + z];
+            }
+            int mirroredZ = depth - 1 - z;
+            return mirroredZ >= 0 && mirroredZ < depth
+                    && masks[3][y * depth + mirroredZ];
         }
     }
 

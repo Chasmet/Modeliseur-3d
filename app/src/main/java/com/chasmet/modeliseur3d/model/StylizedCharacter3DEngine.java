@@ -13,10 +13,10 @@ import android.os.SystemClock;
 import java.util.List;
 
 /**
- * Moteur 3D local V7.1 réservé au mode quatre vues.
+ * Moteur 3D local V7.2 multi-formes réservé au mode quatre vues.
  *
  * La V6 conserve les corrections de profil éprouvées, mais remplace le volume
- * binaire par un champ de distances multivue continu. La V7.1 exécute Depth
+ * binaire par un champ de distances multivue continu. La V7.2 exécute Depth
  * Anything 3 Small : les quatre vues passent ensemble dans le réseau, puis les
  * profondeurs cohérentes sculptent la coque sans pouvoir dépasser les
  * silhouettes vérifiées. Le moteur 2.5D reste totalement séparé.
@@ -39,7 +39,24 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             float depthMultiplier,
             ProgressListener listener
     ) throws Exception {
+        return generate(
+                views,
+                depthMultiplier,
+                SubjectCategory.AUTO,
+                listener
+        );
+    }
+
+    public Result generate(
+            List<Bitmap> views,
+            float depthMultiplier,
+            SubjectCategory requestedCategory,
+            ProgressListener listener
+    ) throws Exception {
         validateViews(views);
+        if (requestedCategory == null) {
+            requestedCategory = SubjectCategory.AUTO;
+        }
         long started = SystemClock.elapsedRealtime();
         Bitmap[] isolated = new Bitmap[REQUIRED_VIEW_COUNT];
         Rect[] bounds = new Rect[REQUIRED_VIEW_COUNT];
@@ -78,7 +95,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             throw error;
         }
 
-        Profile profile = Profile.detect(depthMultiplier, bounds);
+        Profile profile = Profile.detect(depthMultiplier, bounds, requestedCategory);
         boolean[][] masks = new boolean[REQUIRED_VIEW_COUNT][];
         float[][] confidences = new float[REQUIRED_VIEW_COUNT][];
         int componentCount = 0;
@@ -131,6 +148,14 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     profile.height
             );
         }
+
+        SubjectCategory category = SubjectCategoryClassifier.resolve(
+                requestedCategory,
+                masks,
+                profile.width,
+                profile.height,
+                profile.depth
+        );
 
         double coherence = FourViewAutoCorrector.computeCoherence(
                 masks[StylizedFourViewProjector.FRONT],
@@ -200,7 +225,8 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     profile.width,
                     profile.height,
                     profile.depth,
-                    adaptive
+                    adaptive,
+                    category
             );
             occupied = hull.getOccupiedVoxels();
             int minimumUseful = Math.max(
@@ -217,7 +243,8 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                         profile.width,
                         profile.height,
                         profile.depth,
-                        true
+                        true,
+                        category
                 );
                 occupied = hull.getOccupiedVoxels();
             }
@@ -232,7 +259,8 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                             neuralPrediction.getConfidence(),
                             profile.width,
                             profile.height,
-                            profile.depth
+                            profile.depth,
+                            category
                     );
                     if (depthFusion.isApplied()
                             && depthFusion.getOccupiedVoxels() >= 320) {
@@ -261,8 +289,8 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         if (occupied < 320) {
             recycleAll(isolated);
             throw new IllegalArgumentException(
-                    "Les quatre vues restent trop différentes. Utilise le même personnage, "
-                            + "la même pose et le corps entier."
+                    "Les quatre vues restent trop différentes. Utilise le même sujet, "
+                            + "la même pose et le modèle entier."
             );
         }
         SmoothHullMesher.AtlasLayout layout = SmoothHullMesher.AtlasLayout.create(
@@ -292,7 +320,9 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     profile.height,
                     profile.depth,
                     layout,
-                    profile.processors
+                    profile.processors,
+                    masks,
+                    category
             );
             try {
                 mesh = MeshSurfaceOptimizer.optimize(mesh, adaptive ? 2 : 1);
@@ -323,8 +353,10 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         }
         correctionSummary.append(" • champ continu sous-pixel");
         correctionSummary.append(" • sections arrondies");
+        correctionSummary.append(" • famille ")
+                .append(category.getDisplayName());
         if (hull.isComplexShapeMode()) {
-            correctionSummary.append(" • volume large/kart préservé");
+            correctionSummary.append(" • conducteur et base large traités par zones");
         }
         if (depthFusion != null && depthFusion.isApplied()) {
             correctionSummary.append(" • modeleur de surfaces DA3 ")
@@ -369,6 +401,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 profileCorrection.shouldFlipLeft(),
                 coherence,
                 profile.depth,
+                category,
                 correctionSummary.toString(),
                 SystemClock.elapsedRealtime() - started
         );
@@ -386,7 +419,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         }
         for (Bitmap bitmap : views) {
             if (bitmap == null || bitmap.isRecycled()) {
-                throw new IllegalArgumentException("Une image du personnage est invalide");
+                throw new IllegalArgumentException("Une image du sujet est invalide");
             }
         }
     }
@@ -760,11 +793,12 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         int height = bitmap.getHeight();
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
-        TextureHoleFiller.fillNearestOpaque(
+        TextureHoleFiller.fillLocalOpaque(
                 pixels,
                 width,
                 height,
-                Math.round(FOREGROUND_ALPHA)
+                Math.round(FOREGROUND_ALPHA),
+                Math.max(10, Math.min(width, height) / 45)
         );
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
     }
@@ -901,6 +935,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         private final boolean profileMirrored;
         private final double coherence;
         private final int depthResolution;
+        private final SubjectCategory subjectCategory;
         private final String correctionSummary;
         private final long totalDurationMs;
 
@@ -916,6 +951,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 boolean profileMirrored,
                 double coherence,
                 int depthResolution,
+                SubjectCategory subjectCategory,
                 String correctionSummary,
                 long totalDurationMs
         ) {
@@ -930,6 +966,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             this.profileMirrored = profileMirrored;
             this.coherence = coherence;
             this.depthResolution = depthResolution;
+            this.subjectCategory = subjectCategory;
             this.correctionSummary = correctionSummary;
             this.totalDurationMs = totalDurationMs;
         }
@@ -978,6 +1015,10 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             return depthResolution;
         }
 
+        public SubjectCategory getSubjectCategory() {
+            return subjectCategory;
+        }
+
         public String getCorrectionSummary() {
             return correctionSummary;
         }
@@ -1011,7 +1052,11 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             this.label = label;
         }
 
-        static Profile detect(float requestedDepth, Rect[] bounds) {
+        static Profile detect(
+                float requestedDepth,
+                Rect[] bounds,
+                SubjectCategory requestedCategory
+        ) {
             int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
             long memoryMb = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
             int width;
@@ -1024,19 +1069,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 height = 256;
                 maximumDepth = 304;
                 atlasHeight = 2048;
-                label = "3D V7.1 DA3 précision neuronale";
+                label = "3D V7.2 DA3 multi-formes précision neuronale";
             } else if (memoryMb >= 430L && processors >= 6) {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
                 atlasHeight = 2048;
-                label = "3D V7.1 DA3 haute précision";
+                label = "3D V7.2 DA3 multi-formes haute précision";
             } else {
                 width = 88;
                 height = 176;
                 maximumDepth = 200;
                 atlasHeight = 1024;
-                label = "3D V7.1 DA3 compatible";
+                label = "3D V7.2 DA3 multi-formes compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],
@@ -1047,7 +1092,11 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     bounds[StylizedFourViewProjector.LEFT]
             );
             double aspectRatio = sideAspect / Math.max(0.18, frontAspect);
-            aspectRatio = Math.max(0.65, Math.min(1.75, aspectRatio));
+            double maximumRatio = maximumAspectRatio(
+                    requestedCategory,
+                    aspectRatio
+            );
+            aspectRatio = Math.max(0.65, Math.min(maximumRatio, aspectRatio));
             float multiplier = Math.max(0.65f, Math.min(1.35f, requestedDepth));
             int depth = Math.round((float) (width * aspectRatio * multiplier));
             depth = Math.max(48, Math.min(maximumDepth, depth));
@@ -1065,6 +1114,31 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             double firstAspect = first.width() / Math.max(1.0, first.height());
             double secondAspect = second.width() / Math.max(1.0, second.height());
             return (firstAspect + secondAspect) * 0.5;
+        }
+
+        private static double maximumAspectRatio(
+                SubjectCategory category,
+                double measuredRatio
+        ) {
+            if (category == SubjectCategory.ANIMAL) {
+                return 2.30;
+            }
+            if (category == SubjectCategory.COMPOSITE_VEHICLE) {
+                return 2.10;
+            }
+            if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
+                return 1.95;
+            }
+            if (category == SubjectCategory.PLANT) {
+                return 1.60;
+            }
+            // En Auto, un profil nettement plus long que la face est le seul
+            // indice disponible avant le détourage final. Autoriser le volume
+            // animal/composé évite de raccourcir un cheval dès cette étape.
+            if (category == SubjectCategory.AUTO && measuredRatio >= 1.55) {
+                return 2.25;
+            }
+            return 1.75;
         }
     }
 }
