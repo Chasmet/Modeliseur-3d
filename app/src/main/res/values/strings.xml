@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 2.5D + 3D V6.0</string>
+    <string name="app_name">Modéliseur 2.5D + 3D V6.1</string>
 
-    <string name="home_title">Modéliseur 3D V6.0</string>
+    <string name="home_title">Modéliseur 3D V6.1</string>
     <string name="home_subtitle">Choisis uniquement le type de reconstruction à utiliser.</string>
     <string name="home_mode_25d">2.5D\nFace + dos</string>
-    <string name="home_mode_3d">3D guidée\n8 silhouettes contrôlées</string>
+    <string name="home_mode_3d">3D guidée\n4 vues contrôlées et réparées</string>
 
     <string name="title">Modéliseur 2.5D V5.4 — Face + Dos réel</string>
     <string name="subtitle">Importe une image de face et une image de dos. Le mode 2.5D aligne les silhouettes, garde les textures avant et arrière et reconstruit l’épaisseur depuis les bords réels.</string>

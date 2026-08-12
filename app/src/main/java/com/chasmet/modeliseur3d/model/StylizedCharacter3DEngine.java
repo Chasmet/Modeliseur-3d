@@ -25,6 +25,8 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
     public static final int REQUIRED_VIEW_COUNT = 4;
     private static final float FOREGROUND_ALPHA = 24.0f;
     private static final int MAXIMUM_COMPONENTS = 16;
+    private static final int QUALITY_WIDTH = 96;
+    private static final int QUALITY_HEIGHT = 128;
 
     private final Context context;
 
@@ -63,6 +65,14 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     isolated,
                     bounds
             );
+        } catch (RuntimeException | OutOfMemoryError error) {
+            recycleAll(isolated);
+            throw error;
+        }
+
+        ProfileRecovery profileRecovery;
+        try {
+            profileRecovery = recoverUnusableProfile(isolated, bounds);
         } catch (RuntimeException | OutOfMemoryError error) {
             recycleAll(isolated);
             throw error;
@@ -228,6 +238,10 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         if (profileCorrection.shouldFlipLeft()) {
             correctionSummary.append(" • profil gauche mis en miroir");
         }
+        if (profileRecovery.hasReplacement()) {
+            correctionSummary.append(" • ")
+                    .append(profileRecovery.summary());
+        }
         if (adaptive) {
             correctionSummary.append(" • volume adaptatif");
         } else {
@@ -235,6 +249,9 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         }
         correctionSummary.append(" • champ continu sous-pixel");
         correctionSummary.append(" • sections arrondies");
+        if (hull.isComplexShapeMode()) {
+            correctionSummary.append(" • volume large/kart préservé");
+        }
         correctionSummary.append(" • silhouettes ")
                 .append(Math.round(hull.getSilhouetteScore() * 100.0))
                 .append(" %");
@@ -277,6 +294,78 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
     private static boolean isProfile(int index) {
         return index == StylizedFourViewProjector.RIGHT
                 || index == StylizedFourViewProjector.LEFT;
+    }
+
+    /**
+     * Remplace uniquement un profil manifestement effondré. La géométrie et
+     * l'atlas utilisent alors la même vue opposée en miroir : une mauvaise
+     * photo ne peut plus écraser le volume ni créer des traînées de texture.
+     */
+    private static ProfileRecovery recoverUnusableProfile(
+            Bitmap[] isolated,
+            Rect[] bounds
+    ) {
+        int right = StylizedFourViewProjector.RIGHT;
+        int left = StylizedFourViewProjector.LEFT;
+        NormalizedSilhouette rightQuality = normalizeSilhouette(
+                isolated[right],
+                bounds[right],
+                QUALITY_WIDTH,
+                QUALITY_HEIGHT
+        );
+        NormalizedSilhouette leftQuality = normalizeSilhouette(
+                isolated[left],
+                bounds[left],
+                QUALITY_WIDTH,
+                QUALITY_HEIGHT
+        );
+        FourViewReliabilityAnalyzer.PairAssessment assessment =
+                FourViewReliabilityAnalyzer.assessPair(
+                        rightQuality.mask,
+                        leftQuality.mask,
+                        QUALITY_WIDTH,
+                        QUALITY_HEIGHT
+                );
+        if (!assessment.requiresReplacement()) {
+            return ProfileRecovery.none(assessment);
+        }
+
+        int target;
+        int source;
+        if (assessment.getReplacement()
+                == FourViewReliabilityAnalyzer.Replacement.FIRST_FROM_SECOND) {
+            target = right;
+            source = left;
+        } else {
+            target = left;
+            source = right;
+        }
+        Bitmap replacement = mirroredBitmap(isolated[source]);
+        Rect replacementBounds;
+        try {
+            replacementBounds = findForegroundBounds(replacement);
+        } catch (RuntimeException error) {
+            recycle(replacement);
+            throw error;
+        }
+        recycle(isolated[target]);
+        isolated[target] = replacement;
+        bounds[target] = replacementBounds;
+        return new ProfileRecovery(target, source, assessment);
+    }
+
+    private static Bitmap mirroredBitmap(Bitmap source) {
+        Matrix matrix = new Matrix();
+        matrix.setScale(-1.0f, 1.0f);
+        return Bitmap.createBitmap(
+                source,
+                0,
+                0,
+                source.getWidth(),
+                source.getHeight(),
+                matrix,
+                true
+        );
     }
 
     private static Rect findForegroundBounds(Bitmap bitmap) {
@@ -609,6 +698,48 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         }
     }
 
+    private static final class ProfileRecovery {
+        final int target;
+        final int source;
+        final FourViewReliabilityAnalyzer.PairAssessment assessment;
+
+        ProfileRecovery(
+                int target,
+                int source,
+                FourViewReliabilityAnalyzer.PairAssessment assessment
+        ) {
+            this.target = target;
+            this.source = source;
+            this.assessment = assessment;
+        }
+
+        static ProfileRecovery none(
+                FourViewReliabilityAnalyzer.PairAssessment assessment
+        ) {
+            return new ProfileRecovery(-1, -1, assessment);
+        }
+
+        boolean hasReplacement() {
+            return target >= 0;
+        }
+
+        String summary() {
+            if (!hasReplacement()) {
+                return "profils conservés";
+            }
+            String targetName = target == StylizedFourViewProjector.RIGHT
+                    ? "profil droit"
+                    : "profil gauche";
+            String sourceName = source == StylizedFourViewProjector.RIGHT
+                    ? "droit"
+                    : "gauche";
+            return targetName + " incomplet remplacé par le "
+                    + sourceName + " en miroir (confiance "
+                    + Math.round(assessment.getConfidence() * 100.0)
+                    + " %)";
+        }
+    }
+
     public static final class Result {
         private final MeshData mesh;
         private final Bitmap texture;
@@ -744,19 +875,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 height = 256;
                 maximumDepth = 304;
                 atlasHeight = 2048;
-                label = "3D V6 précision extrême";
+                label = "3D V6.1 précision anti-aplatissement";
             } else if (memoryMb >= 430L && processors >= 6) {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
                 atlasHeight = 2048;
-                label = "3D V6 haute précision";
+                label = "3D V6.1 haute précision";
             } else {
                 width = 88;
                 height = 176;
                 maximumDepth = 200;
                 atlasHeight = 1024;
-                label = "3D V6 compatible";
+                label = "3D V6.1 compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],

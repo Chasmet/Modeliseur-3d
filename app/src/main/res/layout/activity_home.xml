@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="Modéliseur 3D V6.0"
+            android:text="Modéliseur 3D V6.1"
             android:textColor="@color/text_primary"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -50,7 +50,7 @@
             android:layout_marginTop="14dp"
             android:backgroundTint="@color/viewer_background"
             android:gravity="center"
-            android:text="3D PRÉCISION EXTRÊME\nContours sous-pixel + texture 2K"
+            android:text="3D V6.1 ANTI-APLATISSEMENT\nProfils réparés + texture 2K"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="20sp"

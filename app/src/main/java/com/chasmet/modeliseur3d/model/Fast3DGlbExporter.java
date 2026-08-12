@@ -55,8 +55,8 @@ public final class Fast3DGlbExporter {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v6_0.tmp");
-        File output = new File(directory, "personnage_3d_v6_0_precision.glb");
+        File temporary = new File(directory, "personnage_3d_v6_1.tmp");
+        File output = new File(directory, "personnage_3d_v6_1_profils_fiabilises.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 

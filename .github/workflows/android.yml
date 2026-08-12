@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v600-continuous-hull-isnet-fp32-6a92a19a
+          key: modeliseur-v610-reliable-profiles-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -82,14 +82,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0
+      - name: Vérifier l'architecture V6.1
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.0'" app/build.gradle
-          grep -q "versionCode 36" app/build.gradle
+          grep -q "Modéliseur 3D V6.1" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.1.0'" app/build.gradle
+          grep -q "versionCode 37" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -105,6 +105,8 @@ jobs:
           grep -q "ManualProfileTransformer.apply" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
           grep -q "HumanoidVolumeRefiner.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
           grep -q "ContinuousVisualHull.build" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "FourViewReliabilityAnalyzer.assessPair" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "volume large/kart préservé" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           grep -q "float\[\] density" app/src/main/java/com/chasmet/modeliseur3d/model/SmoothHullMesher.java
           grep -q "champ continu sous-pixel" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
@@ -132,7 +134,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.0.0",
+                  "User-Agent": "Modeliseur3D-CI/6.1.0",
                   "Accept": "application/vnd.github+json"
               })
               try:
@@ -153,7 +155,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p build/asset-tests build/orientation-tests build/stylized-tests build/continuous-tests build/legacy-tests
+          mkdir -p build/asset-tests build/orientation-tests build/stylized-tests build/reliability-tests build/continuous-tests build/legacy-tests
           javac -encoding UTF-8 -d build/asset-tests \
             app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DItem.java \
             app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java \
@@ -172,6 +174,11 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefinerSelfTest.java
           java -cp build/stylized-tests com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
           java -cp build/stylized-tests com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
+          javac -encoding UTF-8 -d build/reliability-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewReliabilityAnalyzer.java \
+            validation/java/com/chasmet/modeliseur3d/model/FourViewReliabilityAnalyzerSelfTest.java
+          java -cp build/reliability-tests com.chasmet.modeliseur3d.model.FourViewReliabilityAnalyzerSelfTest
           javac -encoding UTF-8 -d build/continuous-tests \
             app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
             app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
@@ -204,10 +211,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V6.0
+      - name: Publier l'APK V6.1
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0-Precision-Continue-2K-debug
+          name: Modeliseur-V6.1-Profils-Fiabilises-Kart-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

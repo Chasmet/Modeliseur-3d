@@ -37,7 +37,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V6 continu avec rotation et miroir manuels des deux profils. */
+/** Mode 3D V6.1 avec récupération automatique d'un profil effondré. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
@@ -441,9 +441,18 @@ public final class Manual3DActivity extends AppCompatActivity {
                 : "DOS ✓");
         labels[1].setText(profileLabel(
                 RIGHT_PROFILE,
-                result.hasProfileWarning() ? "⚠" : "✓"
+                result.hasRightProfileFallback()
+                        ? "⚠ RÉPARÉ DEPUIS GAUCHE"
+                        : result.hasProfileWarning() ? "⚠" : "✓"
         ));
-        if (result.hasMirrorCorrection()) {
+        if (result.hasLeftProfileFallback()) {
+            labels[3].setText(profileLabel(
+                    LEFT_PROFILE,
+                    "⚠ RÉPARÉ DEPUIS DROIT"
+            ));
+        } else if (result.hasRightProfileFallback()) {
+            labels[3].setText(profileLabel(LEFT_PROFILE, "✓ SOURCE FIABLE"));
+        } else if (result.hasMirrorCorrection()) {
             labels[3].setText(profileLabel(LEFT_PROFILE, "⚠ MIROIR AUTO"));
         } else {
             labels[3].setText(profileLabel(
@@ -721,7 +730,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V6 qualité extrême");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V6.1 profils fiabilisés");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
         status.setText(modelSummary + " • partage GLB qualité instantané : "
@@ -766,7 +775,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "continuous-3d-v600");
+                powerLock = ProcessingPowerLock.acquire(this, "continuous-3d-v610");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {

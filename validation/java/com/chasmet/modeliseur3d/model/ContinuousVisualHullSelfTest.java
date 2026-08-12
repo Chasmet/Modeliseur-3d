@@ -5,6 +5,7 @@ public final class ContinuousVisualHullSelfTest {
     public static void main(String[] args) {
         testContinuousRoundedCrossSection();
         testLocalDepthForLimbs();
+        testWideVehicleDoesNotBecomeFlatSheets();
         testAdaptiveRecoveryNeedsTwoAxes();
         System.out.println("ContinuousVisualHullSelfTest V6 OK");
     }
@@ -115,6 +116,46 @@ public final class ContinuousVisualHullSelfTest {
         }
         if (adaptive.getSilhouetteScore() < 0.82) {
             throw new AssertionError("Le mode adaptatif crée trop de volume fantôme");
+        }
+    }
+
+    private static void testWideVehicleDoesNotBecomeFlatSheets() {
+        int width = 40;
+        int height = 48;
+        int depth = 32;
+        boolean[][] masks = createMasks(width, height, depth);
+
+        // Conducteur étroit au-dessus d'un kart large en trois volumes.
+        fill(masks[0], width, 15, 4, 24, 23);
+        fill(masks[0], width, 3, 24, 10, 43);
+        fill(masks[0], width, 12, 24, 27, 43);
+        fill(masks[0], width, 29, 24, 36, 43);
+        fillMirrored(masks[2], width, 15, 4, 24, 23);
+        fillMirrored(masks[2], width, 3, 24, 10, 43);
+        fillMirrored(masks[2], width, 12, 24, 27, 43);
+        fillMirrored(masks[2], width, 29, 24, 36, 43);
+        fill(masks[1], depth, 4, 4, 27, 43);
+        fillMirrored(masks[3], depth, 4, 4, 27, 43);
+
+        ContinuousVisualHull.Result result = ContinuousVisualHull.build(
+                confidence(masks),
+                masks,
+                width,
+                height,
+                depth,
+                false
+        );
+        if (!result.isComplexShapeMode()) {
+            throw new AssertionError("Le kart large a été pris pour deux jambes");
+        }
+        boolean[] occupancy = result.getOccupancy();
+        int wheelDepth = depthCount(occupancy, width, depth, 6, 34);
+        int chassisDepth = depthCount(occupancy, width, depth, 20, 34);
+        if (wheelDepth < chassisDepth * 0.80f) {
+            throw new AssertionError(
+                    "La roue latérale est encore aplatie en feuille : "
+                            + wheelDepth + "/" + chassisDepth
+            );
         }
     }
 
