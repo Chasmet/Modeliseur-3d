@@ -147,5 +147,5 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }
