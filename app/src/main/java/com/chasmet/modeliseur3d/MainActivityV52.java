@@ -3,10 +3,6 @@ package com.chasmet.modeliseur3d;
 import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -29,6 +25,7 @@ import com.chasmet.modeliseur3d.model.FaceBack25DEngine;
 import com.chasmet.modeliseur3d.model.MeshData;
 import com.chasmet.modeliseur3d.model.ObjExporter;
 import com.chasmet.modeliseur3d.model.Relief25DEngine;
+import com.chasmet.modeliseur3d.model.VideoReconstructionEngineV48;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
@@ -50,7 +47,7 @@ public final class MainActivityV52 extends AppCompatActivity {
     private DevicePerformanceProfile performanceProfile;
     private ProcessingPowerLock processingPowerLock;
     private FaceBack25DEngine faceBackEngine;
-    private Relief25DEngine videoEngine;
+    private VideoReconstructionEngineV48 videoEngine;
     private ModelGLSurfaceViewV52 viewer;
     private ProgressBar progressBar;
     private TextView statusText;
@@ -256,27 +253,17 @@ public final class MainActivityV52 extends AppCompatActivity {
                                  ))
                          )) {
                 if (videoEngine == null) {
-                    videoEngine = new Relief25DEngine(
+                    videoEngine = new VideoReconstructionEngineV48(
                             getApplicationContext(),
                             performanceProfile
                     );
                 }
-                Relief25DEngine.Result result = videoEngine.generateVideo(
+                VideoReconstructionEngineV48.Result result = videoEngine.generate(
                         extracted.getFrames(),
                         extracted.getDecodedFrameCount(),
-                        this::postReliefProgress
+                        this::postVideoProgress
                 );
-                Bitmap correctedTexture = flipAtlasCellsVertically(
-                        result.getTexture()
-                );
-                if (!result.getTexture().isRecycled()) {
-                    result.getTexture().recycle();
-                }
-                showResultWithTexture(
-                        result,
-                        correctedTexture,
-                        R.string.status_done_video
-                );
+                showVideoResult(result);
             } catch (Exception | OutOfMemoryError error) {
                 handleGenerationFailure(error, R.string.error_video);
             }
@@ -290,40 +277,6 @@ public final class MainActivityV52 extends AppCompatActivity {
                     performanceProfile
             );
         }
-    }
-
-    private static Bitmap flipAtlasCellsVertically(Bitmap source) {
-        int width = source.getWidth();
-        int height = source.getHeight();
-        if (width < 4 || height < 4) {
-            return source.copy(Bitmap.Config.ARGB_8888, false);
-        }
-        int cellWidth = width / 2;
-        int cellHeight = height / 2;
-        Bitmap output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(output);
-        canvas.drawColor(Color.TRANSPARENT);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        for (int row = 0; row < 2; row++) {
-            for (int column = 0; column < 2; column++) {
-                int left = column * cellWidth;
-                int top = row * cellHeight;
-                Rect sourceRect = new Rect(
-                        left,
-                        top,
-                        left + cellWidth,
-                        top + cellHeight
-                );
-                Rect targetRect = new Rect(
-                        left,
-                        top + cellHeight,
-                        left + cellWidth,
-                        top
-                );
-                canvas.drawBitmap(source, sourceRect, targetRect, paint);
-            }
-        }
-        return output;
     }
 
     private void postReliefProgress(
@@ -348,6 +301,28 @@ public final class MainActivityV52 extends AppCompatActivity {
             case TEXTURING:
             default:
                 postStatus(getString(R.string.status_25d_texturing_v52));
+                break;
+        }
+    }
+
+    private void postVideoProgress(
+            VideoReconstructionEngineV48.Stage stage,
+            int current,
+            int total
+    ) {
+        switch (stage) {
+            case SEGMENTING:
+                postStatus("Détourage vidéo 360° " + current + "/" + total + "…");
+                break;
+            case BUILDING_HULL:
+                postStatus("Intersection réelle des huit angles…");
+                break;
+            case MESHING:
+                postStatus("Création de la surface 3D continue…");
+                break;
+            case DEPTH:
+            default:
+                postStatus("Fusion de la texture cylindrique 360°…");
                 break;
         }
     }
@@ -377,6 +352,27 @@ public final class MainActivityV52 extends AppCompatActivity {
                     result.getBackend(),
                     result.getTotalDurationMs() / 1000.0
             ));
+        });
+    }
+
+    private void showVideoResult(VideoReconstructionEngineV48.Result result) {
+        runOnUiThread(() -> {
+            replaceCurrentModel(result.getMesh(), result.getTexture());
+            emptyText.setVisibility(View.GONE);
+            setBusy(false, R.string.status_done_video);
+            statusText.setText(
+                    result.getQualityLabel()
+                            + " • vraie surface 3D 360°"
+                            + " • " + currentMesh.getTriangleCount() + " triangles"
+                            + " • " + result.getDecodedFrameCount() + "/8 vues décodées"
+                            + " • " + result.getRepairedViewCount() + " vues réparées"
+                            + " • " + result.getBackend()
+                            + " • " + String.format(
+                                    java.util.Locale.FRANCE,
+                                    "%.1f s",
+                                    result.getTotalDurationMs() / 1000.0
+                            )
+            );
         });
     }
 

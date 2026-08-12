@@ -37,7 +37,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V6.1 avec récupération automatique d'un profil effondré. */
+/** Mode 3D V7 : DA3 multivue avec repli sur la coque continue V6.1. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
@@ -554,6 +554,9 @@ public final class Manual3DActivity extends AppCompatActivity {
             case ANALYSING:
                 text = "Auto-correction après réglages manuels…";
                 break;
+            case NEURAL_DEPTH:
+                text = "Depth Anything 3 analyse les quatre vues ensemble…";
+                break;
             case CLEANING:
                 text = "Séparation des membres et accessoires…";
                 break;
@@ -730,7 +733,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V6.1 profils fiabilisés");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V7 DA3 multivue");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
         status.setText(modelSummary + " • partage GLB qualité instantané : "
@@ -775,7 +778,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "continuous-3d-v610");
+                powerLock = ProcessingPowerLock.acquire(this, "neural-3d-v700");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {

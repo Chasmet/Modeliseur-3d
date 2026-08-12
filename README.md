@@ -1,14 +1,14 @@
-# Modéliseur 3D V6.1 — Android Java
+# Modéliseur 3D V7 DA3 — Android Java
 
 Application Android qui transforme quatre vues réelles d'un même personnage
 (face, profil droit, dos et profil gauche) en un modèle 3D texturé exportable en
-GLB. Le dépôt contient aussi le moteur 2.5D Face/Dos et un catalogue de 259
-assets 3D.
+GLB. Le dépôt contient aussi une vraie reconstruction vidéo 360° à huit angles,
+le moteur 2.5D Face/Dos et un catalogue de 259 assets 3D.
 
-## Reconstruction V6.1 « profils fiabilisés »
+## Reconstruction V7 « profondeur neuronale multivue »
 
-La V6.1 conserve l'enveloppe visuelle continue et ajoute un contrôle de
-non-régression avant la reconstruction :
+La V7 conserve les contrôles V6.1 et ajoute une profondeur réellement issue des
+pixels avant la reconstruction :
 
 1. détourage local de chaque vue avec IS-Net Anime FP32 ;
 2. conservation de la confiance alpha du réseau au bord du sujet ;
@@ -16,16 +16,20 @@ non-régression avant la reconstruction :
 4. mesure de la surface et de la largeur utile de chaque profil ;
 5. remplacement d'un profil effondré par la vue opposée en miroir ;
 6. normalisation indépendante des axes largeur, hauteur et profondeur ;
-7. distance signée euclidienne pour chaque silhouette ;
-8. fusion robuste face/dos et droite/gauche ;
-9. récupération adaptative d'un détail seulement s'il est confirmé sur deux
+7. analyse simultanée des quatre images par Depth Anything 3 Small ;
+8. cartes de profondeur cohérentes grâce à l'attention entre les vues ;
+9. distance signée euclidienne pour chaque silhouette ;
+10. fusion robuste face/dos et droite/gauche ;
+11. sculpture DA3 limitée à l'intérieur de la coque vérifiée ;
+12. garde-fou automatique si les cartes neuronales écrasent trop le volume ;
+13. récupération adaptative d'un détail seulement s'il est confirmé sur deux
    axes différents ;
-10. arrondi local des sections du torse, des membres et des accessoires afin de
+14. arrondi local des sections du torse, des membres et des accessoires afin de
    supprimer les coins artificiels de l'intersection orthographique ;
-11. mode de profondeur séparé pour les formes larges comme un kart ou un siège ;
-12. champ de densité sous-pixel transmis directement au mailleur ;
-13. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
-14. export du maillage complet sans simplification destructive.
+15. mode de profondeur séparé pour les formes larges comme un kart ou un siège ;
+16. champ de densité sous-pixel transmis directement au mailleur ;
+17. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
+18. export du maillage complet sans simplification destructive.
 
 Le mode haute précision utilise une grille allant jusqu'à 128 × 256 × 304 sur
 les appareils disposant de suffisamment de mémoire. Un profil compatible réduit
@@ -47,6 +51,10 @@ automatiquement la grille et l'atlas pour éviter une saturation mémoire.
 - un profil presque vide ne peut plus aplatir l'ensemble du sujet ;
 - la géométrie et la texture utilisent exactement le même profil de secours ;
 - un kart ou un objet large n'est plus aminci comme un membre humain.
+- la profondeur du visage, du vêtement, du siège et des pièces mécaniques peut
+  désormais modifier la surface au lieu de rester uniquement dans la texture ;
+- une vidéo de rotation utilise huit angles pour créer une vraie surface 3D et
+  une texture cylindrique, au lieu d'être réduite à quatre faces 2.5D.
 
 ## Prise de vues recommandée
 
@@ -64,7 +72,7 @@ Pour exploiter la précision du moteur :
 Le mode 3D crée un fichier autonome :
 
 ```text
-personnage_3d_v6_1_profils_fiabilises.glb
+personnage_3d_v7_da3_multivue.glb
 ```
 
 L'export conserve le nombre complet de triangles, les normales, les UV et la
@@ -93,8 +101,10 @@ images à un serveur.
 - `targetSdkVersion 34` ;
 - Java 17 ;
 - ABI `arm64-v8a` ;
-- ONNX Runtime Android 1.20.0 ;
-- version `6.1.0` (`versionCode 37`).
+- ONNX Runtime Android 1.22.1 ;
+- IS-Net Anime FP32 pour le détourage ;
+- DA3-SMALL quatre vues 224 px pour la profondeur ;
+- version `7.0.0` (`versionCode 38`).
 
 ## Compilation
 
@@ -112,16 +122,19 @@ app/build/outputs/apk/debug/app-debug.apk
 Le workflow `.github/workflows/android.yml` :
 
 - télécharge et vérifie IS-Net Anime FP32 par SHA-256 ;
+- exporte le checkpoint DA3-SMALL épinglé vers ONNX quatre vues et compare ses
+  sorties à PyTorch ;
 - exécute les tests Java du catalogue, des orientations, de la géométrie
-  historique, de l'enveloppe continue et de la fiabilité des profils ;
+  historique, de l'enveloppe continue, de la fiabilité des profils et de la
+  fusion de profondeur ;
 - lance `lintDebug` et `assembleDebug` ;
-- vérifie la signature et le modèle ONNX inclus ;
-- publie l'artefact `Modeliseur-V6.1-Profils-Fiabilises-Kart-debug`.
+- vérifie la signature et les deux modèles ONNX inclus ;
+- publie l'artefact `Modeliseur-V7-DA3-Multivue-Video360-debug`.
 
 ## Limite physique
 
 Quatre images ne contiennent aucune information sur une zone cachée dans les
-quatre vues. La V6.1 améliore l'enveloppe, les profils, les contours et la surface,
+quatre vues. La V7 améliore l'enveloppe, les profils, les contours et la surface,
 mais elle ne peut pas inventer avec certitude l'intérieur d'un vêtement, un
 dessous invisible ou une micro-géométrie absente des photos. Une reconstruction
 photogrammétrique complète nécessiterait davantage d'angles et des

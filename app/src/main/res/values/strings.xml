@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Modéliseur 2.5D + 3D V6.1</string>
+    <string name="app_name">Modéliseur 3D V7 DA3</string>
 
-    <string name="home_title">Modéliseur 3D V6.1</string>
+    <string name="home_title">Modéliseur 3D V7</string>
     <string name="home_subtitle">Choisis uniquement le type de reconstruction à utiliser.</string>
     <string name="home_mode_25d">2.5D\nFace + dos</string>
     <string name="home_mode_3d">3D guidée\n4 vues contrôlées et réparées</string>
@@ -17,7 +17,7 @@
     <string name="back_selected">Dos sélectionné ✓</string>
     <string name="generate_single">Générer avec la face</string>
     <string name="generate_front_back">Générer Face + Dos</string>
-    <string name="select_video">Choisir une vidéo</string>
+    <string name="select_video">Vidéo 360° — vraie 3D (8 angles)</string>
     <string name="reset_view">Face</string>
     <string name="rotation_start">Rotation</string>
     <string name="rotation_stop">Arrêter</string>
@@ -56,7 +56,7 @@
     <string name="status_generating_image_v47">Détourage et création du relief 2.5D…</string>
 
     <string name="status_done">Personnage image 2.5D V5.4 prêt.</string>
-    <string name="status_done_video">Personnage vidéo 2.5D V5.4 prêt.</string>
+    <string name="status_done_video">Modèle vidéo 360° en vraie 3D prêt.</string>
     <string name="status_done_pair">Personnage Face + Dos V5.4 prêt.</string>
     <string name="quality_front_back">Face + Dos réels V5.4</string>
     <string name="backend_front_back">Deux détourages IS-Net • silhouette commune • vraies textures avant/arrière • profils depuis les bords • UV corrigés</string>
@@ -72,7 +72,7 @@
     <string name="error_select_front">Sélectionne d’abord une image de face.</string>
     <string name="error_image">Impossible de lire cette image.</string>
     <string name="error_not_video">Le fichier choisi n’est pas une vidéo. Utilise le bouton Choisir une vidéo.</string>
-    <string name="error_video">La vidéo n’a pas pu produire un relief 2.5D exploitable.</string>
+    <string name="error_video">La vidéo n’a pas pu produire une surface 3D 360° exploitable.</string>
     <string name="error_generation">La génération 2.5D locale a échoué. Le détail est affiché ci-dessous.</string>
     <string name="error_export">L’export GLB HD ou de la copie mobile 200 ko a échoué.</string>
 

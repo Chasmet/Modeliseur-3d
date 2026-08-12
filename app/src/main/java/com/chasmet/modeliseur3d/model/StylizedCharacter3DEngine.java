@@ -14,12 +14,13 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Moteur 3D local V6 réservé au mode quatre vues.
+ * Moteur 3D local V7 réservé au mode quatre vues.
  *
  * La V6 conserve les corrections de profil éprouvées, mais remplace le volume
- * binaire par un champ de distances multivue continu. Les contours IS-Net
- * sous-pixel, les membres séparés et les sections arrondies sont ainsi gardés
- * jusqu'au maillage final. Le moteur 2.5D reste totalement séparé.
+ * binaire par un champ de distances multivue continu. La V7 ajoute Depth
+ * Anything 3 Small : les quatre vues passent ensemble dans le réseau, puis les
+ * profondeurs cohérentes sculptent la coque sans pouvoir dépasser les
+ * silhouettes vérifiées. Le moteur 2.5D reste totalement séparé.
  */
 public final class StylizedCharacter3DEngine implements AutoCloseable {
     public static final int REQUIRED_VIEW_COUNT = 4;
@@ -146,11 +147,49 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 profileCorrection
         );
 
+        NeuralMultiViewDepthEngine.Prediction neuralPrediction = null;
+        String neuralBackend = "DA3 indisponible — coque V6.1 conservée";
+        Bitmap[] depthInputs = null;
+        try {
+            notifyProgress(listener, Stage.NEURAL_DEPTH, 0, 1);
+            depthInputs = buildDepthInputs(
+                    isolated,
+                    bounds,
+                    profile,
+                    profileCorrection.shouldFlipLeft()
+            );
+            int[] depthWidths = {
+                    profile.width,
+                    profile.depth,
+                    profile.width,
+                    profile.depth
+            };
+            try (NeuralMultiViewDepthEngine depthEngine =
+                         new NeuralMultiViewDepthEngine(context)) {
+                neuralPrediction = depthEngine.estimate(
+                        depthInputs,
+                        depthWidths,
+                        profile.height
+                );
+                neuralBackend = neuralPrediction.getBackend()
+                        + " • quatre vues simultanées"
+                        + " • " + neuralPrediction.getDurationMs() + " ms";
+            }
+        } catch (Exception | OutOfMemoryError neuralError) {
+            neuralBackend = "DA3 ignoré sans bloquer : " + shortError(neuralError);
+            releaseMemory();
+        } finally {
+            recycleAll(depthInputs);
+            notifyProgress(listener, Stage.NEURAL_DEPTH, 1, 1);
+        }
+
         notifyProgress(listener, Stage.CLEANING, REQUIRED_VIEW_COUNT, REQUIRED_VIEW_COUNT);
         releaseMemory();
         notifyProgress(listener, Stage.BUILDING_HULL, 0, 1);
 
         ContinuousVisualHull.Result hull;
+        MultiViewDepthFusion.Result depthFusion = null;
+        float[] finalDensity;
         int occupied;
         try {
             hull = ContinuousVisualHull.build(
@@ -179,6 +218,34 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                         true
                 );
                 occupied = hull.getOccupiedVoxels();
+            }
+            finalDensity = hull.getDensity();
+            int baseOccupied = occupied;
+            if (neuralPrediction != null) {
+                try {
+                    depthFusion = MultiViewDepthFusion.refine(
+                            finalDensity,
+                            masks,
+                            neuralPrediction.getDepth(),
+                            neuralPrediction.getConfidence(),
+                            profile.width,
+                            profile.height,
+                            profile.depth
+                    );
+                    if (depthFusion.isApplied()
+                            && depthFusion.getOccupiedVoxels() >= 320) {
+                        finalDensity = depthFusion.getDensity();
+                        occupied = depthFusion.getOccupiedVoxels();
+                    } else if (depthFusion.isApplied()) {
+                        depthFusion = null;
+                        occupied = baseOccupied;
+                        neuralBackend += " • relief refusé par le garde-fou final";
+                    }
+                } catch (RuntimeException | OutOfMemoryError fusionError) {
+                    depthFusion = null;
+                    neuralBackend += " • fusion ignorée : " + shortError(fusionError);
+                    releaseMemory();
+                }
             }
         } catch (RuntimeException | OutOfMemoryError error) {
             recycleAll(isolated);
@@ -213,7 +280,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         MeshData mesh;
         try {
             mesh = SmoothHullMesher.build(
-                    hull.getDensity(),
+                    finalDensity,
                     profile.width,
                     profile.height,
                     profile.depth,
@@ -252,6 +319,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         if (hull.isComplexShapeMode()) {
             correctionSummary.append(" • volume large/kart préservé");
         }
+        if (depthFusion != null && depthFusion.isApplied()) {
+            correctionSummary.append(" • relief DA3 multivue ")
+                    .append(depthFusion.getValidViews())
+                    .append("/4")
+                    .append(" • ")
+                    .append(depthFusion.getChangedVoxels())
+                    .append(" voxels sculptés");
+            if (depthFusion.isCollapseGuardUsed()) {
+                correctionSummary.append(" • garde-fou anti-écrasement actif");
+            }
+        } else {
+            correctionSummary.append(" • coque continue de secours");
+        }
         correctionSummary.append(" • silhouettes ")
                 .append(Math.round(hull.getSilhouetteScore() * 100.0))
                 .append(" %");
@@ -264,7 +344,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 averageComponents,
                 profile.label,
                 profile.processors,
-                segmentationBackend,
+                segmentationBackend + " • " + neuralBackend,
                 adaptive,
                 profileCorrection.shouldFlipLeft(),
                 coherence,
@@ -544,6 +624,68 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         return atlas;
     }
 
+    private static Bitmap[] buildDepthInputs(
+            Bitmap[] views,
+            Rect[] bounds,
+            Profile profile,
+            boolean flipLeft
+    ) {
+        Bitmap[] inputs = new Bitmap[REQUIRED_VIEW_COUNT];
+        try {
+            for (int view = 0; view < REQUIRED_VIEW_COUNT; view++) {
+                int targetWidth = isProfile(view) ? profile.depth : profile.width;
+                inputs[view] = normalizedDepthInput(
+                        views[view],
+                        bounds[view],
+                        targetWidth,
+                        profile.height,
+                        view == StylizedFourViewProjector.LEFT && flipLeft
+                );
+            }
+            return inputs;
+        } catch (RuntimeException | OutOfMemoryError error) {
+            recycleAll(inputs);
+            throw error;
+        }
+    }
+
+    private static Bitmap normalizedDepthInput(
+            Bitmap source,
+            Rect bounds,
+            int targetWidth,
+            int targetHeight,
+            boolean flipHorizontal
+    ) {
+        Bitmap output = Bitmap.createBitmap(
+                targetWidth,
+                targetHeight,
+                Bitmap.Config.ARGB_8888
+        );
+        Canvas canvas = new Canvas(output);
+        canvas.drawColor(Color.TRANSPARENT);
+        int drawHeight = Math.max(1, Math.round(targetHeight * 0.92f));
+        float scale = drawHeight / Math.max(1.0f, bounds.height());
+        int drawWidth = Math.max(1, Math.round(bounds.width() * scale));
+        drawWidth = Math.min(Math.round(targetWidth * 0.94f), drawWidth);
+        float left = (targetWidth - drawWidth) * 0.5f;
+        float top = (targetHeight - drawHeight) * 0.5f;
+        RectF destination = new RectF(left, top, left + drawWidth, top + drawHeight);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG
+        );
+        if (flipHorizontal) {
+            Matrix matrix = new Matrix();
+            matrix.setScale(-1.0f, 1.0f, targetWidth * 0.5f, targetHeight * 0.5f);
+            canvas.save();
+            canvas.concat(matrix);
+            canvas.drawBitmap(source, bounds, destination, paint);
+            canvas.restore();
+        } else {
+            canvas.drawBitmap(source, bounds, destination, paint);
+        }
+        return output;
+    }
+
     private static Bitmap normalizedTexture(
             Bitmap source,
             Rect bounds,
@@ -665,6 +807,9 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
     }
 
     private static void recycleAll(Bitmap[] bitmaps) {
+        if (bitmaps == null) {
+            return;
+        }
         for (Bitmap bitmap : bitmaps) {
             recycle(bitmap);
         }
@@ -679,9 +824,34 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
     public enum Stage {
         SEGMENTING,
         ANALYSING,
+        NEURAL_DEPTH,
         CLEANING,
         BUILDING_HULL,
         MESHING
+    }
+
+    private static String shortError(Throwable error) {
+        if (error instanceof OutOfMemoryError) {
+            return "mémoire insuffisante";
+        }
+        Throwable current = error;
+        String message = null;
+        while (current != null) {
+            if (current.getMessage() != null
+                    && !current.getMessage().trim().isEmpty()) {
+                message = current.getMessage().trim();
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
+        }
+        if (message == null) {
+            return error.getClass().getSimpleName();
+        }
+        return message.length() > 120
+                ? message.substring(0, 117) + "…"
+                : message;
     }
 
     public interface ProgressListener {
@@ -875,19 +1045,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 height = 256;
                 maximumDepth = 304;
                 atlasHeight = 2048;
-                label = "3D V6.1 précision anti-aplatissement";
+                label = "3D V7 DA3 précision neuronale";
             } else if (memoryMb >= 430L && processors >= 6) {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
                 atlasHeight = 2048;
-                label = "3D V6.1 haute précision";
+                label = "3D V7 DA3 haute précision";
             } else {
                 width = 88;
                 height = 176;
                 maximumDepth = 200;
                 atlasHeight = 1024;
-                label = "3D V6.1 compatible";
+                label = "3D V7 DA3 compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],
