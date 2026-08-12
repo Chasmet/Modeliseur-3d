@@ -18,8 +18,8 @@ import java.util.Locale;
  * résolution de texture affichés dans l'application. Aucune limite de taille,
  * aucune simplification et aucune compression destructive ne sont appliquées.
  *
- * La V5.9.7 conserve le matériau propre pour les visionneuses externes et
- * exporte le volume anatomique affiné. Le moteur 2.5D reste totalement séparé.
+ * La V6 conserve le matériau propre pour les visionneuses externes et exporte
+ * sans simplification le champ multivue continu. Le moteur 2.5D reste séparé.
  */
 public final class Fast3DGlbExporter {
     private Fast3DGlbExporter() {
@@ -49,14 +49,14 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Personnage_3D_V5_9_7_" + stamp
+                "Modeliseur3D/Personnage_3D_V6_0_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "personnage_3d_v5_9_7.tmp");
-        File output = new File(directory, "personnage_3d_v5_9_7_anatomique.glb");
+        File temporary = new File(directory, "personnage_3d_v6_0.tmp");
+        File output = new File(directory, "personnage_3d_v6_0_precision.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 

@@ -20,7 +20,8 @@ import java.util.concurrent.Future;
 public final class SmoothHullMesher {
     // Un seuil plus bas et un seul flou empêchent les doigts, pattes et
     // accessoires fins de disparaître avant l'extraction de la surface.
-    private static final float ISO_LEVEL = 0.37f;
+    private static final float BINARY_ISO_LEVEL = 0.37f;
+    private static final float CONTINUOUS_ISO_LEVEL = 0.50f;
     private static final int SMOOTHING_PASSES = 1;
 
     private static final int[][] CORNER_OFFSETS = {
@@ -71,6 +72,61 @@ public final class SmoothHullMesher {
         }
 
         float[] field = createSmoothField(occupancy, width, height, depth);
+        return buildField(
+                field,
+                width,
+                height,
+                depth,
+                atlas,
+                availableProcessors,
+                BINARY_ISO_LEVEL
+        );
+    }
+
+    /**
+     * Extrait directement l'isosurface d'un champ continu V6. Aucun flou
+     * binaire supplémentaire n'est appliqué : les fractions contiennent déjà
+     * la position sous-pixel calculée depuis les quatre vues.
+     */
+    public static MeshData build(
+            float[] density,
+            int width,
+            int height,
+            int depth,
+            AtlasLayout atlas,
+            int availableProcessors
+    ) throws Exception {
+        if (density == null || density.length != width * height * depth) {
+            throw new IllegalArgumentException("Champ 3D continu invalide");
+        }
+        if (width < 4 || height < 4 || depth < 4) {
+            throw new IllegalArgumentException("Résolution 3D trop faible");
+        }
+        for (float value : density) {
+            if (!Float.isFinite(value) || value < 0.0f || value > 1.0f) {
+                throw new IllegalArgumentException("Densité 3D hors limites");
+            }
+        }
+        return buildField(
+                density,
+                width,
+                height,
+                depth,
+                atlas,
+                availableProcessors,
+                CONTINUOUS_ISO_LEVEL
+        );
+    }
+
+    private static MeshData buildField(
+            float[] field,
+            int width,
+            int height,
+            int depth,
+            AtlasLayout atlas,
+            int availableProcessors,
+            float isoLevel
+    ) throws Exception {
         GradientField gradient = createGradientField(field, width, height, depth);
 
         int workers = Math.max(1, Math.min(availableProcessors - 1, 10));
@@ -92,6 +148,7 @@ public final class SmoothHullMesher {
                             height,
                             depth,
                             atlas,
+                            isoLevel,
                             from,
                             to
                     );
@@ -236,6 +293,7 @@ public final class SmoothHullMesher {
             int height,
             int depth,
             AtlasLayout atlas,
+            float isoLevel,
             int startY,
             int endY
     ) {
@@ -265,7 +323,7 @@ public final class SmoothHullMesher {
                         minimum = Math.min(minimum, value);
                         maximum = Math.max(maximum, value);
                     }
-                    if (minimum >= ISO_LEVEL || maximum < ISO_LEVEL) {
+                    if (minimum >= isoLevel || maximum < isoLevel) {
                         continue;
                     }
 
@@ -276,14 +334,14 @@ public final class SmoothHullMesher {
                             int cornerB = tetrahedron[edge[1]];
                             float valueA = cubeValues[cornerA];
                             float valueB = cubeValues[cornerB];
-                            if ((valueA >= ISO_LEVEL) == (valueB >= ISO_LEVEL)) {
+                            if ((valueA >= isoLevel) == (valueB >= isoLevel)) {
                                 continue;
                             }
 
                             float denominator = valueB - valueA;
                             float t = Math.abs(denominator) < 0.000001f
                                     ? 0.5f
-                                    : (ISO_LEVEL - valueA) / denominator;
+                                    : (isoLevel - valueA) / denominator;
                             t = clamp01(t);
 
                             float ax = x + CORNER_OFFSETS[cornerA][0];

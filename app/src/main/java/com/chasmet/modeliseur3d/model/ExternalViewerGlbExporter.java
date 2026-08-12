@@ -150,7 +150,7 @@ public final class ExternalViewerGlbExporter {
     ) {
         StringBuilder json = new StringBuilder(2100);
         json.append('{');
-        json.append("\"asset\":{\"version\":\"2.0\",\"generator\":\"Modeliseur 3D V5.9.5 Android\"},");
+        json.append("\"asset\":{\"version\":\"2.0\",\"generator\":\"Modeliseur 3D V6.0 Android\"},");
         json.append("\"extensionsUsed\":[\"KHR_materials_unlit\"],");
         json.append("\"scene\":0,");
         json.append("\"scenes\":[{\"nodes\":[0]}],");

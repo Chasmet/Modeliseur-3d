@@ -1,105 +1,94 @@
-# Modéliseur 3D V4.4 — Android local, image et vidéo
+# Modéliseur 3D V6.0 — Android Java
 
-Application Android Java qui transforme localement :
+Application Android qui transforme quatre vues réelles d'un même personnage
+(face, profil droit, dos et profil gauche) en un modèle 3D texturé exportable en
+GLB. Le dépôt contient aussi le moteur 2.5D Face/Dos et un catalogue de 259
+assets 3D.
 
-- une image unique ;
-- une planche contenant plusieurs vues ;
-- une courte vidéo de rotation ;
+## Reconstruction V6 « précision extrême »
 
-en un modèle 3D texturé exportable en GLB.
+La V6 remplace l'ancienne intersection de voxels binaires par une enveloppe
+visuelle continue :
 
-## Confidentialité et fonctionnement
+1. détourage local de chaque vue avec IS-Net Anime FP32 ;
+2. conservation de la confiance alpha du réseau au bord du sujet ;
+3. correction automatique et manuelle de l'orientation des profils ;
+4. normalisation indépendante des axes largeur, hauteur et profondeur ;
+5. distance signée euclidienne pour chaque silhouette ;
+6. fusion robuste face/dos et droite/gauche ;
+7. récupération adaptative d'un détail seulement s'il est confirmé sur deux
+   axes différents ;
+8. arrondi local des sections du torse, des membres et des accessoires afin de
+   supprimer les coins artificiels de l'intersection orthographique ;
+9. champ de densité sous-pixel transmis directement au mailleur ;
+10. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
+11. export du maillage complet sans simplification destructive.
 
-La V4.4 n’utilise :
+Le mode haute précision utilise une grille allant jusqu'à 128 × 256 × 304 sur
+les appareils disposant de suffisamment de mémoire. Un profil compatible réduit
+automatiquement la grille et l'atlas pour éviter une saturation mémoire.
 
-- aucune API distante ;
-- aucune clé ;
-- aucun compte ;
-- aucun crédit ni abonnement ;
-- aucune permission Internet.
+## Ce qui améliore réellement la qualité
 
-Les images, les trames vidéo, les modèles neuronaux et les GLB restent sur le téléphone. Internet est seulement utilisé par GitHub Actions pendant la compilation pour télécharger les modèles open source avant de les intégrer à l’APK.
+- les contours ne sont plus coupés en « vrai/faux » avant la création du
+  maillage ;
+- ajouter des triangles sert désormais à représenter une surface fractionnaire,
+  et non à lisser une forme déjà appauvrie ;
+- les bras et les jambes séparés reçoivent une profondeur locale plus faible que
+  le torse ;
+- les espaces visibles, notamment entre les jambes, restent ouverts ;
+- un accessoire caché dans une vue peut être conservé s'il est visible depuis
+  deux directions perpendiculaires ;
+- le score de conservation des silhouettes est calculé après reconstruction et
+  affiché avec le résultat.
 
-## Vidéo locale en huit vues
+## Prise de vues recommandée
 
-Pour une vidéo, l’application :
+Pour exploiter la précision du moteur :
 
-1. vérifie que sa durée est comprise entre 1,2 seconde et 2 minutes ;
-2. répartit huit zones sur la rotation ;
-3. compare plusieurs trames dans chaque zone ;
-4. conserve la trame la plus nette et la mieux exposée ;
-5. corrige l’orientation de la vidéo ;
-6. compose localement une planche 4 × 2 ;
-7. transmet cette planche au moteur multivue embarqué.
+- photographier exactement le même personnage et la même pose ;
+- garder le corps entier visible, sans couper les pieds ni les accessoires ;
+- utiliser une lumière uniforme et un fond contrasté ;
+- conserver la même hauteur de caméra et une distance proche ;
+- fournir les vues dans l'ordre Face, Droite, Dos, Gauche ;
+- corriger la rotation ou le miroir des profils dans l'écran prévu à cet effet.
 
-Le MP4 n’est jamais envoyé ni copié sur un serveur.
+## Export GLB
 
-## Reconstruction locale
-
-Pipeline principal :
-
-1. décodage de l’entrée jusqu’à 2048 px ;
-2. détourage par **IS-Net Anime FP32** ;
-3. regroupement des morceaux appartenant au même sujet ;
-4. détection des vues réellement exploitables ;
-5. enveloppe volumique multivue ou volume monoculaire arrondi ;
-6. maillage lissé préservant les membres et accessoires ;
-7. relief par **Depth Anything V2 Small FP32** ;
-8. calcul NNAPI quand il est compatible, avec repli CPU multi-cœurs ;
-9. affichage OpenGL ES 3 ;
-10. export GLB, OBJ, MTL et texture.
-
-## Deux GLB à chaque export
-
-### GLB haute définition
-
-```text
-personnage_v44_local_hd.glb
-```
-
-Il conserve le maillage complet et la texture PNG intégrée.
-
-### GLB mobile limité à 200 Ko
+Le mode 3D crée un fichier autonome :
 
 ```text
-personnage_v44_mobile_200ko.glb
+personnage_3d_v6_0_precision.glb
 ```
 
-L’application réduit progressivement :
+L'export conserve le nombre complet de triangles, les normales, les UV et la
+texture PNG. Le matériau externe utilise `KHR_materials_unlit`, masque les faces
+arrière et désactive les mipmaps afin d'éviter le mélange entre les quatre zones
+de l'atlas.
 
-- le nombre de triangles ;
-- la taille de la texture ;
-- la qualité JPEG ;
+## Catalogue
 
-puis mesure le fichier réellement écrit. Le GLB mobile n’est accepté que si sa taille est comprise entre 1 et **200 000 octets**.
+- 259 assets classés ;
+- 247 modèles procéduraux générés hors ligne sous licence CC0 ;
+- 12 modèles officiels Khronos sous licences permissives ;
+- 112 assets animés ;
+- ouverture et export via le sélecteur de documents Android ;
+- limite de sécurité de 8 Mo par asset téléchargé.
 
-Une limite de 200 Ko impose nécessairement une perte de détails. Le GLB HD reste disponible pour conserver la meilleure qualité produite par le téléphone.
-
-## Modèles embarqués
-
-### IS-Net Anime FP32
-
-```text
-SHA-256 : 6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
-```
-
-### Depth Anything V2 Small FP32
-
-```text
-SHA-256 : afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
-```
-
-Runtime : ONNX Runtime Android 1.20.0.
+Le catalogue utilise Internet pour récupérer les modèles distants. La
+reconstruction des photos reste exécutée sur le téléphone et n'envoie pas les
+images à un serveur.
 
 ## Configuration Android
 
-- langage : Java ;
+- Java uniquement ;
 - `minSdkVersion 21` ;
 - `compileSdkVersion 34` ;
 - `targetSdkVersion 34` ;
-- ABI : `arm64-v8a` ;
-- version : `4.4.0` ;
-- versionCode : `10`.
+- Java 17 ;
+- ABI `arm64-v8a` ;
+- ONNX Runtime Android 1.20.0 ;
+- version `6.0.0` (`versionCode 36`).
 
 ## Compilation
 
@@ -114,35 +103,20 @@ APK produit :
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` exécute les tests Java, vérifie l’absence de permission Internet, compile l’APK, contrôle sa signature et les SHA-256 des deux modèles, puis publie l’artefact :
+Le workflow `.github/workflows/android.yml` :
 
-```text
-Modeliseur3D-V4.4-Local-Video8-debug
-```
+- télécharge et vérifie IS-Net Anime FP32 par SHA-256 ;
+- exécute les tests Java du catalogue, des orientations, de la géométrie
+  historique et de l'enveloppe continue V6 ;
+- lance `lintDebug` et `assembleDebug` ;
+- vérifie la signature et le modèle ONNX inclus ;
+- publie l'artefact `Modeliseur-V6.0-Precision-Continue-2K-debug`.
 
-## Principaux fichiers V4.4
+## Limite physique
 
-```text
-app/src/main/java/com/chasmet/modeliseur3d/
-├── MainActivity.java
-├── media/
-│   ├── VideoFrameExtractor.java
-│   └── VideoSheetComposer.java
-├── model/
-│   ├── AnimeSegmentationEngine.java
-│   ├── NeuralDepthEngine.java
-│   ├── NeuralReconstructionEngine.java
-│   ├── MobileMeshOptimizer.java
-│   ├── MobileGlbExporter.java
-│   ├── GlbExporter.java
-│   └── ObjExporter.java
-└── gl/
-    ├── ModelGLSurfaceView.java
-    └── ModelRenderer.java
-```
-
-## Limites réelles
-
-Cette application n’exécute pas un grand générateur 3D distant. Elle combine segmentation, profondeur neuronale et reconstruction géométrique sur Android. La précision dépend directement de la qualité de l’image ou de la rotation vidéo : pose stable, sujet entier visible, fond propre, éclairage régulier et angles suffisamment différents.
-
-Les zones constamment cachées, l’intérieur des vêtements et les détails très fins ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est généré dans cette version.
+Quatre images ne contiennent aucune information sur une zone cachée dans les
+quatre vues. La V6 améliore fortement l'enveloppe, les contours et la surface,
+mais elle ne peut pas inventer avec certitude l'intérieur d'un vêtement, un
+dessous invisible ou une micro-géométrie absente des photos. Une reconstruction
+photogrammétrique complète nécessiterait davantage d'angles et des
+correspondances de points fiables.

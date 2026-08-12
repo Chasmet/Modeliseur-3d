@@ -37,7 +37,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V5.9.8 avec rotation et miroir manuels des deux profils. */
+/** Mode 3D V6 continu avec rotation et miroir manuels des deux profils. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
@@ -549,10 +549,10 @@ public final class Manual3DActivity extends AppCompatActivity {
                 text = "Séparation des membres et accessoires…";
                 break;
             case BUILDING_HULL:
-                text = "Construction du volume anatomique…";
+                text = "Fusion continue des quatre silhouettes…";
                 break;
             default:
-                text = "Création du maillage et des textures…";
+                text = "Surface sous-pixel et texture 2K…";
                 break;
         }
         runOnUiThread(() -> status.setText(text));
@@ -721,7 +721,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.8 qualité");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V6 qualité extrême");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
         status.setText(modelSummary + " • partage GLB qualité instantané : "
@@ -766,7 +766,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v598");
+                powerLock = ProcessingPowerLock.acquire(this, "continuous-3d-v600");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {

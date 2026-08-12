@@ -1,16 +1,16 @@
-# Validation V4.4 locale
+# Validation V6.0
 
 La validation automatique doit confirmer les points suivants :
 
-- aucune permission `android.permission.INTERNET` ;
-- aucune classe Tripo, clé API ou adresse de service cloud ;
-- version Android `4.4.0` / versionCode `10` ;
-- extraction locale de huit vues vidéo ;
-- regroupement des silhouettes testé en Java ;
-- simplification du maillage mobile testée en Java ;
-- export HD conservé séparément ;
-- copie mobile refusée si elle dépasse 200 000 octets ;
-- IS-Net Anime FP32 et Depth Anything V2 vérifiés par SHA-256 dans l’APK ;
+- version Android `6.0.0` / versionCode `36` ;
+- reconstruction des photos exécutée localement ;
+- IS-Net Anime FP32 vérifié par SHA-256 dans l'APK ;
+- enveloppe continue testée en Java pur ;
+- coins artificiels arrondis sans perdre les projections ;
+- profondeur locale des membres inférieure à celle du torse ;
+- espace entre les jambes conservé ;
+- détail adaptatif accepté seulement avec deux axes de support ;
+- export GLB complet sans simplification ;
 - signature APK v1/v2 vérifiée ;
 - `lintDebug` et `assembleDebug` réussis.
 
@@ -23,5 +23,5 @@ Commande de compilation :
 Artefact attendu :
 
 ```text
-Modeliseur3D-V4.4-Local-Video8-debug
+Modeliseur-V6.0-Precision-Continue-2K-debug
 ```

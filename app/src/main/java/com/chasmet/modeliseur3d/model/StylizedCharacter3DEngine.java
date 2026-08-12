@@ -14,15 +14,15 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Moteur 3D local V5.9 réservé au mode quatre vues.
+ * Moteur 3D local V6 réservé au mode quatre vues.
  *
- * La V5.9 redresse les profils horizontaux avant de calculer la profondeur,
- * corrige l'orientation verticale des textures OpenGL et conserve le moteur
- * 2.5D totalement séparé.
+ * La V6 conserve les corrections de profil éprouvées, mais remplace le volume
+ * binaire par un champ de distances multivue continu. Les contours IS-Net
+ * sous-pixel, les membres séparés et les sections arrondies sont ainsi gardés
+ * jusqu'au maillage final. Le moteur 2.5D reste totalement séparé.
  */
 public final class StylizedCharacter3DEngine implements AutoCloseable {
     public static final int REQUIRED_VIEW_COUNT = 4;
-    private static final int ATLAS_HEIGHT = 1024;
     private static final float FOREGROUND_ALPHA = 24.0f;
     private static final int MAXIMUM_COMPONENTS = 16;
 
@@ -70,21 +70,26 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
 
         Profile profile = Profile.detect(depthMultiplier, bounds);
         boolean[][] masks = new boolean[REQUIRED_VIEW_COUNT][];
+        float[][] confidences = new float[REQUIRED_VIEW_COUNT][];
         int componentCount = 0;
         try {
             for (int index = 0; index < REQUIRED_VIEW_COUNT; index++) {
                 int axisWidth = isProfile(index) ? profile.depth : profile.width;
-                boolean[] normalized = normalizeMask(
+                NormalizedSilhouette normalized = normalizeSilhouette(
                         isolated[index],
                         bounds[index],
                         axisWidth,
                         profile.height
                 );
                 masks[index] = StylizedMaskTopology.clean(
-                        normalized,
+                        normalized.mask,
                         axisWidth,
                         profile.height,
                         MAXIMUM_COMPONENTS
+                );
+                confidences[index] = keepCleanConfidence(
+                        normalized.confidence,
+                        masks[index]
                 );
                 componentCount += StylizedMaskTopology.countComponents(
                         masks[index],
@@ -110,6 +115,11 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                     profile.depth,
                     profile.height
             );
+            confidences[StylizedFourViewProjector.LEFT] = flipHorizontal(
+                    confidences[StylizedFourViewProjector.LEFT],
+                    profile.depth,
+                    profile.height
+            );
         }
 
         double coherence = FourViewAutoCorrector.computeCoherence(
@@ -130,27 +140,39 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         releaseMemory();
         notifyProgress(listener, Stage.BUILDING_HULL, 0, 1);
 
-        boolean[] volume = StylizedFourViewProjector.build(
-                masks,
-                profile.width,
-                profile.height,
-                profile.depth,
-                profile.depth,
-                adaptive
-        );
-        int occupied = StylizedFourViewProjector.countOccupied(volume);
-        int minimumUseful = Math.max(500, volume.length / 3600);
-        if (!adaptive && occupied < minimumUseful) {
-            adaptive = true;
-            volume = StylizedFourViewProjector.build(
+        ContinuousVisualHull.Result hull;
+        int occupied;
+        try {
+            hull = ContinuousVisualHull.build(
+                    confidences,
                     masks,
                     profile.width,
                     profile.height,
                     profile.depth,
-                    profile.depth,
-                    true
+                    adaptive
             );
-            occupied = StylizedFourViewProjector.countOccupied(volume);
+            occupied = hull.getOccupiedVoxels();
+            int minimumUseful = Math.max(
+                    500,
+                    profile.width * profile.height * profile.depth / 3600
+            );
+            if (!adaptive && occupied < minimumUseful) {
+                adaptive = true;
+                hull = null;
+                releaseMemory();
+                hull = ContinuousVisualHull.build(
+                        confidences,
+                        masks,
+                        profile.width,
+                        profile.height,
+                        profile.depth,
+                        true
+                );
+                occupied = hull.getOccupiedVoxels();
+            }
+        } catch (RuntimeException | OutOfMemoryError error) {
+            recycleAll(isolated);
+            throw error;
         }
         if (occupied < 320) {
             recycleAll(isolated);
@@ -159,18 +181,11 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                             + "la même pose et le corps entier."
             );
         }
-        closeEnclosedVoxelHoles(
-                volume,
-                profile.width,
-                profile.height,
-                profile.depth
-        );
-
         SmoothHullMesher.AtlasLayout layout = SmoothHullMesher.AtlasLayout.create(
                 profile.width,
                 profile.height,
                 profile.depth,
-                ATLAS_HEIGHT
+                profile.atlasHeight
         );
         Bitmap atlas;
         try {
@@ -188,7 +203,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         MeshData mesh;
         try {
             mesh = SmoothHullMesher.build(
-                    volume,
+                    hull.getDensity(),
                     profile.width,
                     profile.height,
                     profile.depth,
@@ -218,7 +233,12 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         } else {
             correctionSummary.append(" • quatre vues cohérentes");
         }
-        correctionSummary.append(" • texture remise à l'endroit");
+        correctionSummary.append(" • champ continu sous-pixel");
+        correctionSummary.append(" • sections arrondies");
+        correctionSummary.append(" • silhouettes ")
+                .append(Math.round(hull.getSilhouetteScore() * 100.0))
+                .append(" %");
+        correctionSummary.append(" • texture 2K remise à l'endroit");
 
         return new Result(
                 mesh,
@@ -290,47 +310,83 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         return new Rect(left, top, right + 1, bottom + 1);
     }
 
-    private static boolean[] normalizeMask(
+    private static NormalizedSilhouette normalizeSilhouette(
             Bitmap isolated,
             Rect bounds,
             int targetWidth,
             int targetHeight
     ) {
-        boolean[] output = new boolean[targetWidth * targetHeight];
+        Bitmap normalized = Bitmap.createBitmap(
+                targetWidth,
+                targetHeight,
+                Bitmap.Config.ARGB_8888
+        );
         int drawHeight = Math.max(1, Math.round(targetHeight * 0.92f));
         float physicalScale = drawHeight / Math.max(1.0f, bounds.height());
         int naturalWidth = Math.max(1, Math.round(bounds.width() * physicalScale));
         int drawWidth = Math.min(Math.round(targetWidth * 0.94f), naturalWidth);
         drawWidth = Math.max(1, drawWidth);
-        int offsetX = (targetWidth - drawWidth) / 2;
-        int offsetY = (targetHeight - drawHeight) / 2;
+        float offsetX = (targetWidth - drawWidth) * 0.5f;
+        float offsetY = (targetHeight - drawHeight) * 0.5f;
+        Canvas canvas = new Canvas(normalized);
+        canvas.drawColor(Color.TRANSPARENT);
+        Paint paint = new Paint(
+                Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG
+        );
+        canvas.drawBitmap(
+                isolated,
+                bounds,
+                new RectF(
+                        offsetX,
+                        offsetY,
+                        offsetX + drawWidth,
+                        offsetY + drawHeight
+                ),
+                paint
+        );
 
-        int sourceWidth = isolated.getWidth();
-        int sourceHeight = isolated.getHeight();
-        int[] pixels = new int[sourceWidth * sourceHeight];
-        isolated.getPixels(
+        int[] pixels = new int[targetWidth * targetHeight];
+        normalized.getPixels(
                 pixels,
                 0,
-                sourceWidth,
+                targetWidth,
                 0,
                 0,
-                sourceWidth,
-                sourceHeight
+                targetWidth,
+                targetHeight
         );
-        for (int y = 0; y < drawHeight; y++) {
-            int sourceY = Math.min(
-                    bounds.bottom - 1,
-                    bounds.top + (int) ((y + 0.5f) * bounds.height() / drawHeight)
-            );
-            int targetY = offsetY + y;
-            for (int x = 0; x < drawWidth; x++) {
-                int sourceX = Math.min(
-                        bounds.right - 1,
-                        bounds.left + (int) ((x + 0.5f) * bounds.width() / drawWidth)
-                );
-                if (Color.alpha(pixels[sourceY * sourceWidth + sourceX]) > FOREGROUND_ALPHA) {
-                    output[targetY * targetWidth + offsetX + x] = true;
-                }
+        normalized.recycle();
+        boolean[] mask = new boolean[pixels.length];
+        float[] confidence = new float[pixels.length];
+        for (int index = 0; index < pixels.length; index++) {
+            float alpha = Color.alpha(pixels[index]) / 255.0f;
+            confidence[index] = alpha;
+            mask[index] = alpha >= 0.28f;
+        }
+        return new NormalizedSilhouette(mask, confidence);
+    }
+
+    private static float[] keepCleanConfidence(
+            float[] source,
+            boolean[] cleanMask
+    ) {
+        float[] output = new float[source.length];
+        for (int index = 0; index < source.length; index++) {
+            if (cleanMask[index]) {
+                // Une fermeture topologique peut créer un pixel sans valeur
+                // neuronale. Une confiance neutre évite d'y creuser un trou.
+                output[index] = Math.max(0.26f, source[index]);
+            }
+        }
+        return output;
+    }
+
+    private static float[] flipHorizontal(float[] source, int width, int height) {
+        float[] output = new float[source.length];
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                output[row + (width - 1 - x)] = source[row + x];
             }
         }
         return output;
@@ -503,32 +559,6 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         return tail;
     }
 
-    private static void closeEnclosedVoxelHoles(
-            boolean[] volume,
-            int width,
-            int height,
-            int depth
-    ) {
-        boolean[] source = Arrays.copyOf(volume, volume.length);
-        int rowStride = width * depth;
-        for (int y = 1; y < height - 1; y++) {
-            for (int x = 1; x < width - 1; x++) {
-                for (int z = 1; z < depth - 1; z++) {
-                    int index = (y * width + x) * depth + z;
-                    if (!source[index]
-                            && source[index - 1]
-                            && source[index + 1]
-                            && source[index - depth]
-                            && source[index + depth]
-                            && source[index - rowStride]
-                            && source[index + rowStride]) {
-                        volume[index] = true;
-                    }
-                }
-            }
-        }
-    }
-
     private static void notifyProgress(
             ProgressListener listener,
             Stage stage,
@@ -567,6 +597,16 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
 
     public interface ProgressListener {
         void onProgress(Stage stage, int current, int total);
+    }
+
+    private static final class NormalizedSilhouette {
+        final boolean[] mask;
+        final float[] confidence;
+
+        NormalizedSilhouette(boolean[] mask, float[] confidence) {
+            this.mask = mask;
+            this.confidence = confidence;
+        }
     }
 
     public static final class Result {
@@ -671,6 +711,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         final int width;
         final int height;
         final int depth;
+        final int atlasHeight;
         final int processors;
         final String label;
 
@@ -678,12 +719,14 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 int width,
                 int height,
                 int depth,
+                int atlasHeight,
                 int processors,
                 String label
         ) {
             this.width = width;
             this.height = height;
             this.depth = depth;
+            this.atlasHeight = atlasHeight;
             this.processors = processors;
             this.label = label;
         }
@@ -694,22 +737,26 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             int width;
             int height;
             int maximumDepth;
+            int atlasHeight;
             String label;
             if (memoryMb >= 700L && processors >= 8) {
+                width = 128;
+                height = 256;
+                maximumDepth = 304;
+                atlasHeight = 2048;
+                label = "3D V6 précision extrême";
+            } else if (memoryMb >= 430L && processors >= 6) {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
-                label = "3D V5.9 ultra redressée";
-            } else if (memoryMb >= 430L && processors >= 6) {
-                width = 96;
-                height = 192;
-                maximumDepth = 224;
-                label = "3D V5.9 haute précision";
+                atlasHeight = 2048;
+                label = "3D V6 haute précision";
             } else {
-                width = 80;
-                height = 160;
-                maximumDepth = 184;
-                label = "3D V5.9 compatible";
+                width = 88;
+                height = 176;
+                maximumDepth = 200;
+                atlasHeight = 1024;
+                label = "3D V6 compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],
@@ -724,7 +771,14 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             float multiplier = Math.max(0.65f, Math.min(1.35f, requestedDepth));
             int depth = Math.round((float) (width * aspectRatio * multiplier));
             depth = Math.max(48, Math.min(maximumDepth, depth));
-            return new Profile(width, height, depth, processors, label);
+            return new Profile(
+                    width,
+                    height,
+                    depth,
+                    atlasHeight,
+                    processors,
+                    label
+            );
         }
 
         private static double averageAspect(Rect first, Rect second) {
