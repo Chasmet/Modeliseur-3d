@@ -12,7 +12,7 @@ Modly est distribué sous licence MIT. Le texte de sa licence est disponible dan
 
 ## Depth Anything 3 Small
 
-La V7 embarque un export ONNX fixe du checkpoint officiel `DA3-SMALL` pour
+La V7.1 embarque un export ONNX fixe du checkpoint officiel `DA3-SMALL` pour
 estimer ensemble la profondeur relative des vues face, droite, dos et gauche.
 Le modèle est exécuté localement par ONNX Runtime ; aucune photo n'est envoyée
 à ByteDance, Hugging Face ou un autre service.

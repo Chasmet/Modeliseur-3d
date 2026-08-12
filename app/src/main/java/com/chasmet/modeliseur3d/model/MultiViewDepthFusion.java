@@ -3,19 +3,22 @@ package com.chasmet.modeliseur3d.model;
 import java.util.Arrays;
 
 /**
- * Fuses four DA3 depth maps with the conservative continuous visual hull.
+ * Camera-aware surface modeler for the four guided DA3 views.
  *
- * <p>Depth is used to carve local relief into the front/back and left/right
- * surfaces.  The neural model is never allowed to create geometry outside the
- * verified silhouettes, and a collapse guard restores the visual hull if the
- * predicted maps disagree too strongly.</p>
+ * <p>The capture UI supplies exact canonical poses (front, right, back, left),
+ * so each neural depth map is projected along its known camera axis. Opposite
+ * maps define paired low/high surfaces and the two perpendicular pairs form a
+ * continuous signed support field. The model can strongly move the surface,
+ * while verified silhouettes and a collapse guard remain hard safety limits.</p>
  */
 public final class MultiViewDepthFusion {
     private static final int VIEW_COUNT = 4;
     private static final float BASE_ISO = 0.50f;
-    private static final float MAXIMUM_INSET_FRACTION = 0.31f;
+    private static final float MAXIMUM_INSET_FRACTION = 0.29f;
     private static final float SURFACE_TRANSITION = 0.90f;
-    private static final float MINIMUM_RETAINED_FRACTION = 0.58f;
+    private static final float MINIMUM_RETAINED_FRACTION = 0.60f;
+    private static final float MINIMUM_NEURAL_INFLUENCE = 0.68f;
+    private static final float CONFIDENCE_INFLUENCE = 0.22f;
 
     private MultiViewDepthFusion() {
     }
@@ -54,7 +57,12 @@ public final class MultiViewDepthFusion {
             }
         }
         if (validViews < 2) {
-            return Result.unchanged(baseDensity, validViews);
+            return Result.unchanged(
+                    baseDensity,
+                    validViews,
+                    "profondeur DA3 plate ou insuffisante "
+                            + validViews + "/4"
+            );
         }
 
         SurfacePair[] zSurfaces = new SurfacePair[width * height];
@@ -159,7 +167,8 @@ public final class MultiViewDepthFusion {
                         }
                         continue;
                     }
-                    float influence = 0.52f + 0.18f * clamp01(confidence);
+                    float influence = MINIMUM_NEURAL_INFLUENCE
+                            + CONFIDENCE_INFLUENCE * clamp01(confidence);
                     float value = base * (1.0f - influence + influence * support);
                     refined[voxel] = clamp01(value);
                     if (Math.abs(refined[voxel] - base) > 0.08f) {
@@ -189,8 +198,12 @@ public final class MultiViewDepthFusion {
             }
         }
 
-        if (changed < Math.max(24, baseDensity.length / 50_000)) {
-            return Result.unchanged(baseDensity, validViews);
+        if (changed < Math.max(12, baseDensity.length / 240_000)) {
+            return Result.unchanged(
+                    baseDensity,
+                    validViews,
+                    "relief DA3 trop faible (" + changed + " voxels)"
+            );
         }
         return new Result(
                 refined,
@@ -199,7 +212,8 @@ public final class MultiViewDepthFusion {
                 changed,
                 refinedOccupied,
                 shiftedSurfaces == 0 ? 0.0 : totalShift / shiftedSurfaces,
-                collapseGuard
+                collapseGuard,
+                "fusion de surfaces DA3 appliquée"
         );
     }
 
@@ -555,6 +569,7 @@ public final class MultiViewDepthFusion {
         private final int occupiedVoxels;
         private final double meanSurfaceInset;
         private final boolean collapseGuardUsed;
+        private final String reason;
 
         Result(
                 float[] density,
@@ -563,7 +578,8 @@ public final class MultiViewDepthFusion {
                 int changedVoxels,
                 int occupiedVoxels,
                 double meanSurfaceInset,
-                boolean collapseGuardUsed
+                boolean collapseGuardUsed,
+                String reason
         ) {
             this.density = density;
             this.applied = applied;
@@ -572,9 +588,14 @@ public final class MultiViewDepthFusion {
             this.occupiedVoxels = occupiedVoxels;
             this.meanSurfaceInset = meanSurfaceInset;
             this.collapseGuardUsed = collapseGuardUsed;
+            this.reason = reason;
         }
 
-        static Result unchanged(float[] density, int validViews) {
+        static Result unchanged(
+                float[] density,
+                int validViews,
+                String reason
+        ) {
             int occupied = 0;
             for (float value : density) {
                 if (value >= BASE_ISO) {
@@ -588,7 +609,8 @@ public final class MultiViewDepthFusion {
                     0,
                     occupied,
                     0.0,
-                    false
+                    false,
+                    reason
             );
         }
 
@@ -618,6 +640,10 @@ public final class MultiViewDepthFusion {
 
         public boolean isCollapseGuardUsed() {
             return collapseGuardUsed;
+        }
+
+        public String getReason() {
+            return reason;
         }
     }
 }

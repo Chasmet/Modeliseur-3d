@@ -10,14 +10,13 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.SystemClock;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
- * Moteur 3D local V7 réservé au mode quatre vues.
+ * Moteur 3D local V7.1 réservé au mode quatre vues.
  *
  * La V6 conserve les corrections de profil éprouvées, mais remplace le volume
- * binaire par un champ de distances multivue continu. La V7 ajoute Depth
+ * binaire par un champ de distances multivue continu. La V7.1 exécute Depth
  * Anything 3 Small : les quatre vues passent ensemble dans le réseau, puis les
  * profondeurs cohérentes sculptent la coque sans pouvoir dépasser les
  * silhouettes vérifiées. Le moteur 2.5D reste totalement séparé.
@@ -149,6 +148,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
 
         NeuralMultiViewDepthEngine.Prediction neuralPrediction = null;
         String neuralBackend = "DA3 indisponible — coque V6.1 conservée";
+        String neuralFallbackReason = "DA3 non exécuté";
         Bitmap[] depthInputs = null;
         try {
             notifyProgress(listener, Stage.NEURAL_DEPTH, 0, 1);
@@ -174,9 +174,11 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 neuralBackend = neuralPrediction.getBackend()
                         + " • quatre vues simultanées"
                         + " • " + neuralPrediction.getDurationMs() + " ms";
+                neuralFallbackReason = "cartes DA3 non fusionnées";
             }
         } catch (Exception | OutOfMemoryError neuralError) {
             neuralBackend = "DA3 ignoré sans bloquer : " + shortError(neuralError);
+            neuralFallbackReason = "DA3 non exécuté : " + shortError(neuralError);
             releaseMemory();
         } finally {
             recycleAll(depthInputs);
@@ -236,14 +238,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                             && depthFusion.getOccupiedVoxels() >= 320) {
                         finalDensity = depthFusion.getDensity();
                         occupied = depthFusion.getOccupiedVoxels();
+                        neuralFallbackReason = null;
                     } else if (depthFusion.isApplied()) {
                         depthFusion = null;
                         occupied = baseOccupied;
                         neuralBackend += " • relief refusé par le garde-fou final";
+                        neuralFallbackReason = "relief DA3 trop petit après sécurité";
+                    } else {
+                        neuralFallbackReason = depthFusion.getReason();
                     }
                 } catch (RuntimeException | OutOfMemoryError fusionError) {
                     depthFusion = null;
                     neuralBackend += " • fusion ignorée : " + shortError(fusionError);
+                    neuralFallbackReason = "fusion DA3 : " + shortError(fusionError);
                     releaseMemory();
                 }
             }
@@ -320,17 +327,30 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
             correctionSummary.append(" • volume large/kart préservé");
         }
         if (depthFusion != null && depthFusion.isApplied()) {
-            correctionSummary.append(" • relief DA3 multivue ")
+            correctionSummary.append(" • modeleur de surfaces DA3 ")
                     .append(depthFusion.getValidViews())
                     .append("/4")
                     .append(" • ")
                     .append(depthFusion.getChangedVoxels())
-                    .append(" voxels sculptés");
+                    .append(" voxels sculptés")
+                    .append(" • recul moyen ")
+                    .append(String.format(
+                            java.util.Locale.FRANCE,
+                            "%.2f voxel",
+                            depthFusion.getMeanSurfaceInset()
+                    ));
             if (depthFusion.isCollapseGuardUsed()) {
                 correctionSummary.append(" • garde-fou anti-écrasement actif");
             }
+            if (neuralPrediction != null
+                    && neuralPrediction.getBackend().contains("repli NNAPI")) {
+                correctionSummary.append(" • calcul CPU sécurisé");
+            }
         } else {
-            correctionSummary.append(" • coque continue de secours");
+            correctionSummary.append(" • coque de secours : ")
+                    .append(neuralFallbackReason == null
+                            ? "relief neural non appliqué"
+                            : neuralFallbackReason);
         }
         correctionSummary.append(" • silhouettes ")
                 .append(Math.round(hull.getSilhouetteScore() * 100.0))
@@ -720,7 +740,7 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         } else {
             canvas.drawBitmap(source, bounds, destination, paint);
         }
-        bleedTexture(output, 10);
+        fillTextureCell(output);
         return output;
     }
 
@@ -735,59 +755,18 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
         canvas.drawBitmap(texture, null, new RectF(start, 0, start + width, height), paint);
     }
 
-    private static void bleedTexture(Bitmap bitmap, int maximumDistance) {
+    private static void fillTextureCell(Bitmap bitmap) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
-        int[] distance = new int[pixels.length];
-        Arrays.fill(distance, -1);
-        int[] queue = new int[pixels.length];
-        int head = 0;
-        int tail = 0;
-        for (int index = 0; index < pixels.length; index++) {
-            if (Color.alpha(pixels[index]) > FOREGROUND_ALPHA) {
-                pixels[index] = 0xFF000000 | (pixels[index] & 0x00FFFFFF);
-                distance[index] = 0;
-                queue[tail++] = index;
-            }
-        }
-        while (head < tail) {
-            int current = queue[head++];
-            if (distance[current] >= maximumDistance) {
-                continue;
-            }
-            int x = current % width;
-            int y = current / width;
-            tail = propagate(pixels, distance, queue, tail, current, x - 1, y, width, height);
-            tail = propagate(pixels, distance, queue, tail, current, x + 1, y, width, height);
-            tail = propagate(pixels, distance, queue, tail, current, x, y - 1, width, height);
-            tail = propagate(pixels, distance, queue, tail, current, x, y + 1, width, height);
-        }
+        TextureHoleFiller.fillNearestOpaque(
+                pixels,
+                width,
+                height,
+                Math.round(FOREGROUND_ALPHA)
+        );
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
-    }
-
-    private static int propagate(
-            int[] pixels,
-            int[] distance,
-            int[] queue,
-            int tail,
-            int source,
-            int x,
-            int y,
-            int width,
-            int height
-    ) {
-        if (x < 0 || y < 0 || x >= width || y >= height) {
-            return tail;
-        }
-        int target = y * width + x;
-        if (distance[target] < 0) {
-            distance[target] = distance[source] + 1;
-            pixels[target] = pixels[source];
-            queue[tail++] = target;
-        }
-        return tail;
     }
 
     private static void notifyProgress(
@@ -1045,19 +1024,19 @@ public final class StylizedCharacter3DEngine implements AutoCloseable {
                 height = 256;
                 maximumDepth = 304;
                 atlasHeight = 2048;
-                label = "3D V7 DA3 précision neuronale";
+                label = "3D V7.1 DA3 précision neuronale";
             } else if (memoryMb >= 430L && processors >= 6) {
                 width = 112;
                 height = 224;
                 maximumDepth = 264;
                 atlasHeight = 2048;
-                label = "3D V7 DA3 haute précision";
+                label = "3D V7.1 DA3 haute précision";
             } else {
                 width = 88;
                 height = 176;
                 maximumDepth = 200;
                 atlasHeight = 1024;
-                label = "3D V7 DA3 compatible";
+                label = "3D V7.1 DA3 compatible";
             }
             double frontAspect = averageAspect(
                     bounds[StylizedFourViewProjector.FRONT],

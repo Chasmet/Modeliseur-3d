@@ -39,20 +39,21 @@ public final class NeuralMultiViewDepthEngine implements AutoCloseable {
     private static final String MODEL_ASSET =
             "models/da3_small_four_view_224.onnx";
     private static final String MODEL_FILE =
-            "da3_small_four_view_224_v7.onnx";
+            "da3_small_four_view_224_v7_1.onnx";
     private static final int VIEW_COUNT = 4;
     private static final int INPUT_SIZE = 224;
     private static final int CONTENT_MARGIN = 7;
     private static final long MINIMUM_MODEL_BYTES = 60_000_000L;
 
     private final OrtEnvironment environment;
-    private final OrtSession session;
+    private final File model;
+    private OrtSession session;
     private final String inputName;
-    private final String backend;
+    private String backend;
 
     public NeuralMultiViewDepthEngine(Context context) throws Exception {
         Context applicationContext = context.getApplicationContext();
-        File model = copyModelIfNeeded(applicationContext);
+        model = copyModelIfNeeded(applicationContext);
         environment = OrtEnvironment.getEnvironment();
         SessionBundle bundle = createSession(model);
         session = bundle.session;
@@ -81,61 +82,58 @@ public final class NeuralMultiViewDepthEngine implements AutoCloseable {
             )) {
                 Map<String, OnnxTensor> inputs =
                         Collections.singletonMap(inputName, input);
-                try (OrtSession.Result outputs = session.run(inputs)) {
-                    float[] rawDepth = tensorValues(outputs.get(0), "profondeur");
-                    float[] rawConfidence = outputs.size() > 1
-                            ? tensorValues(outputs.get(1), "confiance")
-                            : null;
-                    int pixelsPerView = rawDepth.length / VIEW_COUNT;
-                    int outputSide = Math.round((float) Math.sqrt(pixelsPerView));
-                    if (pixelsPerView <= 0
-                            || outputSide * outputSide != pixelsPerView
-                            || rawDepth.length != pixelsPerView * VIEW_COUNT) {
-                        throw new OrtException(
-                                "Dimensions DA3 inattendues : " + rawDepth.length
-                        );
-                    }
-                    if (rawConfidence != null
-                            && rawConfidence.length != rawDepth.length) {
-                        rawConfidence = null;
-                    }
+                RawOutputs rawOutputs = runRawWithCpuFallback(inputs);
+                float[] rawDepth = rawOutputs.depth;
+                float[] rawConfidence = rawOutputs.confidence;
+                int pixelsPerView = rawDepth.length / VIEW_COUNT;
+                int outputSide = Math.round((float) Math.sqrt(pixelsPerView));
+                if (pixelsPerView <= 0
+                        || outputSide * outputSide != pixelsPerView
+                        || rawDepth.length != pixelsPerView * VIEW_COUNT) {
+                    throw new OrtException(
+                            "Dimensions DA3 inattendues : " + rawDepth.length
+                    );
+                }
+                if (rawConfidence != null
+                        && rawConfidence.length != rawDepth.length) {
+                    rawConfidence = null;
+                }
 
-                    float[][] depth = new float[VIEW_COUNT][];
-                    float[][] confidence = new float[VIEW_COUNT][];
-                    for (int view = 0; view < VIEW_COUNT; view++) {
-                        depth[view] = resampleOutput(
-                                rawDepth,
+                float[][] depth = new float[VIEW_COUNT][];
+                float[][] confidence = new float[VIEW_COUNT][];
+                for (int view = 0; view < VIEW_COUNT; view++) {
+                    depth[view] = resampleOutput(
+                            rawDepth,
+                            view * pixelsPerView,
+                            outputSide,
+                            prepared[view],
+                            targetWidths[view],
+                            targetHeight,
+                            false
+                    );
+                    if (rawConfidence == null) {
+                        confidence[view] = filled(
+                                targetWidths[view] * targetHeight,
+                                1.0f
+                        );
+                    } else {
+                        confidence[view] = resampleOutput(
+                                rawConfidence,
                                 view * pixelsPerView,
                                 outputSide,
                                 prepared[view],
                                 targetWidths[view],
                                 targetHeight,
-                                false
+                                true
                         );
-                        if (rawConfidence == null) {
-                            confidence[view] = filled(
-                                    targetWidths[view] * targetHeight,
-                                    1.0f
-                            );
-                        } else {
-                            confidence[view] = resampleOutput(
-                                    rawConfidence,
-                                    view * pixelsPerView,
-                                    outputSide,
-                                    prepared[view],
-                                    targetWidths[view],
-                                    targetHeight,
-                                    true
-                            );
-                        }
                     }
-                    return new Prediction(
-                            depth,
-                            confidence,
-                            backend,
-                            SystemClock.elapsedRealtime() - started
-                    );
                 }
+                return new Prediction(
+                        depth,
+                        confidence,
+                        backend,
+                        SystemClock.elapsedRealtime() - started
+                );
             }
         } finally {
             for (PreparedInput input : prepared) {
@@ -151,11 +149,83 @@ public final class NeuralMultiViewDepthEngine implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         try {
             session.close();
         } catch (OrtException ignored) {
             // Closing an accelerator session must never crash the activity.
+        }
+    }
+
+    private synchronized RawOutputs runRawWithCpuFallback(
+            Map<String, OnnxTensor> inputs
+    ) throws OrtException {
+        try {
+            RawOutputs outputs = runRaw(inputs);
+            validateNeuralSignal(outputs.depth);
+            return outputs;
+        } catch (OrtException acceleratedFailure) {
+            if (!backend.contains("NNAPI")) {
+                throw acceleratedFailure;
+            }
+            switchToCpu();
+            try {
+                RawOutputs outputs = runRaw(inputs);
+                validateNeuralSignal(outputs.depth);
+                return outputs;
+            } catch (OrtException cpuFailure) {
+                cpuFailure.addSuppressed(acceleratedFailure);
+                throw cpuFailure;
+            }
+        }
+    }
+
+    private RawOutputs runRaw(Map<String, OnnxTensor> inputs)
+            throws OrtException {
+        try (OrtSession.Result outputs = session.run(inputs)) {
+            float[] depth = tensorValues(outputs.get(0), "profondeur");
+            float[] confidence = outputs.size() > 1
+                    ? tensorValues(outputs.get(1), "confiance")
+                    : null;
+            return new RawOutputs(depth, confidence);
+        }
+    }
+
+    private static void validateNeuralSignal(float[] depth) throws OrtException {
+        int finite = 0;
+        float minimum = Float.POSITIVE_INFINITY;
+        float maximum = Float.NEGATIVE_INFINITY;
+        for (float value : depth) {
+            if (!Float.isFinite(value)) {
+                continue;
+            }
+            finite++;
+            minimum = Math.min(minimum, value);
+            maximum = Math.max(maximum, value);
+        }
+        float scale = Math.max(1.0f, Math.max(Math.abs(minimum), Math.abs(maximum)));
+        if (finite < depth.length * 0.75f
+                || !Float.isFinite(minimum)
+                || !Float.isFinite(maximum)
+                || maximum - minimum <= scale * 1.0e-6f) {
+            throw new OrtException("Sortie DA3 vide ou plate");
+        }
+    }
+
+    private void switchToCpu() throws OrtException {
+        try {
+            session.close();
+        } catch (OrtException ignored) {
+            // The fresh CPU session below is independent from NNAPI state.
+        }
+        int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
+        int threads = Math.max(2, Math.min(8, processors - 1));
+        OrtSession.SessionOptions cpu = options(threads);
+        try {
+            session = environment.createSession(model.getAbsolutePath(), cpu);
+            backend = "DA3 CPU multi-cœurs après repli NNAPI";
+        } finally {
+            cpu.close();
         }
     }
 
@@ -409,6 +479,16 @@ public final class NeuralMultiViewDepthEngine implements AutoCloseable {
         SessionBundle(OrtSession session, String backend) {
             this.session = session;
             this.backend = backend;
+        }
+    }
+
+    private static final class RawOutputs {
+        final float[] depth;
+        final float[] confidence;
+
+        RawOutputs(float[] depth, float[] confidence) {
+            this.depth = depth;
+            this.confidence = confidence;
         }
     }
 

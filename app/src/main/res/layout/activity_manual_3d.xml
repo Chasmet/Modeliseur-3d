@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V7 — Depth Anything 3 multivue"
+        android:text="3D locale V7.1 — modeleur Depth Anything 3 multivue"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Les quatre vues sont analysées ensemble par DA3 pour sculpter le relief, puis sécurisées par la coque continue. Les profils peuvent être tournés ou mis en miroir avant la génération."
+        android:text="Les quatre vues sont analysées ensemble par DA3 puis projetées selon leurs poses face, droite, dos et gauche pour modeler les surfaces. Les profils naturellement larges restent intacts et la texture est remplie sans zones noires."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 

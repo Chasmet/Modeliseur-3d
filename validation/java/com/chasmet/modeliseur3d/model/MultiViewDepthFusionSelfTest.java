@@ -27,6 +27,8 @@ public final class MultiViewDepthFusionSelfTest {
         check(result.getValidViews() == 4, "All four neural views must remain valid");
         check(result.getChangedVoxels() > 100, "Depth must alter a measurable surface");
         check(result.getMeanSurfaceInset() > 0.10, "Depth must create real relief");
+        check(result.getReason().contains("surfaces DA3"),
+                "Applied depth must identify the surface modeler");
         check(result.getOccupiedVoxels() > fixture.baseOccupied * 0.55,
                 "Collapse guard must preserve most of the verified hull");
     }
@@ -38,6 +40,8 @@ public final class MultiViewDepthFusionSelfTest {
         }
         MultiViewDepthFusion.Result result = fixture.refine();
         check(!result.isApplied(), "A constant depth map contains no usable relief");
+        check(result.getReason().contains("plate ou insuffisante"),
+                "Fallback must explain why DA3 was not applied");
         check(result.getDensity() == fixture.baseDensity,
                 "Invalid depth must return the original hull without copying it");
     }
