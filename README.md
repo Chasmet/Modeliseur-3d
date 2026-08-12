@@ -101,7 +101,7 @@ images à un serveur.
 - `targetSdkVersion 34` ;
 - Java 17 ;
 - ABI `arm64-v8a` ;
-- ONNX Runtime Android 1.22.1 ;
+- ONNX Runtime Android 1.22.0 ;
 - IS-Net Anime FP32 pour le détourage ;
 - DA3-SMALL quatre vues 224 px pour la profondeur ;
 - version `7.0.0` (`versionCode 38`).
