@@ -1,4 +1,4 @@
-name: Compiler APK Android V7.4
+name: Compiler APK Android V8
 
 on:
   pull_request:
@@ -49,18 +49,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v730-da3-isnet-fp32-6a92a19a
+          key: modeliseur-v8-isnet-fp32-6a92a19a
 
       - name: Cache DA3
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
-          key: modeliseur-v730-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
+          key: modeliseur-v8-da3-small-b83acb5b
 
       - name: Préparer DA3
         run: bash tools/ci_prepare_da3.sh
 
-      - name: SDK Android 34 et identité V7.4
+      - name: SDK Android 34 et identité V8
         shell: bash
         run: |
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
@@ -69,15 +69,19 @@ jobs:
           yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
           "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew tools/ci_v74_test.sh
-          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V7.4 — correspondance 3D + DA3/' app/src/main/res/layout/activity_manual_3d.xml
+          sed -i "s/versionCode 43/versionCode 44/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '8.0.0'/" app/build.gradle
+          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V8 — reconstruction modulaire + DA3/' app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "V8 modulaire" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
+          grep -q "weldExactVertices" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
 
-      - name: Tester correspondance 3D V7.4
+      - name: Tester DA3 et correspondance V8
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK
+      - name: Compiler APK V8
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V7.4
+      - name: Vérifier APK V8
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -85,16 +89,15 @@ jobs:
           test -f "$APK"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/aapt" dump badging "$APK" | tee /tmp/badging.txt
-          grep -q "versionCode='43'" /tmp/badging.txt
-          grep -q "versionName='7.4.0'" /tmp/badging.txt
+          grep -q "versionCode='44'" /tmp/badging.txt
+          grep -q "versionName='8.0.0'" /tmp/badging.txt
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
           test "$(unzip -p "$APK" assets/models/da3_small_four_view_224.onnx | sha256sum | cut -d' ' -f1)" = "b83acb5bcfa05e1393396fab77e31605b6f2ba53c8f04c2a0644c46557acefb6"
-          strings "$APK" | grep -q 'V7.4' || true
 
-      - name: Publier APK V7.4
+      - name: Publier APK V8
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V7-4-Correspondance-3D-DA3-debug
+          name: Modeliseur-V8-Modulaire-DA3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
