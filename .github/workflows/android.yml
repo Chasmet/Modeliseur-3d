@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v731-da3-isnet-fp32-6a92a19a
+          key: modeliseur-v730-da3-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
-          key: modeliseur-v731-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
+          key: modeliseur-v730-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
 
       - name: Exporter et vérifier DA3-SMALL multivue
         shell: bash
