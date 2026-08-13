@@ -5,6 +5,7 @@ public final class ContinuousVisualHullSelfTest {
     public static void main(String[] args) {
         roundedBodyKeepsSilhouettes();
         quadrupedLegsRemainFour3DComponents();
+        temporaryLegMergeIsReopenedBeforeHull();
         characterLegGapStaysEmpty();
         compositeDriverDoesNotFillVehicleDepth();
         adaptiveRecoveryCannotBridgeRealComponentGaps();
@@ -57,6 +58,38 @@ public final class ContinuousVisualHullSelfTest {
                 "side leg was extruded through the front-view gap");
         check(r.getSilhouetteScore() >= 0.90,
                 "four-leg separation damaged silhouettes");
+    }
+
+    private static void temporaryLegMergeIsReopenedBeforeHull() {
+        int w = 40, h = 48, d = 50;
+        boolean[][] m = masks(w, h, d);
+        fill(m[0], w, 10, 8, 29, 28);
+        mirror(m[2], w, 10, 8, 29, 28);
+        fill(m[1], d, 8, 8, 41, 28);
+        mirror(m[3], d, 8, 8, 41, 28);
+
+        fill(m[0], w, 11, 29, 15, 43);
+        fill(m[0], w, 24, 29, 28, 43);
+        mirror(m[2], w, 11, 29, 15, 43);
+        mirror(m[2], w, 24, 29, 28, 43);
+        fill(m[1], d, 10, 29, 15, 43);
+        fill(m[1], d, 34, 29, 39, 43);
+        mirror(m[3], d, 10, 29, 15, 43);
+        mirror(m[3], d, 34, 29, 39, 43);
+
+        // Défaut vu sur la vidéo : deux lignes de segmentation soudent les membres.
+        fill(m[0], w, 11, 35, 28, 36);
+        mirror(m[2], w, 11, 35, 28, 36);
+        fill(m[1], d, 10, 35, 39, 36);
+        mirror(m[3], d, 10, 35, 39, 36);
+
+        ContinuousVisualHull.Result r = ContinuousVisualHull.build(
+                confidence(m), m, w, h, d, true, SubjectCategory.ANIMAL
+        );
+        check(componentCount(r.getOccupancy(), w, d, 35) >= 4,
+                "temporary silhouette merge still creates one 3D leg wall");
+        check(!r.getOccupancy()[index(20, 35, 25, w, d)],
+                "vertical component tracking did not reopen the central leg void");
     }
 
     private static void characterLegGapStaysEmpty() {
