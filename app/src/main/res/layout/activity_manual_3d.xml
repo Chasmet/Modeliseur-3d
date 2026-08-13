@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V7.2 — modeleur DA3 multi-formes"
+        android:text="3D locale V7.3.1 — composants suivis + DA3"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Les quatre vues sont analysées ensemble par DA3. Le moteur adapte maintenant le volume et la texture aux personnages, animaux, véhicules composés, habitations, objets, arbres et fleurs."
+        android:text="Les quatre vues sont croisées par composants 3D. Les pattes, jambes et bras sont suivis verticalement avant la fusion DA3 pour éviter les murs de matière entre membres."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -264,6 +264,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
                     android:layout_weight="1"
+                    android:enabled="true"
                     android:text="Miroir"
                     android:textAllCaps="false" />
             </LinearLayout>
@@ -367,7 +368,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D multi-formes"
+                    android:text="Créer la 3D composants suivis"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
