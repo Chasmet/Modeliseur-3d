@@ -3,18 +3,19 @@ package com.chasmet.modeliseur3d.model;
 import java.util.Arrays;
 
 /**
- * Camera-aware surface modeler for the four guided DA3 views.
+ * Camera-aware multi-expert DA3 surface modeler.
  *
- * <p>The capture UI supplies exact canonical poses (front, right, back, left),
- * so each neural depth map is projected along its known camera axis. Opposite
- * maps define paired low/high surfaces and the two perpendicular pairs form a
- * continuous signed support field. The model can strongly move the surface,
- * while verified silhouettes and a collapse guard remain hard safety limits.</p>
+ * <p>V7.3 keeps the four verified silhouettes as a hard outer shell, but no
+ * longer sculpts every row with one global category coefficient. A lightweight
+ * shape profile identifies vertical zones and their relative widths. The
+ * active expert then changes inset, cross-axis mixing, core protection and
+ * collapse limits for heads, torsos, legs, quadruped bodies, vehicle bases,
+ * rigid volumes, trunks and canopies.</p>
  */
 public final class MultiViewDepthFusion {
     private static final int VIEW_COUNT = 4;
     private static final float BASE_ISO = 0.50f;
-    private static final float SURFACE_TRANSITION = 0.90f;
+    private static final float SURFACE_TRANSITION = 0.82f;
 
     private MultiViewDepthFusion() {
     }
@@ -59,7 +60,12 @@ public final class MultiViewDepthFusion {
                 height,
                 depth
         );
-        FusionPolicy policy = FusionPolicy.forCategory(category);
+        SubjectCategory resolved = category == null || category == SubjectCategory.AUTO
+                ? SubjectCategory.CHARACTER
+                : category;
+        FusionPolicy policy = FusionPolicy.forCategory(resolved);
+        ShapeProfile shape = ShapeProfile.from(masks, width, height, depth);
+
         int[] viewWidths = {width, depth, width, depth};
         PreparedDepth[] views = new PreparedDepth[VIEW_COUNT];
         int validViews = 0;
@@ -79,8 +85,7 @@ public final class MultiViewDepthFusion {
             return Result.unchanged(
                     baseDensity,
                     validViews,
-                    "profondeur DA3 plate ou insuffisante "
-                            + validViews + "/4"
+                    "profondeur DA3 plate ou insuffisante " + validViews + "/4"
             );
         }
 
@@ -90,6 +95,11 @@ public final class MultiViewDepthFusion {
         int shiftedSurfaces = 0;
 
         for (int y = 0; y < height; y++) {
+            ZonePolicy zone = policy.zone(
+                    shape.progress(y),
+                    shape.frontRatio(y),
+                    shape.sideRatio(y)
+            );
             for (int x = 0; x < width; x++) {
                 int minimum = depth;
                 int maximum = -1;
@@ -111,7 +121,8 @@ public final class MultiViewDepthFusion {
                         frontIndex,
                         views[StylizedFourViewProjector.BACK],
                         backIndex,
-                        policy.maximumInsetFraction
+                        zone.maximumInsetFraction,
+                        zone.minimumGapFraction
                 );
                 zSurfaces[frontIndex] = pair;
                 totalShift += pair.totalInset;
@@ -120,6 +131,11 @@ public final class MultiViewDepthFusion {
         }
 
         for (int y = 0; y < height; y++) {
+            ZonePolicy zone = policy.zone(
+                    shape.progress(y),
+                    shape.frontRatio(y),
+                    shape.sideRatio(y)
+            );
             for (int z = 0; z < depth; z++) {
                 int minimum = width;
                 int maximum = -1;
@@ -134,7 +150,6 @@ public final class MultiViewDepthFusion {
                 }
                 int rightIndex = y * depth + z;
                 int leftIndex = y * depth + (depth - 1 - z);
-                // LEFT constrains the low-X surface; RIGHT constrains high-X.
                 SurfacePair pair = createPair(
                         minimum,
                         maximum,
@@ -142,7 +157,8 @@ public final class MultiViewDepthFusion {
                         leftIndex,
                         views[StylizedFourViewProjector.RIGHT],
                         rightIndex,
-                        policy.maximumInsetFraction
+                        zone.maximumInsetFraction * zone.crossAxisScale,
+                        zone.minimumGapFraction
                 );
                 xSurfaces[rightIndex] = pair;
                 totalShift += pair.totalInset;
@@ -154,7 +170,18 @@ public final class MultiViewDepthFusion {
         int baseOccupied = 0;
         int refinedOccupied = 0;
         int changed = 0;
+
         for (int y = 0; y < height; y++) {
+            ZonePolicy zone = policy.zone(
+                    shape.progress(y),
+                    shape.frontRatio(y),
+                    shape.sideRatio(y)
+            );
+            float rowCenterX = shape.frontCenter(y);
+            float rowHalfWidth = Math.max(1.0f, shape.frontHalfWidth(y));
+            float rowCenterZ = shape.sideCenter(y);
+            float rowHalfDepth = Math.max(1.0f, shape.sideHalfWidth(y));
+
             for (int x = 0; x < width; x++) {
                 SurfacePair zPair = zSurfaces[y * width + x];
                 for (int z = 0; z < depth; z++) {
@@ -167,6 +194,7 @@ public final class MultiViewDepthFusion {
                         refined[voxel] = 0.0f;
                         continue;
                     }
+
                     SurfacePair xPair = xSurfaces[y * depth + z];
                     AxisSupport zSupport = support(zPair, z);
                     AxisSupport xSupport = support(xPair, x);
@@ -175,8 +203,8 @@ public final class MultiViewDepthFusion {
                     if (zSupport.valid && xSupport.valid) {
                         float minimum = Math.min(zSupport.value, xSupport.value);
                         float maximum = Math.max(zSupport.value, xSupport.value);
-                        support = minimum * (1.0f - policy.ambiguityProtection)
-                                + maximum * policy.ambiguityProtection;
+                        support = minimum * (1.0f - zone.ambiguityProtection)
+                                + maximum * zone.ambiguityProtection;
                         confidence = (zSupport.confidence + xSupport.confidence) * 0.5f;
                     } else if (zSupport.valid) {
                         support = zSupport.value;
@@ -191,9 +219,25 @@ public final class MultiViewDepthFusion {
                         }
                         continue;
                     }
-                    float influence = policy.minimumInfluence
-                            + policy.confidenceInfluence * clamp01(confidence);
+
+                    float influence = zone.minimumInfluence
+                            + zone.confidenceInfluence * clamp01(confidence);
                     float value = base * (1.0f - influence + influence * support);
+
+                    float nx = Math.abs(x - rowCenterX) / rowHalfWidth;
+                    float nz = Math.abs(z - rowCenterZ) / rowHalfDepth;
+                    float coreDistance = Math.max(nx, nz);
+                    if (coreDistance <= zone.coreRadius) {
+                        float coreWeight = 1.0f
+                                - smoothStep(
+                                        zone.coreRadius * 0.55f,
+                                        zone.coreRadius,
+                                        coreDistance
+                                );
+                        float protectedFloor = base * zone.coreFloor * coreWeight;
+                        value = Math.max(value, protectedFloor);
+                    }
+
                     refined[voxel] = clamp01(value);
                     if (Math.abs(refined[voxel] - base) > 0.08f) {
                         changed++;
@@ -212,8 +256,11 @@ public final class MultiViewDepthFusion {
         if (collapseGuard) {
             refinedOccupied = 0;
             changed = 0;
+            float baseWeight = policy.collapseBaseWeight;
+            float refinedWeight = 1.0f - baseWeight;
             for (int voxel = 0; voxel < refined.length; voxel++) {
-                float guarded = baseDensity[voxel] * 0.58f + refined[voxel] * 0.42f;
+                float guarded = baseDensity[voxel] * baseWeight
+                        + refined[voxel] * refinedWeight;
                 refined[voxel] = clamp01(guarded);
                 if (Math.abs(refined[voxel] - baseDensity[voxel]) > 0.08f) {
                     changed++;
@@ -239,8 +286,22 @@ public final class MultiViewDepthFusion {
                 refinedOccupied,
                 shiftedSurfaces == 0 ? 0.0 : totalShift / shiftedSurfaces,
                 collapseGuard,
-                "fusion de surfaces DA3 appliquée"
+                "fusion DA3 multi-experts par zones appliquée"
         );
+    }
+
+    static float debugInsetFraction(
+            SubjectCategory category,
+            float progress,
+            float frontRatio,
+            float sideRatio
+    ) {
+        SubjectCategory resolved = category == null || category == SubjectCategory.AUTO
+                ? SubjectCategory.CHARACTER
+                : category;
+        return FusionPolicy.forCategory(resolved)
+                .zone(progress, frontRatio, sideRatio)
+                .maximumInsetFraction;
     }
 
     private static SurfacePair createPair(
@@ -250,15 +311,19 @@ public final class MultiViewDepthFusion {
             int lowIndex,
             PreparedDepth highView,
             int highIndex,
-            float maximumInsetFraction
+            float maximumInsetFraction,
+            float minimumGapFraction
     ) {
         float span = Math.max(1.0f, maximum - minimum);
-        float maximumInset = Math.max(0.45f, span * maximumInsetFraction);
+        float maximumInset = Math.max(0.38f, span * maximumInsetFraction);
         float lowInset = inset(lowView, lowIndex, maximumInset);
         float highInset = inset(highView, highIndex, maximumInset);
         float low = minimum + lowInset;
         float high = maximum - highInset;
-        float minimumGap = Math.min(2.0f, Math.max(0.70f, span * 0.16f));
+        float minimumGap = Math.min(
+                Math.max(0.70f, span * minimumGapFraction),
+                Math.max(0.70f, span)
+        );
         if (high - low < minimumGap) {
             float center = (low + high) * 0.5f;
             low = center - minimumGap * 0.5f;
@@ -266,6 +331,12 @@ public final class MultiViewDepthFusion {
         }
         low = clamp(low, minimum, maximum);
         high = clamp(high, minimum, maximum);
+        if (high < low) {
+            float center = (minimum + maximum) * 0.5f;
+            low = center;
+            high = center;
+        }
+
         float lowConfidence = confidence(lowView, lowIndex);
         float highConfidence = confidence(highView, highIndex);
         boolean lowValid = lowView.valid && lowView.isUsable(lowIndex);
@@ -273,10 +344,12 @@ public final class MultiViewDepthFusion {
         if (!lowValid) {
             low = minimum;
             lowConfidence = 0.0f;
+            lowInset = 0.0f;
         }
         if (!highValid) {
             high = maximum;
             highConfidence = 0.0f;
+            highInset = 0.0f;
         }
         return new SurfacePair(
                 low,
@@ -298,8 +371,9 @@ public final class MultiViewDepthFusion {
         if (!view.valid || !view.isUsable(index)) {
             return 0.0f;
         }
-        float confidence = 0.64f + 0.36f * view.confidence[index];
-        return maximumInset * view.normalized[index] * confidence;
+        float confidence = 0.60f + 0.40f * view.confidence[index];
+        float detail = 0.08f + 0.92f * view.normalized[index];
+        return maximumInset * detail * confidence;
     }
 
     private static float confidence(PreparedDepth view, int index) {
@@ -438,6 +512,7 @@ public final class MultiViewDepthFusion {
             if (validCount < minimum) {
                 return new PreparedDepth(normalized, confidence, usable, false);
             }
+
             float[] values = new float[validCount];
             int cursor = 0;
             for (int index = 0; index < raw.length; index++) {
@@ -446,8 +521,8 @@ public final class MultiViewDepthFusion {
                 }
             }
             Arrays.sort(values);
-            float low = percentile(values, 0.10f);
-            float high = percentile(values, 0.90f);
+            float low = percentile(values, 0.08f);
+            float high = percentile(values, 0.92f);
             float range = high - low;
             float scale = Math.max(1.0f, Math.max(Math.abs(low), Math.abs(high)));
             if (!Float.isFinite(range) || range <= scale * 1.0e-5f) {
@@ -463,8 +538,8 @@ public final class MultiViewDepthFusion {
                 }
             }
             Arrays.sort(confidenceValues);
-            float confidenceLow = percentile(confidenceValues, 0.10f);
-            float confidenceHigh = percentile(confidenceValues, 0.90f);
+            float confidenceLow = percentile(confidenceValues, 0.08f);
+            float confidenceHigh = percentile(confidenceValues, 0.92f);
             float confidenceRange = confidenceHigh - confidenceLow;
 
             for (int index = 0; index < raw.length; index++) {
@@ -479,17 +554,19 @@ public final class MultiViewDepthFusion {
                         : 0.75f;
                 usable[index] = true;
             }
-            smooth(normalized, usable, width, height, 2);
-            smooth(confidence, usable, width, height, 1);
+
+            edgeAwareSmooth(normalized, usable, width, height, 2, 0.20f);
+            edgeAwareSmooth(confidence, usable, width, height, 1, 0.34f);
             return new PreparedDepth(normalized, confidence, usable, true);
         }
 
-        private static void smooth(
+        private static void edgeAwareSmooth(
                 float[] values,
                 boolean[] usable,
                 int width,
                 int height,
-                int passes
+                int passes,
+                float edgeThreshold
         ) {
             float[] temporary = new float[values.length];
             for (int pass = 0; pass < passes; pass++) {
@@ -500,8 +577,9 @@ public final class MultiViewDepthFusion {
                             temporary[center] = values[center];
                             continue;
                         }
-                        float total = values[center] * 2.0f;
-                        float weight = 2.0f;
+                        float centerValue = values[center];
+                        float total = centerValue * 3.0f;
+                        float weight = 3.0f;
                         for (int dy = -1; dy <= 1; dy++) {
                             int sampleY = y + dy;
                             if (sampleY < 0 || sampleY >= height) {
@@ -516,10 +594,17 @@ public final class MultiViewDepthFusion {
                                     continue;
                                 }
                                 int sample = sampleY * width + sampleX;
-                                if (usable[sample]) {
-                                    total += values[sample];
-                                    weight += 1.0f;
+                                if (!usable[sample]) {
+                                    continue;
                                 }
+                                float delta = Math.abs(values[sample] - centerValue);
+                                if (delta > edgeThreshold) {
+                                    continue;
+                                }
+                                float neighborWeight = 1.0f
+                                        - 0.55f * delta / Math.max(0.001f, edgeThreshold);
+                                total += values[sample] * neighborWeight;
+                                weight += neighborWeight;
                             }
                         }
                         temporary[center] = total / weight;
@@ -538,6 +623,215 @@ public final class MultiViewDepthFusion {
             int upper = Math.min(sorted.length - 1, lower + 1);
             float amount = position - lower;
             return sorted[lower] * (1.0f - amount) + sorted[upper] * amount;
+        }
+    }
+
+    private static final class ShapeProfile {
+        final int top;
+        final int bottom;
+        final int[] frontMin;
+        final int[] frontMax;
+        final int[] sideMin;
+        final int[] sideMax;
+        final float[] frontRatio;
+        final float[] sideRatio;
+
+        ShapeProfile(
+                int top,
+                int bottom,
+                int[] frontMin,
+                int[] frontMax,
+                int[] sideMin,
+                int[] sideMax,
+                float[] frontRatio,
+                float[] sideRatio
+        ) {
+            this.top = top;
+            this.bottom = bottom;
+            this.frontMin = frontMin;
+            this.frontMax = frontMax;
+            this.sideMin = sideMin;
+            this.sideMax = sideMax;
+            this.frontRatio = frontRatio;
+            this.sideRatio = sideRatio;
+        }
+
+        static ShapeProfile from(
+                boolean[][] masks,
+                int width,
+                int height,
+                int depth
+        ) {
+            boolean[] front = mirroredUnion(
+                    masks[StylizedFourViewProjector.FRONT],
+                    masks[StylizedFourViewProjector.BACK],
+                    width,
+                    height
+            );
+            boolean[] side = mirroredUnion(
+                    masks[StylizedFourViewProjector.RIGHT],
+                    masks[StylizedFourViewProjector.LEFT],
+                    depth,
+                    height
+            );
+            int[] frontMin = new int[height];
+            int[] frontMax = new int[height];
+            int[] sideMin = new int[height];
+            int[] sideMax = new int[height];
+            Arrays.fill(frontMin, -1);
+            Arrays.fill(frontMax, -1);
+            Arrays.fill(sideMin, -1);
+            Arrays.fill(sideMax, -1);
+            int top = height;
+            int bottom = -1;
+            int maxFrontSpan = 1;
+            int maxSideSpan = 1;
+
+            for (int y = 0; y < height; y++) {
+                int[] frontSpan = span(front, width, y);
+                int[] sideSpan = span(side, depth, y);
+                frontMin[y] = frontSpan[0];
+                frontMax[y] = frontSpan[1];
+                sideMin[y] = sideSpan[0];
+                sideMax[y] = sideSpan[1];
+                if (frontSpan[0] >= 0 || sideSpan[0] >= 0) {
+                    top = Math.min(top, y);
+                    bottom = Math.max(bottom, y);
+                }
+                if (frontSpan[0] >= 0) {
+                    maxFrontSpan = Math.max(
+                            maxFrontSpan,
+                            frontSpan[1] - frontSpan[0] + 1
+                    );
+                }
+                if (sideSpan[0] >= 0) {
+                    maxSideSpan = Math.max(
+                            maxSideSpan,
+                            sideSpan[1] - sideSpan[0] + 1
+                    );
+                }
+            }
+            if (bottom < top) {
+                top = 0;
+                bottom = Math.max(1, height - 1);
+            }
+
+            float[] frontRatio = new float[height];
+            float[] sideRatio = new float[height];
+            for (int y = 0; y < height; y++) {
+                if (frontMin[y] >= 0) {
+                    frontRatio[y] = (frontMax[y] - frontMin[y] + 1)
+                            / (float) maxFrontSpan;
+                }
+                if (sideMin[y] >= 0) {
+                    sideRatio[y] = (sideMax[y] - sideMin[y] + 1)
+                            / (float) maxSideSpan;
+                }
+            }
+            softenRatios(frontRatio);
+            softenRatios(sideRatio);
+            return new ShapeProfile(
+                    top,
+                    bottom,
+                    frontMin,
+                    frontMax,
+                    sideMin,
+                    sideMax,
+                    frontRatio,
+                    sideRatio
+            );
+        }
+
+        float progress(int y) {
+            if (bottom <= top) {
+                return 0.5f;
+            }
+            return clamp01((y - top) / (float) (bottom - top));
+        }
+
+        float frontRatio(int y) {
+            return frontRatio[Math.max(0, Math.min(frontRatio.length - 1, y))];
+        }
+
+        float sideRatio(int y) {
+            return sideRatio[Math.max(0, Math.min(sideRatio.length - 1, y))];
+        }
+
+        float frontCenter(int y) {
+            int min = frontMin[y];
+            int max = frontMax[y];
+            return min >= 0 ? (min + max) * 0.5f : 0.0f;
+        }
+
+        float frontHalfWidth(int y) {
+            int min = frontMin[y];
+            int max = frontMax[y];
+            return min >= 0 ? (max - min + 1) * 0.5f : 1.0f;
+        }
+
+        float sideCenter(int y) {
+            int min = sideMin[y];
+            int max = sideMax[y];
+            return min >= 0 ? (min + max) * 0.5f : 0.0f;
+        }
+
+        float sideHalfWidth(int y) {
+            int min = sideMin[y];
+            int max = sideMax[y];
+            return min >= 0 ? (max - min + 1) * 0.5f : 1.0f;
+        }
+
+        private static boolean[] mirroredUnion(
+                boolean[] first,
+                boolean[] opposite,
+                int width,
+                int height
+        ) {
+            boolean[] union = new boolean[width * height];
+            for (int y = 0; y < height; y++) {
+                int row = y * width;
+                for (int x = 0; x < width; x++) {
+                    union[row + x] = first[row + x]
+                            || opposite[row + (width - 1 - x)];
+                }
+            }
+            return union;
+        }
+
+        private static int[] span(boolean[] mask, int width, int y) {
+            int min = width;
+            int max = -1;
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                if (mask[row + x]) {
+                    min = Math.min(min, x);
+                    max = Math.max(max, x);
+                }
+            }
+            return max < min ? new int[]{-1, -1} : new int[]{min, max};
+        }
+
+        private static void softenRatios(float[] ratios) {
+            if (ratios.length < 3) {
+                return;
+            }
+            float[] source = ratios.clone();
+            for (int y = 1; y < ratios.length - 1; y++) {
+                if (source[y] <= 0.0f) {
+                    continue;
+                }
+                float total = source[y] * 2.0f;
+                float weight = 2.0f;
+                if (source[y - 1] > 0.0f) {
+                    total += source[y - 1];
+                    weight += 1.0f;
+                }
+                if (source[y + 1] > 0.0f) {
+                    total += source[y + 1];
+                    weight += 1.0f;
+                }
+                ratios[y] = total / weight;
+            }
         }
     }
 
@@ -573,44 +867,222 @@ public final class MultiViewDepthFusion {
     }
 
     private static final class FusionPolicy {
-        final float maximumInsetFraction;
+        final SubjectCategory category;
         final float minimumRetainedFraction;
-        final float minimumInfluence;
-        final float confidenceInfluence;
-        final float ambiguityProtection;
+        final float collapseBaseWeight;
 
         FusionPolicy(
-                float maximumInsetFraction,
+                SubjectCategory category,
                 float minimumRetainedFraction,
-                float minimumInfluence,
-                float confidenceInfluence,
-                float ambiguityProtection
+                float collapseBaseWeight
         ) {
-            this.maximumInsetFraction = maximumInsetFraction;
+            this.category = category;
             this.minimumRetainedFraction = minimumRetainedFraction;
-            this.minimumInfluence = minimumInfluence;
-            this.confidenceInfluence = confidenceInfluence;
-            this.ambiguityProtection = ambiguityProtection;
+            this.collapseBaseWeight = collapseBaseWeight;
+        }
+
+        ZonePolicy zone(
+                float progress,
+                float frontRatio,
+                float sideRatio
+        ) {
+            float p = clamp01(progress);
+            float broadness = clamp01((frontRatio + sideRatio) * 0.5f);
+
+            if (category == SubjectCategory.COMPOSITE_VEHICLE) {
+                if (p < 0.46f) {
+                    float narrowBoost = 0.08f * (1.0f - broadness);
+                    return new ZonePolicy(
+                            0.27f + narrowBoost,
+                            0.10f,
+                            0.62f,
+                            0.22f,
+                            0.12f,
+                            1.08f,
+                            0.26f,
+                            0.54f
+                    );
+                }
+                return new ZonePolicy(
+                        0.105f,
+                        0.30f,
+                        0.43f,
+                        0.15f,
+                        0.48f,
+                        0.82f,
+                        0.44f,
+                        0.72f
+                );
+            }
+
+            if (category == SubjectCategory.ANIMAL) {
+                if (p >= 0.62f && broadness < 0.72f) {
+                    return new ZonePolicy(
+                            0.35f,
+                            0.09f,
+                            0.70f,
+                            0.22f,
+                            0.05f,
+                            1.02f,
+                            0.20f,
+                            0.52f
+                    );
+                }
+                if (p >= 0.18f && p < 0.64f && broadness >= 0.58f) {
+                    return new ZonePolicy(
+                            0.135f,
+                            0.31f,
+                            0.54f,
+                            0.18f,
+                            0.16f,
+                            0.88f,
+                            0.43f,
+                            0.72f
+                    );
+                }
+                return new ZonePolicy(
+                        0.235f,
+                        0.16f,
+                        0.64f,
+                        0.20f,
+                        0.10f,
+                        0.96f,
+                        0.30f,
+                        0.62f
+                );
+            }
+
+            if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
+                return new ZonePolicy(
+                        0.085f,
+                        0.48f,
+                        0.38f,
+                        0.12f,
+                        0.42f,
+                        0.78f,
+                        0.60f,
+                        0.80f
+                );
+            }
+
+            if (category == SubjectCategory.PLANT) {
+                if (p >= 0.58f && broadness < 0.58f) {
+                    return new ZonePolicy(
+                            0.31f,
+                            0.11f,
+                            0.64f,
+                            0.20f,
+                            0.10f,
+                            1.05f,
+                            0.22f,
+                            0.54f
+                    );
+                }
+                if (p < 0.58f && broadness > 0.54f) {
+                    return new ZonePolicy(
+                            0.19f,
+                            0.17f,
+                            0.58f,
+                            0.20f,
+                            0.14f,
+                            0.96f,
+                            0.27f,
+                            0.60f
+                    );
+                }
+                return new ZonePolicy(
+                        0.25f,
+                        0.12f,
+                        0.60f,
+                        0.20f,
+                        0.12f,
+                        1.00f,
+                        0.24f,
+                        0.56f
+                );
+            }
+
+            if (p < 0.23f) {
+                return new ZonePolicy(
+                        0.22f,
+                        0.18f,
+                        0.63f,
+                        0.22f,
+                        0.04f,
+                        0.96f,
+                        0.32f,
+                        0.64f
+                );
+            }
+            if (p < 0.62f && broadness >= 0.48f) {
+                return new ZonePolicy(
+                        0.15f,
+                        0.29f,
+                        0.56f,
+                        0.20f,
+                        0.08f,
+                        0.90f,
+                        0.42f,
+                        0.70f
+                );
+            }
+            return new ZonePolicy(
+                    0.32f,
+                    0.10f,
+                    0.72f,
+                    0.22f,
+                    0.02f,
+                    1.05f,
+                    0.20f,
+                    0.52f
+            );
         }
 
         static FusionPolicy forCategory(SubjectCategory category) {
             if (category == SubjectCategory.COMPOSITE_VEHICLE) {
-                // Une profondeur unique ne sait pas associer une main, un
-                // guidon et un châssis qui se chevauchent. La fusion reste
-                // donc mesurée et mélange les deux axes au lieu de laisser
-                // une seule carte creuser toute la pièce.
-                return new FusionPolicy(0.16f, 0.78f, 0.52f, 0.16f, 0.35f);
+                return new FusionPolicy(category, 0.76f, 0.64f);
             }
             if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
-                return new FusionPolicy(0.12f, 0.82f, 0.48f, 0.16f, 0.25f);
+                return new FusionPolicy(category, 0.84f, 0.68f);
             }
             if (category == SubjectCategory.ANIMAL) {
-                return new FusionPolicy(0.25f, 0.68f, 0.63f, 0.20f, 0.10f);
+                return new FusionPolicy(category, 0.69f, 0.58f);
             }
             if (category == SubjectCategory.PLANT) {
-                return new FusionPolicy(0.22f, 0.70f, 0.58f, 0.20f, 0.15f);
+                return new FusionPolicy(category, 0.68f, 0.56f);
             }
-            return new FusionPolicy(0.29f, 0.60f, 0.68f, 0.22f, 0.0f);
+            return new FusionPolicy(SubjectCategory.CHARACTER, 0.61f, 0.58f);
+        }
+    }
+
+    private static final class ZonePolicy {
+        final float maximumInsetFraction;
+        final float minimumGapFraction;
+        final float minimumInfluence;
+        final float confidenceInfluence;
+        final float ambiguityProtection;
+        final float crossAxisScale;
+        final float coreRadius;
+        final float coreFloor;
+
+        ZonePolicy(
+                float maximumInsetFraction,
+                float minimumGapFraction,
+                float minimumInfluence,
+                float confidenceInfluence,
+                float ambiguityProtection,
+                float crossAxisScale,
+                float coreRadius,
+                float coreFloor
+        ) {
+            this.maximumInsetFraction = maximumInsetFraction;
+            this.minimumGapFraction = minimumGapFraction;
+            this.minimumInfluence = minimumInfluence;
+            this.confidenceInfluence = confidenceInfluence;
+            this.ambiguityProtection = ambiguityProtection;
+            this.crossAxisScale = crossAxisScale;
+            this.coreRadius = coreRadius;
+            this.coreFloor = coreFloor;
         }
     }
 
