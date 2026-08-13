@@ -1,8 +1,6 @@
-name: Compiler l'APK Android
+name: Compiler APK Android V7.4
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -21,240 +19,80 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Installer Python 3.12 pour l'export DA3
+      - name: Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Conserver la signature APK de test
+      - name: Signature stable
         uses: actions/cache@v4
         with:
           path: .ci-signing/debug.keystore
           key: modeliseur-debug-keystore-v1
 
-      - name: Préparer la signature APK de test
+      - name: Préparer signature
         shell: bash
         run: |
-          set -euo pipefail
           if [ ! -f "$MODELISEUR_DEBUG_KEYSTORE" ]; then
             mkdir -p "$(dirname "$MODELISEUR_DEBUG_KEYSTORE")"
-            keytool -genkeypair -noprompt \
-              -keystore "$MODELISEUR_DEBUG_KEYSTORE" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" \
-              -keyalg RSA -keysize 2048 -validity 10950
+            keytool -genkeypair -noprompt -keystore "$MODELISEUR_DEBUG_KEYSTORE" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10950
           fi
 
-      - name: Mettre en cache IS-Net Anime FP32
+      - name: Cache IS-Net
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
           key: modeliseur-v730-da3-isnet-fp32-6a92a19a
 
-      - name: Télécharger et vérifier IS-Net Anime FP32
-        shell: bash
-        run: |
-          set -euo pipefail
-          MODEL="app/src/main/assets/models/isnet_anime_fp32.onnx"
-          PART="${MODEL}.part"
-          SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
-          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
-          mkdir -p "$(dirname "$MODEL")"
-          if [ ! -f "$MODEL" ] || ! echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            rm -f "$MODEL" "$PART"
-            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
-            echo "$SHA  $PART" | sha256sum -c -
-            mv "$PART" "$MODEL"
-          fi
-
-      - name: Mettre en cache DA3-SMALL quatre vues
+      - name: Cache DA3
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
           key: modeliseur-v730-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
 
-      - name: Exporter et vérifier DA3-SMALL multivue
+      - name: Préparer DA3
+        run: bash tools/ci_prepare_da3.sh
+
+      - name: SDK Android 34
         shell: bash
         run: |
-          set -euo pipefail
-          MODEL="app/src/main/assets/models/da3_small_four_view_224.onnx"
-          MINIMUM=90000000
-          EXPECTED_SHA="b83acb5bcfa05e1393396fab77e31605b6f2ba53c8f04c2a0644c46557acefb6"
-          mkdir -p "$(dirname "$MODEL")"
-          if [ ! -f "$MODEL" ] \
-              || [ "$(stat -c%s "$MODEL")" -lt "$MINIMUM" ] \
-              || ! echo "$EXPECTED_SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
-            rm -f "$MODEL"
-            python -m pip install --disable-pip-version-check \
-              --index-url https://download.pytorch.org/whl/cpu \
-              torch==2.7.1 torchvision==0.22.1
-            python -m pip install --disable-pip-version-check \
-              onnx==1.18.0 onnxruntime==1.22.1 \
-              huggingface_hub==0.33.4 safetensors==0.5.3 \
-              protobuf==7.35.1 einops==0.8.1 omegaconf==2.3.0 addict==2.4.0 \
-              numpy==1.26.4 opencv-python-headless==4.11.0.86 imageio==2.37.0
-            DA3_SOURCE="${RUNNER_TEMP}/da3-onnx-source"
-            DA3_CHECKPOINT="${RUNNER_TEMP}/da3-small-checkpoint"
-            git clone --no-checkout https://github.com/devin-lai/Depth-Anything-3-Onnx.git "$DA3_SOURCE"
-            git -C "$DA3_SOURCE" checkout 9d75a0527225a0cad939af3e72dd5c24978d2723
-            python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3-SMALL', revision='e08cab65ca0ec38e7826075418411ab90cab4da3', local_dir='${DA3_CHECKPOINT}')"
-            PYTHONPATH="${DA3_SOURCE}/src" python tools/export_da3_multiview.py \
-              --model "$DA3_CHECKPOINT" \
-              --output "$MODEL" \
-              --size 224
-          fi
-          test "$(stat -c%s "$MODEL")" -ge "$MINIMUM"
-          echo "$EXPECTED_SHA  $MODEL" | sha256sum -c -
-          DA3_SHA="$(sha256sum "$MODEL" | cut -d' ' -f1)"
-          echo "DA3_MODEL_SHA=$DA3_SHA" >> "$GITHUB_ENV"
-          echo "DA3-SMALL multivue : $(stat -c%s "$MODEL") octets — $DA3_SHA"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew tools/ci_v74_test.sh
 
-      - name: Préparer le SDK Android
+      - name: Tester correspondance 3D V7.4
+        run: bash tools/ci_v74_test.sh
+
+      - name: Compiler APK
+        run: ./gradlew --no-daemon clean lintDebug assembleDebug
+
+      - name: Vérifier APK V7.4
         shell: bash
         run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
-          chmod +x gradlew
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          test -f "$APK"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "versionCode='43'" /tmp/badging.txt
+          grep -q "versionName='7.4.0'" /tmp/badging.txt
+          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          test "$(unzip -p "$APK" assets/models/da3_small_four_view_224.onnx | sha256sum | cut -d' ' -f1)" = "b83acb5bcfa05e1393396fab77e31605b6f2ba53c8f04c2a0644c46557acefb6"
 
-      - name: Vérifier l'architecture V7.3.1 composants suivis
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V7.3.1 Composants Suivis" app/src/main/AndroidManifest.xml
-          grep -q "versionName '7.3.1'" app/build.gradle
-          grep -q "versionCode 42" app/build.gradle
-          grep -q "3D locale V7.3.1 — composants suivis + DA3" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "Modéliseur 3D V7.3.1" app/src/main/res/values/strings.xml
-          grep -q "stabilizeComponentContinuity" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
-          grep -q "stabilizeMirroredPair" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
-          grep -q "MAX_MERGE_ROWS = 3" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
-          grep -q "class RowComponents" app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
-          grep -q "component-aware continuous visual hull" app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
-          grep -q "class RaySegments" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
-          grep -q "component-aware DA3 fusion" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
-          grep -q "edgeAwareSmooth" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
-          grep -q "SubjectCategoryClassifier.resolve" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "ContinuousVisualHull.build" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "MultiViewDepthFusion.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "new NeuralMultiViewDepthEngine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "TextureHoleFiller.fillLocalOpaque" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
-          grep -q "subjectCategorySpinner" app/src/main/res/layout/activity_manual_3d.xml
-          grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
-          ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
-          grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
-
-      - name: Tester la reconstruction Java
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/asset-tests build/orientation-tests build/profile-policy-tests \
-            build/texture-fill-tests build/stylized-tests build/reliability-tests \
-            build/continuous-tests build/depth-fusion-tests build/legacy-tests
-
-          javac -encoding UTF-8 -d build/asset-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DItem.java \
-            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java \
-            validation/java/com/chasmet/modeliseur3d/assets/Asset3DCatalogSelfTest.java
-          java -cp build/asset-tests com.chasmet.modeliseur3d.assets.Asset3DCatalogSelfTest
-
-          javac -encoding UTF-8 -d build/orientation-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java \
-            validation/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrectorSelfTest.java
-          java -cp build/orientation-tests com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
-
-          javac -encoding UTF-8 -d build/profile-policy-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ProfileOrientationPolicy.java \
-            validation/java/com/chasmet/modeliseur3d/model/ProfileOrientationPolicySelfTest.java
-          java -cp build/profile-policy-tests com.chasmet.modeliseur3d.model.ProfileOrientationPolicySelfTest
-
-          javac -encoding UTF-8 -d build/texture-fill-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/TextureHoleFiller.java \
-            validation/java/com/chasmet/modeliseur3d/model/TextureHoleFillerSelfTest.java
-          java -cp build/texture-fill-tests com.chasmet.modeliseur3d.model.TextureHoleFillerSelfTest
-
-          javac -encoding UTF-8 -d build/stylized-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
-            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java \
-            validation/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefinerSelfTest.java
-          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
-          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
-
-          javac -encoding UTF-8 -d build/reliability-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewReliabilityAnalyzer.java \
-            validation/java/com/chasmet/modeliseur3d/model/FourViewReliabilityAnalyzerSelfTest.java
-          java -cp build/reliability-tests com.chasmet.modeliseur3d.model.FourViewReliabilityAnalyzerSelfTest
-
-          javac -encoding UTF-8 -d build/continuous-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategory.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java \
-            validation/java/com/chasmet/modeliseur3d/model/ContinuousVisualHullSelfTest.java \
-            validation/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifierSelfTest.java
-          java -cp build/continuous-tests com.chasmet.modeliseur3d.model.ContinuousVisualHullSelfTest
-          java -cp build/continuous-tests com.chasmet.modeliseur3d.model.SubjectCategoryClassifierSelfTest
-
-          javac -encoding UTF-8 -d build/depth-fusion-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategory.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java \
-            validation/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusionSelfTest.java
-          java -cp build/depth-fusion-tests com.chasmet.modeliseur3d.model.MultiViewDepthFusionSelfTest
-
-          javac -encoding UTF-8 -d build/legacy-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
-            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
-          java -cp build/legacy-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
-
-      - name: Compiler avec Gradle
-        run: |
-          ./gradlew --no-daemon clean lintDebug assembleDebug || {
-            find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
-            exit 1
-          }
-
-      - name: Vérifier l'APK et sa signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
-          DA3_ASSET="assets/models/da3_small_four_view_224.onnx"
-          ls -lh "$APK"
-          sha256sum "$APK"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
-          "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
-          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep -q "versionCode='42' versionName='7.3.1'"
-          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
-          test "$(unzip -p "$APK" "$DA3_ASSET" | sha256sum | cut -d' ' -f1)" = "$DA3_MODEL_SHA"
-          test "$(unzip -l "$APK" "$DA3_ASSET" | awk '/da3_small_four_view_224.onnx/ {print $1}')" -ge 90000000
-
-      - name: Publier l'APK V7.3.1 composants suivis
+      - name: Publier APK V7.4
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V7-3-1-Components-Tracked-DA3-debug
+          name: Modeliseur-V7-4-Correspondance-3D-DA3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
