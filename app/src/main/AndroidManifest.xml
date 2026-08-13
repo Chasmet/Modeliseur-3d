@@ -14,7 +14,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V7.4 Correspondance 3D"
+        android:label="Modéliseur 3D V8 Modulaire DA3"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
