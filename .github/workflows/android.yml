@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v720-da3-isnet-fp32-6a92a19a
+          key: modeliseur-v730-da3-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
-          key: modeliseur-v720-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
+          key: modeliseur-v730-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
 
       - name: Exporter et vérifier DA3-SMALL multivue
         shell: bash
@@ -134,14 +134,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V7.2
+      - name: Vérifier l'architecture V7.3
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V7.2 DA3" app/src/main/AndroidManifest.xml
-          grep -q "versionName '7.2.0'" app/build.gradle
-          grep -q "versionCode 40" app/build.gradle
+          grep -q "Modéliseur 3D V7.3 DA3 Multi-Experts" app/src/main/AndroidManifest.xml
+          grep -q "versionName '7.3.0'" app/build.gradle
+          grep -q "versionCode 41" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -165,6 +165,8 @@ jobs:
           grep -q "champ continu sous-pixel" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           grep -q "new NeuralMultiViewDepthEngine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           grep -q "MultiViewDepthFusion.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          grep -q "multi-experts par zones" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
+          grep -q "edgeAwareSmooth" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
           grep -q "ProfileOrientationPolicy.shouldQuarterTurn" app/src/main/java/com/chasmet/modeliseur3d/model/FourViewBitmapOrientationNormalizer.java
           grep -q "TextureHoleFiller.fillLocalOpaque" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           grep -q "runRawWithCpuFallback" app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMultiViewDepthEngine.java
@@ -195,7 +197,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-              "User-Agent": "Modeliseur3D-CI/7.2.0",
+                  "User-Agent": "Modeliseur3D-CI/7.3.0",
                   "Accept": "application/vnd.github+json"
               })
               try:
@@ -294,10 +296,10 @@ jobs:
           test "$(unzip -p "$APK" "$DA3_ASSET" | sha256sum | cut -d' ' -f1)" = "$DA3_MODEL_SHA"
           test "$(unzip -l "$APK" "$DA3_ASSET" | awk '/da3_small_four_view_224.onnx/ {print $1}')" -ge 90000000
 
-      - name: Publier l'APK V7.2
+      - name: Publier l'APK V7.3
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V7-2-DA3-Multi-Formes-debug
+          name: Modeliseur-V7-3-DA3-Multi-Experts-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
