@@ -1,4 +1,4 @@
-name: Compiler APK Android V8.1
+name: Compiler APK Android V8.2 Extreme
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       MODELISEUR_DEBUG_KEYSTORE: ${{ github.workspace }}/.ci-signing/debug.keystore
 
@@ -49,13 +49,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v81-isnet-anime-6a92a19a
+          key: modeliseur-v82-isnet-anime-6a92a19a
 
       - name: Cache IS-Net General
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_general_use.onnx
-          key: modeliseur-v81-isnet-general-fc16ebd8
+          key: modeliseur-v82-isnet-general-fc16ebd8
 
       - name: Préparer IS-Net General Use
         shell: bash
@@ -74,16 +74,39 @@ jobs:
           fi
           test "$(stat -c%s "$MODEL")" -ge 175000000
 
+      - name: Cache U2Net
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/u2net.onnx
+          key: modeliseur-v82-u2net-60024c5c
+
+      - name: Préparer U2Net
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="app/src/main/assets/models/u2net.onnx"
+          PART="${MODEL}.part"
+          MD5="60024c5c889badc19c04ad937298a77b"
+          URL="https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
+          mkdir -p "$(dirname "$MODEL")"
+          if [ ! -f "$MODEL" ] || ! echo "$MD5  $MODEL" | md5sum -c - >/dev/null 2>&1; then
+            rm -f "$MODEL" "$PART"
+            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
+            echo "$MD5  $PART" | md5sum -c -
+            mv "$PART" "$MODEL"
+          fi
+          test "$(stat -c%s "$MODEL")" -ge 170000000
+
       - name: Cache DA3
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
-          key: modeliseur-v81-da3-small-b83acb5b
+          key: modeliseur-v82-da3-small-b83acb5b
 
       - name: Préparer DA3
         run: bash tools/ci_prepare_da3.sh
 
-      - name: SDK Android 34 et identité V8.1
+      - name: SDK Android 34 et identité V8.2
         shell: bash
         run: |
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
@@ -92,21 +115,23 @@ jobs:
           yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
           "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew tools/ci_v74_test.sh
-          sed -i "s/versionCode 43/versionCode 45/" app/build.gradle
-          sed -i "s/versionName '7.4.0'/versionName '8.1.0'/" app/build.gradle
-          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V8.1 — double segmentation + reconstruction modulaire + DA3/' app/src/main/res/layout/activity_manual_3d.xml
+          sed -i "s/versionCode 43/versionCode 46/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '8.2.0'/" app/build.gradle
+          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V8.2 — Qualité Extrême • IS-Net + U2Net + DA3/' app/src/main/res/layout/activity_manual_3d.xml
           grep -q "V8 modulaire" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
           grep -q "weldExactVertices" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "class GeneralSegmentationEngine" app/src/main/java/com/chasmet/modeliseur3d/model/GeneralSegmentationEngine.java
-          grep -q "calledFromFourViewEngine" app/src/main/java/com/chasmet/modeliseur3d/model/AnimeSegmentationEngine.java
+          grep -q "class U2NetSegmentationEngine" app/src/main/java/com/chasmet/modeliseur3d/model/U2NetSegmentationEngine.java
+          grep -q "class ExtremeSegmentationEngine" app/src/main/java/com/chasmet/modeliseur3d/model/ExtremeSegmentationEngine.java
+          grep -q "ExtremeSegmentationEngine" app/src/main/java/com/chasmet/modeliseur3d/model/AnimeSegmentationEngine.java
 
-      - name: Tester DA3 et correspondance V8.1
+      - name: Tester DA3 et correspondance V8.2
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK V8.1
+      - name: Compiler APK V8.2
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V8.1
+      - name: Vérifier APK V8.2
         shell: bash
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -114,16 +139,17 @@ jobs:
           test -f "$APK"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/aapt" dump badging "$APK" | tee /tmp/badging.txt
-          grep -q "versionCode='45'" /tmp/badging.txt
-          grep -q "versionName='8.1.0'" /tmp/badging.txt
+          grep -q "versionCode='46'" /tmp/badging.txt
+          grep -q "versionName='8.2.0'" /tmp/badging.txt
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
           test "$(unzip -p "$APK" assets/models/isnet_general_use.onnx | md5sum | cut -d' ' -f1)" = "fc16ebd8b0c10d971d3513d564d01e29"
+          test "$(unzip -p "$APK" assets/models/u2net.onnx | md5sum | cut -d' ' -f1)" = "60024c5c889badc19c04ad937298a77b"
           test "$(unzip -p "$APK" assets/models/da3_small_four_view_224.onnx | sha256sum | cut -d' ' -f1)" = "b83acb5bcfa05e1393396fab77e31605b6f2ba53c8f04c2a0644c46557acefb6"
 
-      - name: Publier APK V8.1
+      - name: Publier APK V8.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V8-1-General-DA3-debug
+          name: Modeliseur-V8-2-Extreme-U2Net-DA3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
