@@ -1,0 +1,118 @@
+name: Packager V9.2 Thin depuis V9.1
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  package-v9-2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Outils Android 34
+        run: sdkmanager "build-tools;34.0.0"
+
+      - name: Signature stable
+        uses: actions/cache@v4
+        with:
+          path: /tmp/v92-sign/debug.keystore
+          key: modeliseur-debug-keystore-v1
+
+      - name: Préparer signature
+        run: |
+          mkdir -p /tmp/v92-sign
+          if [ ! -f /tmp/v92-sign/debug.keystore ]; then
+            keytool -genkeypair -noprompt -keystore /tmp/v92-sign/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10950
+          fi
+
+      - name: Attendre le build V9.1 du même commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            DATA=$(gh run list --repo Chasmet/Modeliseur-3d --workflow android-v9-1-geometry-risk.yml --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion)
+            RUN_ID=$(echo "$DATA" | jq -r '.[0].databaseId // empty')
+            STATUS=$(echo "$DATA" | jq -r '.[0].status // empty')
+            CONCLUSION=$(echo "$DATA" | jq -r '.[0].conclusion // empty')
+            if [ "$STATUS" = completed ]; then
+              test "$CONCLUSION" = success
+              echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Récupérer les quatre morceaux V9.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v92/p0 /tmp/v92/p1 /tmp/v92/p2 /tmp/v92/p3
+          gh run download "$RUN_ID" --repo Chasmet/Modeliseur-3d -n Modeliseur-V9-1-Risk-part0 -D /tmp/v92/p0
+          gh run download "$RUN_ID" --repo Chasmet/Modeliseur-3d -n Modeliseur-V9-1-Risk-part1 -D /tmp/v92/p1
+          gh run download "$RUN_ID" --repo Chasmet/Modeliseur-3d -n Modeliseur-V9-1-Risk-part2 -D /tmp/v92/p2
+          gh run download "$RUN_ID" --repo Chasmet/Modeliseur-3d -n Modeliseur-V9-1-Risk-part3 -D /tmp/v92/p3
+          cat /tmp/v92/p0/*.part0 /tmp/v92/p1/*.part1 /tmp/v92/p2/*.part2 /tmp/v92/p3/*.part3 > /tmp/v92/v91.apk
+          EXPECTED=$(awk '{print $1}' /tmp/v92/p3/SHA256.txt)
+          test "$(sha256sum /tmp/v92/v91.apk | awk '{print $1}')" = "$EXPECTED"
+
+      - name: Extraire et vérifier le pack IA V9.2
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v92/models
+          A=/tmp/v92/v91.apk
+          unzip -p "$A" assets/models/isnet_anime_fp32.onnx > /tmp/v92/models/isnet_anime_fp32.onnx
+          unzip -p "$A" assets/models/isnet_general_use.onnx > /tmp/v92/models/isnet_general_use.onnx
+          unzip -p "$A" assets/models/efficientvit_sam_xl0_encoder.onnx > /tmp/v92/models/efficientvit_sam_xl0_encoder.onnx
+          unzip -p "$A" assets/models/efficientvit_sam_xl0_decoder.onnx > /tmp/v92/models/efficientvit_sam_xl0_decoder.onnx
+          unzip -p "$A" assets/models/da3_small_four_view_392.onnx > /tmp/v92/models/da3_small_four_view_392.onnx
+          echo '6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba  /tmp/v92/models/isnet_anime_fp32.onnx' | sha256sum -c -
+          echo '60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a  /tmp/v92/models/isnet_general_use.onnx' | sha256sum -c -
+          echo 'b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3  /tmp/v92/models/efficientvit_sam_xl0_encoder.onnx' | sha256sum -c -
+          echo '051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7  /tmp/v92/models/efficientvit_sam_xl0_decoder.onnx' | sha256sum -c -
+          echo '8cb3b0f246e152e9a784bc7d5b743c174fcd2e25a18713cbcb4781a2fbce50c3  /tmp/v92/models/da3_small_four_view_392.onnx' | sha256sum -c -
+
+      - name: Publier les IA séparément
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          gh release delete v9.2-model-pack --repo Chasmet/Modeliseur-3d --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release create v9.2-model-pack /tmp/v92/models/*.onnx --repo Chasmet/Modeliseur-3d --target "$HEAD_SHA" --title "Modeliseur 3D V9.2 - Pack IA" --notes "Modeles verifies, telecharges une seule fois puis utilises hors ligne." --prerelease
+
+      - name: Retirer les IA et re-signer l'APK légère
+        run: |
+          set -euo pipefail
+          cp /tmp/v92/v91.apk /tmp/v92/unsigned.apk
+          zip -d /tmp/v92/unsigned.apk 'assets/models/*.onnx'
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -f 4 /tmp/v92/unsigned.apk /tmp/v92/Modeliseur-3D-V9.2-Thin.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks /tmp/v92-sign/debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey /tmp/v92/Modeliseur-3D-V9.2-Thin.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose /tmp/v92/Modeliseur-3D-V9.2-Thin.apk
+          if unzip -l /tmp/v92/Modeliseur-3D-V9.2-Thin.apk | grep -q '\.onnx'; then exit 1; fi
+          test "$(stat -c%s /tmp/v92/Modeliseur-3D-V9.2-Thin.apk)" -lt 120000000
+          sha256sum /tmp/v92/Modeliseur-3D-V9.2-Thin.apk > /tmp/v92/SHA256.txt
+
+      - name: Publier APK V9.2 Thin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          gh release delete v9.2-thin --repo Chasmet/Modeliseur-3d --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release create v9.2-thin /tmp/v92/Modeliseur-3D-V9.2-Thin.apk /tmp/v92/SHA256.txt --repo Chasmet/Modeliseur-3d --target "$HEAD_SHA" --title "Modeliseur 3D V9.2 Thin" --notes "APK légère. Les IA sont téléchargées avec reprise au premier accès, puis l'application fonctionne hors ligne." --prerelease
