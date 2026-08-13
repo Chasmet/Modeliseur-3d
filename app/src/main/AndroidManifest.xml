@@ -14,7 +14,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V7.2 DA3"
+        android:label="Modéliseur 3D V7.3 DA3 Multi-Experts"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
