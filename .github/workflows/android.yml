@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v730-da3-isnet-fp32-6a92a19a
+          key: modeliseur-v731-da3-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -80,7 +80,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/da3_small_four_view_224.onnx
-          key: modeliseur-v730-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
+          key: modeliseur-v731-da3-small-e08cab65-exporter-9d75a052-normalized-b83acb5b
 
       - name: Exporter et vérifier DA3-SMALL multivue
         shell: bash
@@ -129,15 +129,18 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V7.3 composants suivis
+      - name: Vérifier l'architecture V7.3.1 composants suivis
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V7.3 DA3 Multi-Experts" app/src/main/AndroidManifest.xml
-          grep -q "versionName '7.3.0'" app/build.gradle
-          grep -q "versionCode 41" app/build.gradle
+          grep -q "Modéliseur 3D V7.3.1 Composants Suivis" app/src/main/AndroidManifest.xml
+          grep -q "versionName '7.3.1'" app/build.gradle
+          grep -q "versionCode 42" app/build.gradle
+          grep -q "3D locale V7.3.1 — composants suivis + DA3" app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "Modéliseur 3D V7.3.1" app/src/main/res/values/strings.xml
           grep -q "stabilizeComponentContinuity" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
+          grep -q "stabilizeMirroredPair" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
           grep -q "MAX_MERGE_ROWS = 3" app/src/main/java/com/chasmet/modeliseur3d/model/SubjectCategoryClassifier.java
           grep -q "class RowComponents" app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
           grep -q "component-aware continuous visual hull" app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
@@ -243,14 +246,15 @@ jobs:
           sha256sum "$APK"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep -q "versionCode='42' versionName='7.3.1'"
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" "$DA3_ASSET" | sha256sum | cut -d' ' -f1)" = "$DA3_MODEL_SHA"
           test "$(unzip -l "$APK" "$DA3_ASSET" | awk '/da3_small_four_view_224.onnx/ {print $1}')" -ge 90000000
 
-      - name: Publier l'APK V7.3 composants suivis
+      - name: Publier l'APK V7.3.1 composants suivis
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V7-3-Components-Tracked-DA3-debug
+          name: Modeliseur-V7-3-1-Components-Tracked-DA3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
