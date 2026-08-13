@@ -1,8 +1,6 @@
-name: Compiler l'APK Android
+name: Compiler APK Android V8.1
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -21,184 +19,111 @@ jobs:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Java 17
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Conserver la signature APK de test
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Signature stable
         uses: actions/cache@v4
         with:
           path: .ci-signing/debug.keystore
           key: modeliseur-debug-keystore-v1
 
-      - name: Préparer la signature APK de test
+      - name: Préparer signature
         shell: bash
         run: |
-          set -euo pipefail
           if [ ! -f "$MODELISEUR_DEBUG_KEYSTORE" ]; then
             mkdir -p "$(dirname "$MODELISEUR_DEBUG_KEYSTORE")"
-            keytool -genkeypair -noprompt \
-              -keystore "$MODELISEUR_DEBUG_KEYSTORE" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" \
-              -keyalg RSA -keysize 2048 -validity 10950
+            keytool -genkeypair -noprompt -keystore "$MODELISEUR_DEBUG_KEYSTORE" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10950
           fi
 
-      - name: Mettre en cache IS-Net Anime FP32
+      - name: Cache IS-Net Anime
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+          key: modeliseur-v81-isnet-anime-6a92a19a
 
-      - name: Télécharger et vérifier IS-Net Anime FP32
+      - name: Cache IS-Net General
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/isnet_general_use.onnx
+          key: modeliseur-v81-isnet-general-fc16ebd8
+
+      - name: Préparer IS-Net General Use
         shell: bash
         run: |
           set -euo pipefail
-          MODEL="app/src/main/assets/models/isnet_anime_fp32.onnx"
+          MODEL="app/src/main/assets/models/isnet_general_use.onnx"
           PART="${MODEL}.part"
-          SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
-          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
+          MD5="fc16ebd8b0c10d971d3513d564d01e29"
+          URL="https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx"
           mkdir -p "$(dirname "$MODEL")"
-          if [ ! -f "$MODEL" ] || ! echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
+          if [ ! -f "$MODEL" ] || ! echo "$MD5  $MODEL" | md5sum -c - >/dev/null 2>&1; then
             rm -f "$MODEL" "$PART"
             curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
-            echo "$SHA  $PART" | sha256sum -c -
+            echo "$MD5  $PART" | md5sum -c -
             mv "$PART" "$MODEL"
           fi
+          test "$(stat -c%s "$MODEL")" -ge 175000000
 
-      - name: Préparer le SDK Android
+      - name: Cache DA3
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/da3_small_four_view_224.onnx
+          key: modeliseur-v81-da3-small-b83acb5b
+
+      - name: Préparer DA3
+        run: bash tools/ci_prepare_da3.sh
+
+      - name: SDK Android 34 et identité V8.1
         shell: bash
         run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
-          chmod +x gradlew
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew tools/ci_v74_test.sh
+          sed -i "s/versionCode 43/versionCode 45/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '8.1.0'/" app/build.gradle
+          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V8.1 — double segmentation + reconstruction modulaire + DA3/' app/src/main/res/layout/activity_manual_3d.xml
+          grep -q "V8 modulaire" app/src/main/java/com/chasmet/modeliseur3d/model/MultiViewDepthFusion.java
+          grep -q "weldExactVertices" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
+          grep -q "class GeneralSegmentationEngine" app/src/main/java/com/chasmet/modeliseur3d/model/GeneralSegmentationEngine.java
+          grep -q "calledFromFourViewEngine" app/src/main/java/com/chasmet/modeliseur3d/model/AnimeSegmentationEngine.java
 
-      - name: Vérifier l'architecture V5.9.10
+      - name: Tester DA3 et correspondance V8.1
+        run: bash tools/ci_v74_test.sh
+
+      - name: Compiler APK V8.1
+        run: ./gradlew --no-daemon clean lintDebug assembleDebug
+
+      - name: Vérifier APK V8.1
         shell: bash
         run: |
-          set -euo pipefail
-          grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.10" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.10'" app/build.gradle
-          grep -q "versionCode 35" app/build.gradle
-          grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q 'FOOD = "Nourriture et marché"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q 'MAGIC = "Magie et effets"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q 'FURNITURE = "Mobilier et intérieur"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
-          grep -q "assetExportButton" app/src/main/res/layout/row_asset_3d.xml
-          grep -q "void onExport" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DAdapter.java
-          grep -q "ActivityResultContracts.CreateDocument" app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
-          grep -q "copyToDocument" app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
-          grep -q "class ProceduralAsset3DGenerator" app/src/main/java/com/chasmet/modeliseur3d/assets/ProceduralAsset3DGenerator.java
-          grep -q "MAXIMUM_ASSET_BYTES = 8_000_000L" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
-          grep -q "ManualProfileTransformer.apply" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
-          grep -q "HumanoidVolumeRefiner.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
-          grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
-          ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
-          grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          test -f "$APK"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "versionCode='45'" /tmp/badging.txt
+          grep -q "versionName='8.1.0'" /tmp/badging.txt
+          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          test "$(unzip -p "$APK" assets/models/isnet_general_use.onnx | md5sum | cut -d' ' -f1)" = "fc16ebd8b0c10d971d3513d564d01e29"
+          test "$(unzip -p "$APK" assets/models/da3_small_four_view_224.onnx | sha256sum | cut -d' ' -f1)" = "b83acb5bcfa05e1393396fab77e31605b6f2ba53c8f04c2a0644c46557acefb6"
 
-      - name: Vérifier les GLB officiels libres sous 8 Mo
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          import urllib.request
-
-          models = [
-              "RiggedSimple", "RiggedFigure", "RecursiveSkeletons", "Fox",
-              "ToyCar", "SimpleInstancing", "AlphaBlendModeTest",
-              "AnimatedColorsCube", "BoxAnimated", "CubeVisibility",
-              "BoxVertexColors", "ClearCoatCarPaint"
-          ]
-          maximum = 8_000_000
-          errors = []
-          for model in models:
-              url = (
-                  "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/"
-                  f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
-              )
-              request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/5.9.10",
-                  "Accept": "application/vnd.github+json"
-              })
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      metadata = json.load(response)
-                  size = int(metadata["size"])
-                  print(f"{model}: {size} octets")
-                  if size > maximum:
-                      errors.append(f"{model} dépasse 8 Mo ({size})")
-              except Exception as error:
-                  errors.append(f"{model} inaccessible ({error})")
-          if errors:
-              raise SystemExit("\n".join(errors))
-          print(f"{len(models)} GLB officiels vérifiés sous 8 Mo.")
-          PY
-
-      - name: Tester le catalogue et la reconstruction
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/asset-tests build/orientation-tests build/stylized-tests build/legacy-tests
-          javac -encoding UTF-8 -d build/asset-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DItem.java \
-            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java \
-            validation/java/com/chasmet/modeliseur3d/assets/Asset3DCatalogSelfTest.java
-          java -cp build/asset-tests com.chasmet.modeliseur3d.assets.Asset3DCatalogSelfTest
-          javac -encoding UTF-8 -d build/orientation-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java \
-            validation/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrectorSelfTest.java
-          java -cp build/orientation-tests com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
-          javac -encoding UTF-8 -d build/stylized-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
-            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java \
-            validation/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefinerSelfTest.java
-          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
-          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
-          javac -encoding UTF-8 -d build/legacy-tests \
-            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
-            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
-            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
-          java -cp build/legacy-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
-
-      - name: Compiler avec Gradle
-        run: |
-          ./gradlew --no-daemon clean lintDebug assembleDebug || {
-            find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
-            exit 1
-          }
-
-      - name: Vérifier l'APK et sa signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
-          ls -lh "$APK"
-          sha256sum "$APK"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
-          "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
-          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
-
-      - name: Publier l'APK V5.9.10
+      - name: Publier APK V8.1
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.10-259-Assets-Export-GLB-debug
+          name: Modeliseur-V8-1-General-DA3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

@@ -24,7 +24,14 @@ import java.nio.FloatBuffer;
 import java.util.Collections;
 import java.util.Map;
 
-/** Segmentation locale IS-Net Anime FP32 avec threads adaptatifs V4.7. */
+/**
+ * Segmentation locale IS-Net.
+ *
+ * V8.1 protège tous les anciens parcours 2.5D : ils continuent à utiliser
+ * IS-Net Anime FP32. Seul StylizedCharacter3DEngine (mode 3D quatre vues)
+ * est automatiquement routé vers IS-Net General Use, mieux adapté aux
+ * animaux, véhicules, habitations, objets et végétation.
+ */
 public final class AnimeSegmentationEngine implements AutoCloseable {
     public static final String MODEL_NAME = "IS-Net Anime FP32 mobile";
 
@@ -39,6 +46,7 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
     private final OrtSession session;
     private final String inputName;
     private final String backend;
+    private final GeneralSegmentationEngine generalDelegate;
 
     public AnimeSegmentationEngine(Context context) throws Exception {
         this(
@@ -52,6 +60,16 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
 
     public AnimeSegmentationEngine(Context context, int requestedThreads)
             throws Exception {
+        if (calledFromFourViewEngine()) {
+            generalDelegate = new GeneralSegmentationEngine(context);
+            environment = null;
+            session = null;
+            inputName = null;
+            backend = generalDelegate.getBackend() + " • route V8.1 3D";
+            return;
+        }
+
+        generalDelegate = null;
         File model = copyModelIfNeeded(context.getApplicationContext());
         environment = OrtEnvironment.getEnvironment();
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
@@ -65,6 +83,9 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
     }
 
     public Mask segment(Bitmap source) throws Exception {
+        if (generalDelegate != null) {
+            return generalDelegate.segment(source);
+        }
         if (source == null || source.isRecycled()) {
             throw new IllegalArgumentException("Image absente pour la segmentation");
         }
@@ -125,6 +146,13 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
 
     @Override
     public void close() {
+        if (generalDelegate != null) {
+            generalDelegate.close();
+            return;
+        }
+        if (session == null) {
+            return;
+        }
         try {
             session.close();
         } catch (OrtException ignored) {
@@ -145,6 +173,17 @@ public final class AnimeSegmentationEngine implements AutoCloseable {
         } finally {
             options.close();
         }
+    }
+
+    private static boolean calledFromFourViewEngine() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        String target = StylizedCharacter3DEngine.class.getName();
+        for (StackTraceElement element : stack) {
+            if (target.equals(element.getClassName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static PreparedInput prepareInput(Bitmap source) {

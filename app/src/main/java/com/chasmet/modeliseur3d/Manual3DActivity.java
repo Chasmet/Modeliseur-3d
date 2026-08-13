@@ -8,11 +8,13 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ArrayAdapter;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +28,7 @@ import com.chasmet.modeliseur3d.model.ManualProfileTransformer;
 import com.chasmet.modeliseur3d.model.MeshData;
 import com.chasmet.modeliseur3d.model.QuickFourViewValidator;
 import com.chasmet.modeliseur3d.model.StylizedCharacter3DEngine;
+import com.chasmet.modeliseur3d.model.SubjectCategory;
 import com.chasmet.modeliseur3d.performance.DevicePerformanceProfile;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.util.BitmapUtils;
@@ -37,7 +40,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Mode 3D V5.9.8 avec rotation et miroir manuels des deux profils. */
+/** Mode 3D V7.2 : modeleur DA3 multivue avec familles structurelles. */
 public final class Manual3DActivity extends AppCompatActivity {
     private static final int MAX_SIDE = 1600;
     private static final int QUICK_ANALYSIS_SIDE = 640;
@@ -88,6 +91,7 @@ public final class Manual3DActivity extends AppCompatActivity {
     private TextView leftTransformState;
     private ProgressBar progress;
     private SeekBar depth;
+    private Spinner subjectCategory;
     private Button clear;
     private Button generate;
     private Button edit;
@@ -123,12 +127,24 @@ public final class Manual3DActivity extends AppCompatActivity {
         status = findViewById(R.id.manualStatusText);
         progress = findViewById(R.id.manualProgressBar);
         depth = findViewById(R.id.depthSeekBar);
+        subjectCategory = findViewById(R.id.subjectCategorySpinner);
         clear = findViewById(R.id.clearViewsButton);
         generate = findViewById(R.id.generate3dButton);
         edit = findViewById(R.id.editViewsButton);
         reset = findViewById(R.id.reset3dButton);
         rotation = findViewById(R.id.rotation3dButton);
         export = findViewById(R.id.export3dButton);
+
+        ArrayAdapter<SubjectCategory> categoryAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                SubjectCategory.values()
+        );
+        categoryAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+        subjectCategory.setAdapter(categoryAdapter);
+        subjectCategory.setSelection(0, false);
 
         rightRotateLeft = findViewById(R.id.rightRotateLeftButton);
         rightRotateRight = findViewById(R.id.rightRotateRightButton);
@@ -441,9 +457,18 @@ public final class Manual3DActivity extends AppCompatActivity {
                 : "DOS ✓");
         labels[1].setText(profileLabel(
                 RIGHT_PROFILE,
-                result.hasProfileWarning() ? "⚠" : "✓"
+                result.hasRightProfileFallback()
+                        ? "⚠ RÉPARÉ DEPUIS GAUCHE"
+                        : result.hasProfileWarning() ? "⚠" : "✓"
         ));
-        if (result.hasMirrorCorrection()) {
+        if (result.hasLeftProfileFallback()) {
+            labels[3].setText(profileLabel(
+                    LEFT_PROFILE,
+                    "⚠ RÉPARÉ DEPUIS DROIT"
+            ));
+        } else if (result.hasRightProfileFallback()) {
+            labels[3].setText(profileLabel(LEFT_PROFILE, "✓ SOURCE FIABLE"));
+        } else if (result.hasMirrorCorrection()) {
             labels[3].setText(profileLabel(LEFT_PROFILE, "⚠ MIROIR AUTO"));
         } else {
             labels[3].setText(profileLabel(
@@ -502,6 +527,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         int[] rotations = manualRotations.clone();
         boolean[] mirrors = manualMirrors.clone();
         float depthValue = depthMultiplier();
+        SubjectCategory category = selectedSubjectCategory();
         worker.execute(() -> {
             ProcessingPowerLock.favorCurrentThread();
             List<Bitmap> images = new ArrayList<>(4);
@@ -519,6 +545,7 @@ public final class Manual3DActivity extends AppCompatActivity {
                 StylizedCharacter3DEngine.Result result = engine.generate(
                         images,
                         depthValue,
+                        category,
                         this::engineProgress
                 );
                 showResult(result, depthValue);
@@ -545,14 +572,17 @@ public final class Manual3DActivity extends AppCompatActivity {
             case ANALYSING:
                 text = "Auto-correction après réglages manuels…";
                 break;
+            case NEURAL_DEPTH:
+                text = "Depth Anything 3 analyse les quatre vues ensemble…";
+                break;
             case CLEANING:
                 text = "Séparation des membres et accessoires…";
                 break;
             case BUILDING_HULL:
-                text = "Construction du volume anatomique…";
+                text = "Fusion continue des quatre silhouettes…";
                 break;
             default:
-                text = "Création du maillage et des textures…";
+                text = "Surface sous-pixel et texture 2K…";
                 break;
         }
         runOnUiThread(() -> status.setText(text));
@@ -588,6 +618,13 @@ public final class Manual3DActivity extends AppCompatActivity {
             setBusy(false, modelSummary);
             startExportPreparation(mesh, texture);
         });
+    }
+
+    private SubjectCategory selectedSubjectCategory() {
+        Object selected = subjectCategory.getSelectedItem();
+        return selected instanceof SubjectCategory
+                ? (SubjectCategory) selected
+                : SubjectCategory.AUTO;
     }
 
     private void startExportPreparation(MeshData meshSnapshot, Bitmap textureSnapshot) {
@@ -721,7 +758,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("model/gltf-binary");
         intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "Personnage 3D V5.9.8 qualité");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "Modèle 3D V7.2 DA3 multi-formes");
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("GLB qualité", uri));
         status.setText(modelSummary + " • partage GLB qualité instantané : "
@@ -759,6 +796,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         rotation.setEnabled(!value && mesh != null);
         export.setEnabled(!value && mesh != null);
         depth.setEnabled(!value);
+        subjectCategory.setEnabled(!value);
         for (int id : CARDS) {
             findViewById(id).setEnabled(!value);
         }
@@ -766,7 +804,7 @@ public final class Manual3DActivity extends AppCompatActivity {
         status.setText(text);
         if (value) {
             if (powerLock == null) {
-                powerLock = ProcessingPowerLock.acquire(this, "stylized-3d-v598");
+                powerLock = ProcessingPowerLock.acquire(this, "neural-3d-v720");
             }
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
