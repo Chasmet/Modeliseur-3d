@@ -14,7 +14,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V8.1 General + DA3"
+        android:label="Modéliseur 3D V9.2 Thin"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
@@ -27,6 +27,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ModelPackActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".MainActivityV52"
