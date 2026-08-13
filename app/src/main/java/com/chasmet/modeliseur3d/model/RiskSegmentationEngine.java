@@ -45,6 +45,11 @@ public final class RiskSegmentationEngine implements AutoCloseable {
     ) throws Exception {
         AnimeSegmentationEngine.Mask coarse = general.segment(source);
         AnimeSegmentationEngine.Mask semantic = sam.segment(source, coarse);
+        if (semantic == coarse) {
+            throw new IllegalStateException(
+                    "SAM XL0 a refusé cette vue : aucun fallback silencieux autorisé en V9.3"
+            );
+        }
         samAccepted++;
 
         if (requestedCategory == SubjectCategory.COMPOSITE_VEHICLE) {
@@ -66,10 +71,6 @@ public final class RiskSegmentationEngine implements AutoCloseable {
                 float nx = x / (float) (FUSION_SIZE - 1);
                 float samValue = semantic.sampleNormalized(nx, ny);
                 float generalValue = coarse.sampleNormalized(nx, ny);
-
-                // SAM reste prioritaire. IS-Net ne récupère que les zones très
-                // certaines, ce qui protège une roue, un châssis ou le pilote
-                // qu'un masque SAM unique aurait oublié.
                 float recovered = generalValue >= 0.90f
                         ? Math.max(samValue, 0.62f * generalValue)
                         : samValue;
