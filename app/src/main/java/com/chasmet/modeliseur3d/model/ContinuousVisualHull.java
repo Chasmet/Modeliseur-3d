@@ -3,22 +3,18 @@ package com.chasmet.modeliseur3d.model;
 import java.util.Arrays;
 
 /**
- * Enveloppe visuelle multivue continue pour la reconstruction V6.
+ * V7.3 structural hotfix: component-aware continuous visual hull.
  *
- * <p>Le projecteur historique travaillait uniquement avec des voxels vrais ou
- * faux. Une grande quantité de triangles pouvait ensuite lisser ces marches,
- * mais l'information de contour perdue ne revenait jamais. Cette classe garde
- * une distance signée sous-pixel pour chaque silhouette, combine les vues
- * opposées de façon robuste et arrondit uniquement les coins artificiels de
- * l'intersection orthographique.</p>
- *
- * <p>La classe reste en Java pur afin que la géométrie puisse être validée dans
- * GitHub Actions sans émulateur Android.</p>
+ * <p>The four silhouettes remain hard constraints. Disconnected runs from the
+ * front and side silhouettes are preserved on both axes, so repeated thin
+ * parts such as quadruped legs, human limbs and branches are no longer
+ * extruded through the complete opposite silhouette.</p>
  */
 public final class ContinuousVisualHull {
     private static final float DISTANCE_INFINITY = 1.0e12f;
-    private static final float TRANSITION_RADIUS = 0.95f;
+    private static final float TRANSITION_RADIUS = 0.88f;
     private static final float ADAPTIVE_PAIR_WEIGHT = 0.40f;
+    private static final float ISO = 0.50f;
 
     private ContinuousVisualHull() {
     }
@@ -32,12 +28,7 @@ public final class ContinuousVisualHull {
             boolean adaptive
     ) {
         return build(
-                confidences,
-                masks,
-                width,
-                height,
-                depth,
-                adaptive,
+                confidences, masks, width, height, depth, adaptive,
                 SubjectCategory.AUTO
         );
     }
@@ -52,13 +43,8 @@ public final class ContinuousVisualHull {
             SubjectCategory requestedCategory
     ) {
         validate(confidences, masks, width, height, depth);
-
         SubjectCategory category = SubjectCategoryClassifier.resolve(
-                requestedCategory,
-                masks,
-                width,
-                height,
-                depth
+                requestedCategory, masks, width, height, depth
         );
 
         float[][] signed = new float[4][];
@@ -77,25 +63,37 @@ public final class ContinuousVisualHull {
 
         boolean[] frontUnion = mirroredUnion(
                 masks[StylizedFourViewProjector.FRONT],
-                masks[StylizedFourViewProjector.BACK],
-                width,
-                height
+                masks[StylizedFourViewProjector.BACK], width, height
         );
         boolean[] sideUnion = mirroredUnion(
                 masks[StylizedFourViewProjector.RIGHT],
-                masks[StylizedFourViewProjector.LEFT],
-                depth,
-                height
+                masks[StylizedFourViewProjector.LEFT], depth, height
         );
-        boolean complexShapeMode = category == SubjectCategory.COMPOSITE_VEHICLE;
-        RowShape[] rows = buildRows(
-                frontUnion,
-                sideUnion,
-                width,
-                height,
-                depth,
-                category
+
+        int top = Math.min(
+                firstOccupiedRow(frontUnion, width, height),
+                firstOccupiedRow(sideUnion, depth, height)
         );
+        int bottom = Math.max(
+                lastOccupiedRow(frontUnion, width, height),
+                lastOccupiedRow(sideUnion, depth, height)
+        );
+        if (top < 0) {
+            top = 0;
+        }
+        if (bottom < top) {
+            bottom = height - 1;
+        }
+
+        RowComponents[] rows = new RowComponents[height];
+        for (int y = 0; y < height; y++) {
+            float progress = bottom <= top
+                    ? 0.5f
+                    : clamp01((y - top) / (float) (bottom - top));
+            rows[y] = RowComponents.from(
+                    frontUnion, sideUnion, width, depth, y, progress, category
+            );
+        }
 
         int size = width * height * depth;
         float[] density = new float[size];
@@ -108,7 +106,7 @@ public final class ContinuousVisualHull {
         for (int y = 0; y < height; y++) {
             int frontRow = y * width;
             int sideRow = y * depth;
-            RowShape row = rows[y];
+            RowComponents row = rows[y];
             for (int x = 0; x < width; x++) {
                 int frontIndex = frontRow + x;
                 int backIndex = frontRow + (width - 1 - x);
@@ -126,12 +124,10 @@ public final class ContinuousVisualHull {
                     float leftConfidence = confidences[StylizedFourViewProjector.LEFT][leftIndex];
 
                     float strictField = minimum(
-                            frontDistance,
-                            backDistance,
-                            rightDistance,
-                            leftDistance
+                            frontDistance, backDistance,
+                            rightDistance, leftDistance
                     );
-                    float roundedField = row.signedDistance(x, z);
+                    float componentField = row.signedDistance(x, z);
                     float field = strictField;
 
                     if (adaptive) {
@@ -151,30 +147,25 @@ public final class ContinuousVisualHull {
                         if (bothAxes && support >= 3) {
                             robustField = Math.max(
                                     robustField,
-                                    Math.min(axisField, roundedField)
+                                    Math.min(axisField, componentField)
                             );
-                        } else if (bothAxes && support >= 2 && roundedField > 0.20f) {
+                        } else if (bothAxes && support >= 2 && componentField > 0.20f) {
                             robustField = Math.max(
                                     robustField,
-                                    Math.min(axisField, roundedField * 0.82f)
+                                    Math.min(axisField, componentField * 0.80f)
                             );
                         }
                         field = robustField;
                     }
 
-                    if (field >= 0.0f && roundedField < 0.0f) {
+                    if (field >= 0.0f && componentField < 0.0f) {
                         roundedAway++;
                     }
-                    field = Math.min(field, roundedField);
+                    field = Math.min(field, componentField);
                     field += confidenceBias(
-                            frontDistance,
-                            backDistance,
-                            rightDistance,
-                            leftDistance,
-                            frontConfidence,
-                            backConfidence,
-                            rightConfidence,
-                            leftConfidence
+                            frontDistance, backDistance, rightDistance, leftDistance,
+                            frontConfidence, backConfidence,
+                            rightConfidence, leftConfidence
                     );
 
                     int voxel = index(x, y, z, width, depth);
@@ -184,16 +175,14 @@ public final class ContinuousVisualHull {
                         value = 0.0f;
                     } else {
                         value = smoothStep(
-                                -TRANSITION_RADIUS,
-                                TRANSITION_RADIUS,
-                                field
+                                -TRANSITION_RADIUS, TRANSITION_RADIUS, field
                         );
                     }
                     density[voxel] = value;
                     if (value > 0.02f && value < 0.98f) {
                         fractional++;
                     }
-                    if (value >= 0.5f) {
+                    if (value >= ISO) {
                         occupancy[voxel] = true;
                         occupied++;
                         if (adaptive && strictField < 0.0f) {
@@ -205,12 +194,7 @@ public final class ContinuousVisualHull {
         }
 
         double silhouetteScore = projectionScore(
-                occupancy,
-                frontUnion,
-                sideUnion,
-                width,
-                height,
-                depth
+                occupancy, frontUnion, sideUnion, width, height, depth
         );
         return new Result(
                 density,
@@ -220,7 +204,7 @@ public final class ContinuousVisualHull {
                 roundedAway,
                 adaptivelyRecovered,
                 silhouetteScore,
-                complexShapeMode,
+                category == SubjectCategory.COMPOSITE_VEHICLE,
                 category
         );
     }
@@ -235,11 +219,6 @@ public final class ContinuousVisualHull {
         return distance >= -0.35f ? 1 : 0;
     }
 
-    /**
-     * Le biais n'agit que dans la bande proche du contour. L'intérieur du
-     * volume reste dicté par les silhouettes, tandis qu'un bord IS-Net doux
-     * décale la surface de quelques dixièmes de voxel au lieu d'être tronqué.
-     */
     private static float confidenceBias(
             float frontDistance,
             float backDistance,
@@ -260,45 +239,239 @@ public final class ContinuousVisualHull {
         float totalWeight = 0.0f;
         for (int view = 0; view < distances.length; view++) {
             float absolute = Math.abs(distances[view]);
-            if (absolute > 1.75f) {
+            if (absolute > 1.65f) {
                 continue;
             }
-            float weight = 1.0f - absolute / 1.75f;
+            float weight = 1.0f - absolute / 1.65f;
             weighted += (clamp01(confidence[view]) - 0.5f) * weight;
             totalWeight += weight;
         }
         if (totalWeight <= 0.0f) {
             return 0.0f;
         }
-        return clamp(weighted / totalWeight * 0.36f, -0.22f, 0.22f);
+        return clamp(weighted / totalWeight * 0.30f, -0.18f, 0.18f);
     }
 
-    private static RowShape[] buildRows(
-            boolean[] frontUnion,
-            boolean[] sideUnion,
-            int width,
-            int height,
-            int depth,
-            SubjectCategory category
-    ) {
-        int top = firstOccupiedRow(frontUnion, width, height);
-        int bottom = lastOccupiedRow(frontUnion, width, height);
-        RowShape[] rows = new RowShape[height];
-        for (int y = 0; y < height; y++) {
-            float progress = top < 0 || bottom <= top
-                    ? 0.5f
-                    : clamp01((y - top) / (float) (bottom - top));
-            rows[y] = RowShape.from(
-                    frontUnion,
-                    sideUnion,
-                    width,
-                    depth,
-                    y,
-                    progress,
-                    category
+    private static final class RowComponents {
+        final Run[] xRuns;
+        final Run[] zRuns;
+        final int[] xRunAt;
+        final int[] zRunAt;
+        final boolean valid;
+        final boolean orthogonalComponents;
+        final SubjectCategory category;
+        final float progress;
+
+        private RowComponents(
+                Run[] xRuns,
+                Run[] zRuns,
+                int[] xRunAt,
+                int[] zRunAt,
+                boolean valid,
+                boolean orthogonalComponents,
+                SubjectCategory category,
+                float progress
+        ) {
+            this.xRuns = xRuns;
+            this.zRuns = zRuns;
+            this.xRunAt = xRunAt;
+            this.zRunAt = zRunAt;
+            this.valid = valid;
+            this.orthogonalComponents = orthogonalComponents;
+            this.category = category;
+            this.progress = progress;
+        }
+
+        static RowComponents from(
+                boolean[] front,
+                boolean[] side,
+                int width,
+                int depth,
+                int y,
+                float progress,
+                SubjectCategory category
+        ) {
+            RunSet frontRuns = RunSet.extract(front, width, y);
+            RunSet sideRuns = RunSet.extract(side, depth, y);
+            if (frontRuns.runs.length == 0 || sideRuns.runs.length == 0) {
+                return new RowComponents(
+                        frontRuns.runs, sideRuns.runs,
+                        frontRuns.index, sideRuns.index,
+                        false, false, category, progress
+                );
+            }
+
+            boolean lowerArticulated = progress >= 0.50f
+                    && (category == SubjectCategory.CHARACTER
+                    || category == SubjectCategory.ANIMAL);
+            boolean upperComposite = category == SubjectCategory.COMPOSITE_VEHICLE
+                    && progress < 0.48f;
+            boolean plantBranches = category == SubjectCategory.PLANT
+                    && (frontRuns.runs.length > 1 || sideRuns.runs.length > 1);
+            boolean orthogonal = (frontRuns.runs.length > 1
+                    && sideRuns.runs.length > 1)
+                    || lowerArticulated
+                    || upperComposite
+                    || plantBranches;
+
+            return new RowComponents(
+                    frontRuns.runs, sideRuns.runs,
+                    frontRuns.index, sideRuns.index,
+                    true, orthogonal, category, progress
             );
         }
-        return rows;
+
+        float signedDistance(int x, int z) {
+            if (!valid || x < 0 || x >= xRunAt.length
+                    || z < 0 || z >= zRunAt.length) {
+                return -4.0f;
+            }
+            int xId = xRunAt[x];
+            int zId = zRunAt[z];
+            if (xId < 0 || zId < 0) {
+                return -4.0f;
+            }
+
+            Run xr = xRuns[xId];
+            Run zr = zRuns[zId];
+            float radiusX = Math.max(0.66f, xr.radius);
+            float radiusZ = Math.max(0.66f, zr.radius);
+            float exponent = exponent();
+
+            if (orthogonalComponents && zRuns.length == 1 && xRuns.length > 1) {
+                float localScale = localCrossScale(xr, maxRadius(xRuns));
+                radiusZ = Math.min(radiusZ, Math.max(0.72f, radiusZ * localScale));
+            }
+            if (orthogonalComponents && xRuns.length == 1 && zRuns.length > 1) {
+                float localScale = localCrossScale(zr, maxRadius(zRuns));
+                radiusX = Math.min(radiusX, Math.max(0.72f, radiusX * localScale));
+            }
+
+            float nx = Math.abs(x - xr.center) / radiusX;
+            float nz = Math.abs(z - zr.center) / radiusZ;
+            float implicit = 1.0f
+                    - (float) Math.pow(nx, exponent)
+                    - (float) Math.pow(nz, exponent);
+            return implicit * Math.min(radiusX, radiusZ) * 0.78f;
+        }
+
+        private float exponent() {
+            if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
+                return 8.0f;
+            }
+            if (category == SubjectCategory.COMPOSITE_VEHICLE && progress >= 0.48f) {
+                return 4.8f;
+            }
+            if (category == SubjectCategory.ANIMAL) {
+                return progress >= 0.52f ? 2.15f : 3.25f;
+            }
+            if (category == SubjectCategory.PLANT) {
+                return 2.05f;
+            }
+            if (category == SubjectCategory.CHARACTER) {
+                return progress >= 0.50f ? 2.20f : 3.15f;
+            }
+            return 3.0f;
+        }
+
+        private float localCrossScale(Run local, float maximumRadius) {
+            float ratio = local.radius / Math.max(0.70f, maximumRadius);
+            if (category == SubjectCategory.COMPOSITE_VEHICLE && progress >= 0.48f) {
+                return 0.78f + 0.18f * (float) Math.sqrt(ratio);
+            }
+            if (category == SubjectCategory.ANIMAL && progress >= 0.50f) {
+                return 0.34f + 0.34f * (float) Math.sqrt(ratio);
+            }
+            if (category == SubjectCategory.CHARACTER && progress >= 0.50f) {
+                return 0.38f + 0.34f * (float) Math.sqrt(ratio);
+            }
+            if (category == SubjectCategory.PLANT) {
+                return 0.38f + 0.36f * (float) Math.sqrt(ratio);
+            }
+            return 0.48f + 0.34f * (float) Math.sqrt(ratio);
+        }
+    }
+
+    private static final class RunSet {
+        final Run[] runs;
+        final int[] index;
+
+        RunSet(Run[] runs, int[] index) {
+            this.runs = runs;
+            this.index = index;
+        }
+
+        static RunSet extract(boolean[] mask, int width, int y) {
+            Run[] temporary = new Run[Math.max(1, width / 2 + 1)];
+            int[] index = new int[width];
+            Arrays.fill(index, -1);
+            int count = 0;
+            int row = y * width;
+            int cursor = 0;
+            while (cursor < width) {
+                while (cursor < width && !mask[row + cursor]) {
+                    cursor++;
+                }
+                if (cursor >= width) {
+                    break;
+                }
+                int start = cursor;
+                while (cursor + 1 < width && mask[row + cursor + 1]) {
+                    cursor++;
+                }
+                int end = cursor;
+                if (count == temporary.length) {
+                    temporary = Arrays.copyOf(temporary, temporary.length * 2);
+                }
+                Run run = new Run(start, end);
+                temporary[count] = run;
+                for (int value = start; value <= end; value++) {
+                    index[value] = count;
+                }
+                count++;
+                cursor++;
+            }
+            return new RunSet(Arrays.copyOf(temporary, count), index);
+        }
+    }
+
+    private static final class Run {
+        final int start;
+        final int end;
+        final float center;
+        final float radius;
+
+        Run(int start, int end) {
+            this.start = start;
+            this.end = end;
+            this.center = (start + end) * 0.5f;
+            this.radius = Math.max(0.70f, (end - start + 1) * 0.5f);
+        }
+    }
+
+    private static float maxRadius(Run[] runs) {
+        float maximum = 0.70f;
+        for (Run run : runs) {
+            maximum = Math.max(maximum, run.radius);
+        }
+        return maximum;
+    }
+
+    private static boolean[] mirroredUnion(
+            boolean[] first,
+            boolean[] opposite,
+            int width,
+            int height
+    ) {
+        boolean[] union = new boolean[width * height];
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                union[row + x] = first[row + x]
+                        || opposite[row + (width - 1 - x)];
+            }
+        }
+        return union;
     }
 
     private static int firstOccupiedRow(boolean[] mask, int width, int height) {
@@ -325,23 +498,6 @@ public final class ContinuousVisualHull {
         return -1;
     }
 
-    private static boolean[] mirroredUnion(
-            boolean[] first,
-            boolean[] opposite,
-            int width,
-            int height
-    ) {
-        boolean[] union = new boolean[width * height];
-        for (int y = 0; y < height; y++) {
-            int row = y * width;
-            for (int x = 0; x < width; x++) {
-                union[row + x] = first[row + x]
-                        || opposite[row + (width - 1 - x)];
-            }
-        }
-        return union;
-    }
-
     private static float[] signedDistance(boolean[] mask, int width, int height) {
         int foreground = 0;
         for (boolean value : mask) {
@@ -357,17 +513,14 @@ public final class ContinuousVisualHull {
         float[] toForeground = squaredDistance(mask, width, height, true);
         float[] toBackground = squaredDistance(mask, width, height, false);
         float[] signed = new float[mask.length];
-        for (int index = 0; index < mask.length; index++) {
-            if (mask[index]) {
-                signed[index] = (float) Math.sqrt(toBackground[index]) - 0.5f;
-            } else {
-                signed[index] = 0.5f - (float) Math.sqrt(toForeground[index]);
-            }
+        for (int i = 0; i < mask.length; i++) {
+            signed[i] = mask[i]
+                    ? (float) Math.sqrt(toBackground[i]) - 0.5f
+                    : 0.5f - (float) Math.sqrt(toForeground[i]);
         }
         return signed;
     }
 
-    /** Transformée de distance euclidienne exacte en O(nombre de pixels). */
     private static float[] squaredDistance(
             boolean[] mask,
             int width,
@@ -390,7 +543,6 @@ public final class ContinuousVisualHull {
             distanceTransform1D(line, width, transformed, sites, intersections);
             System.arraycopy(transformed, 0, horizontal, row, width);
         }
-
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 line[y] = horizontal[y * width + x];
@@ -414,7 +566,6 @@ public final class ContinuousVisualHull {
         sites[0] = 0;
         intersections[0] = Float.NEGATIVE_INFINITY;
         intersections[1] = Float.POSITIVE_INFINITY;
-
         for (int q = 1; q < length; q++) {
             float crossing;
             do {
@@ -439,7 +590,6 @@ public final class ContinuousVisualHull {
                 intersections[last + 1] = Float.POSITIVE_INFINITY;
             }
         }
-
         last = 0;
         for (int q = 0; q < length; q++) {
             while (intersections[last + 1] < q) {
@@ -479,10 +629,10 @@ public final class ContinuousVisualHull {
     private static double intersectionOverUnion(boolean[] first, boolean[] second) {
         int intersection = 0;
         int union = 0;
-        for (int index = 0; index < first.length; index++) {
-            if (first[index] || second[index]) {
+        for (int i = 0; i < first.length; i++) {
+            if (first[i] || second[i]) {
                 union++;
-                if (first[index] && second[index]) {
+                if (first[i] && second[i]) {
                     intersection++;
                 }
             }
@@ -490,8 +640,8 @@ public final class ContinuousVisualHull {
         return union == 0 ? 0.0 : intersection / (double) union;
     }
 
-    private static float minimum(float first, float second, float third, float fourth) {
-        return Math.min(Math.min(first, second), Math.min(third, fourth));
+    private static float minimum(float a, float b, float c, float d) {
+        return Math.min(Math.min(a, b), Math.min(c, d));
     }
 
     private static float smoothStep(float edge0, float edge1, float value) {
@@ -530,8 +680,7 @@ public final class ContinuousVisualHull {
         for (int view = 0; view < 4; view++) {
             int expected = view == StylizedFourViewProjector.FRONT
                     || view == StylizedFourViewProjector.BACK
-                    ? frontSize
-                    : sideSize;
+                    ? frontSize : sideSize;
             if (masks[view] == null || masks[view].length != expected
                     || confidences[view] == null || confidences[view].length != expected) {
                 throw new IllegalArgumentException("Dimensions multivues incohérentes");
@@ -541,187 +690,6 @@ public final class ContinuousVisualHull {
                     throw new IllegalArgumentException("Confiance de contour invalide");
                 }
             }
-        }
-    }
-
-    private static final class RowShape {
-        private final Run[] runs;
-        private final int[] runAtX;
-        private final float centerZ;
-        private final float radiusZ;
-        private final boolean valid;
-
-        private RowShape(
-                Run[] runs,
-                int[] runAtX,
-                float centerZ,
-                float radiusZ,
-                boolean valid
-        ) {
-            this.runs = runs;
-            this.runAtX = runAtX;
-            this.centerZ = centerZ;
-            this.radiusZ = radiusZ;
-            this.valid = valid;
-        }
-
-        static RowShape from(
-                boolean[] front,
-                boolean[] side,
-                int width,
-                int depth,
-                int y,
-                float bodyProgress,
-                SubjectCategory category
-        ) {
-            int[] starts = new int[width];
-            int[] ends = new int[width];
-            int runCount = 0;
-            int row = y * width;
-            int x = 0;
-            while (x < width) {
-                while (x < width && !front[row + x]) {
-                    x++;
-                }
-                if (x >= width) {
-                    break;
-                }
-                int start = x;
-                while (x + 1 < width && front[row + x + 1]) {
-                    x++;
-                }
-                starts[runCount] = start;
-                ends[runCount] = x;
-                runCount++;
-                x++;
-            }
-
-            int minZ = depth;
-            int maxZ = -1;
-            int sideRow = y * depth;
-            for (int z = 0; z < depth; z++) {
-                if (side[sideRow + z]) {
-                    minZ = Math.min(minZ, z);
-                    maxZ = Math.max(maxZ, z);
-                }
-            }
-            if (runCount == 0 || maxZ < minZ) {
-                int[] none = new int[width];
-                Arrays.fill(none, -1);
-                return new RowShape(new Run[0], none, 0.0f, 1.0f, false);
-            }
-
-            int maximumRun = 1;
-            int minX = width;
-            int maxX = -1;
-            for (int run = 0; run < runCount; run++) {
-                int runWidth = ends[run] - starts[run] + 1;
-                maximumRun = Math.max(maximumRun, runWidth);
-                minX = Math.min(minX, starts[run]);
-                maxX = Math.max(maxX, ends[run]);
-            }
-            float overallCenter = (minX + maxX) * 0.5f;
-            int[] runAtX = new int[width];
-            Arrays.fill(runAtX, -1);
-            Run[] runs = new Run[runCount];
-            for (int run = 0; run < runCount; run++) {
-                int start = starts[run];
-                int end = ends[run];
-                int runWidth = end - start + 1;
-                float centerX = (start + end) * 0.5f;
-                float ratio = runWidth / (float) maximumRun;
-                boolean dominant = runWidth >= maximumRun * 0.82f
-                        && Math.abs(centerX - overallCenter) <= maximumRun * 0.28f;
-                float depthScale;
-                float exponent;
-                boolean vehicleLayer = category == SubjectCategory.COMPOSITE_VEHICLE
-                        && bodyProgress >= 0.46f;
-                if (vehicleLayer) {
-                    depthScale = runCount == 1
-                            ? 0.98f
-                            : 0.82f + 0.16f * (float) Math.sqrt(ratio);
-                    exponent = 2.70f;
-                } else if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
-                    depthScale = 1.0f;
-                    exponent = 7.0f;
-                } else if (category == SubjectCategory.ANIMAL) {
-                    if (runCount == 1 || dominant) {
-                        depthScale = 1.0f;
-                        exponent = 3.35f;
-                    } else {
-                        depthScale = 0.60f + 0.25f * (float) Math.sqrt(ratio);
-                        if (bodyProgress >= 0.56f) {
-                            depthScale = Math.min(depthScale, 0.78f);
-                        }
-                        exponent = 2.25f;
-                    }
-                } else if (category == SubjectCategory.PLANT) {
-                    depthScale = runCount == 1
-                            ? 0.88f
-                            : 0.46f + 0.24f * (float) Math.sqrt(ratio);
-                    exponent = 2.05f;
-                } else if (runCount == 1) {
-                    depthScale = bodyProgress < 0.24f ? 0.94f : 0.98f;
-                    exponent = 3.20f;
-                } else if (dominant) {
-                    depthScale = 0.94f;
-                    exponent = 3.05f;
-                } else {
-                    depthScale = 0.54f + 0.22f * (float) Math.sqrt(ratio);
-                    if (bodyProgress >= 0.50f) {
-                        depthScale = Math.min(depthScale, 0.72f);
-                    }
-                    exponent = 2.35f;
-                }
-                runs[run] = new Run(
-                        centerX,
-                        Math.max(0.70f, runWidth * 0.5f),
-                        depthScale,
-                        exponent
-                );
-                for (int column = start; column <= end; column++) {
-                    runAtX[column] = run;
-                }
-            }
-            return new RowShape(
-                    runs,
-                    runAtX,
-                    (minZ + maxZ) * 0.5f,
-                    Math.max(0.75f, (maxZ - minZ + 1) * 0.5f),
-                    true
-            );
-        }
-
-        float signedDistance(int x, int z) {
-            if (!valid || x < 0 || x >= runAtX.length) {
-                return -4.0f;
-            }
-            int runIndex = runAtX[x];
-            if (runIndex < 0) {
-                return -4.0f;
-            }
-            Run run = runs[runIndex];
-            float localRadiusZ = Math.max(0.72f, radiusZ * run.depthScale);
-            float normalizedX = Math.abs(x - run.centerX) / run.radiusX;
-            float normalizedZ = Math.abs(z - centerZ) / localRadiusZ;
-            float implicit = 1.0f
-                    - (float) Math.pow(normalizedX, run.exponent)
-                    - (float) Math.pow(normalizedZ, run.exponent);
-            return implicit * Math.min(run.radiusX, localRadiusZ) * 0.72f;
-        }
-    }
-
-    private static final class Run {
-        final float centerX;
-        final float radiusX;
-        final float depthScale;
-        final float exponent;
-
-        Run(float centerX, float radiusX, float depthScale, float exponent) {
-            this.centerX = centerX;
-            this.radiusX = radiusX;
-            this.depthScale = depthScale;
-            this.exponent = exponent;
         }
     }
 
@@ -758,40 +726,14 @@ public final class ContinuousVisualHull {
             this.category = category;
         }
 
-        public float[] getDensity() {
-            return density;
-        }
-
-        public boolean[] getOccupancy() {
-            return occupancy;
-        }
-
-        public int getOccupiedVoxels() {
-            return occupiedVoxels;
-        }
-
-        public int getFractionalSamples() {
-            return fractionalSamples;
-        }
-
-        public int getRoundedVoxels() {
-            return roundedVoxels;
-        }
-
-        public int getAdaptivelyRecoveredVoxels() {
-            return adaptivelyRecoveredVoxels;
-        }
-
-        public double getSilhouetteScore() {
-            return silhouetteScore;
-        }
-
-        public boolean isComplexShapeMode() {
-            return complexShapeMode;
-        }
-
-        public SubjectCategory getCategory() {
-            return category;
-        }
+        public float[] getDensity() { return density; }
+        public boolean[] getOccupancy() { return occupancy; }
+        public int getOccupiedVoxels() { return occupiedVoxels; }
+        public int getFractionalSamples() { return fractionalSamples; }
+        public int getRoundedVoxels() { return roundedVoxels; }
+        public int getAdaptivelyRecoveredVoxels() { return adaptivelyRecoveredVoxels; }
+        public double getSilhouetteScore() { return silhouetteScore; }
+        public boolean isComplexShapeMode() { return complexShapeMode; }
+        public SubjectCategory getCategory() { return category; }
     }
 }
