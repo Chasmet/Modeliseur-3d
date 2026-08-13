@@ -74,6 +74,11 @@ public final class SubjectCategoryClassifier {
      * Corrige seulement les fusions verticales courtes dans les zones où des
      * membres distincts sont attendus. Aucun pixel n'est ajouté : le filtre ne
      * peut donc pas inventer une silhouette absente des prises de vue.
+     *
+     * <p>Le suivi est fait dans le repère canonique de chaque paire opposée.
+     * Une couture rouverte est ensuite retirée aux deux vues exactement au
+     * même endroit miroir. Sans cette synchronisation, face et dos pouvaient
+     * ouvrir deux pixels voisins différents et leur union rebouchait le vide.</p>
      */
     private static void stabilizeComponentContinuity(
             boolean[][] masks,
@@ -86,10 +91,31 @@ public final class SubjectCategoryClassifier {
                 || category == SubjectCategory.AUTO) {
             return;
         }
-        stabilizeMask(masks[0], width, height, category);
-        stabilizeMask(masks[2], width, height, category);
-        stabilizeMask(masks[1], depth, height, category);
-        stabilizeMask(masks[3], depth, height, category);
+        stabilizeMirroredPair(masks[0], masks[2], width, height, category);
+        stabilizeMirroredPair(masks[1], masks[3], depth, height, category);
+    }
+
+    private static void stabilizeMirroredPair(
+            boolean[] first,
+            boolean[] opposite,
+            int width,
+            int height,
+            SubjectCategory category
+    ) {
+        boolean[] canonicalBefore = mirroredUnion(first, opposite, width, height);
+        boolean[] canonicalAfter = canonicalBefore.clone();
+        stabilizeMask(canonicalAfter, width, height, category);
+
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                int index = row + x;
+                if (canonicalBefore[index] && !canonicalAfter[index]) {
+                    first[index] = false;
+                    opposite[row + (width - 1 - x)] = false;
+                }
+            }
+        }
     }
 
     private static void stabilizeMask(
@@ -209,8 +235,8 @@ public final class SubjectCategoryClassifier {
             seam = Math.max(merged.start + 1, Math.min(merged.end - 1, seam));
             mask[y * width + seam] = false;
 
-            // Sur les silhouettes larges, deux pixels évitent qu'un champ
-            // sous-pixel referme immédiatement la séparation au maillage.
+            // Deux pixels sur une fusion large donnent une marge réelle au champ
+            // continu et évitent qu'une interpolation referme immédiatement le vide.
             if (merged.width() >= 14 && seam + 1 < merged.end) {
                 mask[y * width + seam + 1] = false;
             }
