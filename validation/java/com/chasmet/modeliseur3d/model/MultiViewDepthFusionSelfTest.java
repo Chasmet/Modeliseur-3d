@@ -2,7 +2,7 @@ package com.chasmet.modeliseur3d.model;
 
 import java.util.Arrays;
 
-/** Pure-Java regression checks for the DA3/hull fusion. */
+/** Pure-Java regression checks for the component-aware DA3/hull fusion. */
 public final class MultiViewDepthFusionSelfTest {
     private static final int WIDTH = 16;
     private static final int HEIGHT = 20;
@@ -20,7 +20,8 @@ public final class MultiViewDepthFusionSelfTest {
         usesStrongerDriverThanVehicleCarving();
         preservesAnimalTorsoAndSeparatesLegs();
         keepsArchitectureMoreRigidThanCharacter();
-        System.out.println("MultiViewDepthFusionSelfTest: OK");
+        preservesDisconnectedRayComponents();
+        System.out.println("MultiViewDepthFusionSelfTest component-aware: OK");
     }
 
     private static void refinesAValidFourViewVolume() {
@@ -77,14 +78,8 @@ public final class MultiViewDepthFusionSelfTest {
 
     private static void preservesNearerSurfaceDetails() {
         Fixture fixture = Fixture.gradient();
-        Arrays.fill(
-                fixture.depthMaps[StylizedFourViewProjector.RIGHT],
-                3.0f
-        );
-        Arrays.fill(
-                fixture.depthMaps[StylizedFourViewProjector.LEFT],
-                3.0f
-        );
+        Arrays.fill(fixture.depthMaps[StylizedFourViewProjector.RIGHT], 3.0f);
+        Arrays.fill(fixture.depthMaps[StylizedFourViewProjector.LEFT], 3.0f);
         float[] refined = fixture.refine().getDensity();
         int near = index(4, HEIGHT / 2, 2);
         int far = index(11, HEIGHT / 2, 2);
@@ -94,16 +89,10 @@ public final class MultiViewDepthFusionSelfTest {
 
     private static void usesStrongerDriverThanVehicleCarving() {
         float driver = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.COMPOSITE_VEHICLE,
-                0.30f,
-                0.48f,
-                0.42f
+                SubjectCategory.COMPOSITE_VEHICLE, 0.30f, 0.48f, 0.42f
         );
         float chassis = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.COMPOSITE_VEHICLE,
-                0.72f,
-                0.95f,
-                0.90f
+                SubjectCategory.COMPOSITE_VEHICLE, 0.72f, 0.95f, 0.90f
         );
         check(driver > chassis * 2.2f,
                 "Driver limbs must be sculpted much more strongly than the chassis");
@@ -111,16 +100,10 @@ public final class MultiViewDepthFusionSelfTest {
 
     private static void preservesAnimalTorsoAndSeparatesLegs() {
         float torso = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.ANIMAL,
-                0.42f,
-                0.90f,
-                0.88f
+                SubjectCategory.ANIMAL, 0.42f, 0.90f, 0.88f
         );
         float legs = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.ANIMAL,
-                0.82f,
-                0.38f,
-                0.34f
+                SubjectCategory.ANIMAL, 0.82f, 0.38f, 0.34f
         );
         check(legs > torso * 2.3f,
                 "Quadruped legs must be separated without flattening the torso");
@@ -128,19 +111,88 @@ public final class MultiViewDepthFusionSelfTest {
 
     private static void keepsArchitectureMoreRigidThanCharacter() {
         float rigid = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.ARCHITECTURE_OBJECT,
-                0.50f,
-                0.90f,
-                0.90f
+                SubjectCategory.ARCHITECTURE_OBJECT, 0.50f, 0.90f, 0.90f
         );
         float characterLimb = MultiViewDepthFusion.debugInsetFraction(
-                SubjectCategory.CHARACTER,
-                0.80f,
-                0.38f,
-                0.34f
+                SubjectCategory.CHARACTER, 0.80f, 0.38f, 0.34f
         );
         check(rigid < characterLimb * 0.35f,
                 "Rigid buildings must keep planar volume while limbs can be carved");
+    }
+
+    private static void preservesDisconnectedRayComponents() {
+        final int w = 18;
+        final int h = 24;
+        final int d = 18;
+        float[] base = new float[w * h * d];
+        boolean[][] masks = new boolean[][]{
+                new boolean[w * h], new boolean[d * h],
+                new boolean[w * h], new boolean[d * h]
+        };
+        float[][] maps = new float[][]{
+                new float[w * h], new float[d * h],
+                new float[w * h], new float[d * h]
+        };
+        float[][] confidence = new float[][]{
+                new float[w * h], new float[d * h],
+                new float[w * h], new float[d * h]
+        };
+
+        for (int y = 3; y <= 20; y++) {
+            for (int x = 4; x <= 13; x++) {
+                masks[0][y * w + x] = true;
+                masks[2][y * w + (w - 1 - x)] = true;
+            }
+            for (int z = 2; z <= 6; z++) {
+                masks[1][y * d + z] = true;
+                masks[3][y * d + (d - 1 - z)] = true;
+            }
+            for (int z = 11; z <= 15; z++) {
+                masks[1][y * d + z] = true;
+                masks[3][y * d + (d - 1 - z)] = true;
+            }
+        }
+
+        for (int y = 3; y <= 20; y++) {
+            for (int x = 4; x <= 13; x++) {
+                for (int z = 2; z <= 6; z++) {
+                    base[(y * w + x) * d + z] = 1.0f;
+                }
+                for (int z = 11; z <= 15; z++) {
+                    base[(y * w + x) * d + z] = 1.0f;
+                }
+            }
+        }
+
+        int[] widths = {w, d, w, d};
+        for (int view = 0; view < 4; view++) {
+            int vw = widths[view];
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < vw; x++) {
+                    int i = y * vw + x;
+                    if (masks[view][i]) {
+                        maps[view][i] = x * 0.12f + y * 0.01f + view * 0.03f;
+                        confidence[view][i] = 0.85f;
+                    }
+                }
+            }
+        }
+
+        MultiViewDepthFusion.Result result = MultiViewDepthFusion.refine(
+                base, masks, maps, confidence, w, h, d, SubjectCategory.ANIMAL
+        );
+        check(result.isApplied(), "Component-aware DA3 refinement was not applied");
+        check(result.getReason().contains("composantes"),
+                "Component-aware backend is not reported");
+        float[] refined = result.getDensity();
+        for (int y = 3; y <= 20; y++) {
+            for (int x = 4; x <= 13; x++) {
+                for (int z = 7; z <= 10; z++) {
+                    check(refined[(y * w + x) * d + z] == 0.0f,
+                            "DA3 filled a true gap between disconnected components");
+                }
+            }
+        }
     }
 
     private static int index(int x, int y, int z) {
@@ -148,9 +200,7 @@ public final class MultiViewDepthFusionSelfTest {
     }
 
     private static void check(boolean condition, String message) {
-        if (!condition) {
-            throw new AssertionError(message);
-        }
+        if (!condition) throw new AssertionError(message);
     }
 
     private static final class Fixture {
@@ -160,13 +210,8 @@ public final class MultiViewDepthFusionSelfTest {
         final float[][] confidence;
         final int baseOccupied;
 
-        Fixture(
-                float[] baseDensity,
-                boolean[][] masks,
-                float[][] depthMaps,
-                float[][] confidence,
-                int baseOccupied
-        ) {
+        Fixture(float[] baseDensity, boolean[][] masks, float[][] depthMaps,
+                float[][] confidence, int baseOccupied) {
             this.baseDensity = baseDensity;
             this.masks = masks;
             this.depthMaps = depthMaps;
@@ -176,13 +221,8 @@ public final class MultiViewDepthFusionSelfTest {
 
         MultiViewDepthFusion.Result refine() {
             return MultiViewDepthFusion.refine(
-                    baseDensity,
-                    masks,
-                    depthMaps,
-                    confidence,
-                    WIDTH,
-                    HEIGHT,
-                    DEPTH
+                    baseDensity, masks, depthMaps, confidence,
+                    WIDTH, HEIGHT, DEPTH
             );
         }
 
