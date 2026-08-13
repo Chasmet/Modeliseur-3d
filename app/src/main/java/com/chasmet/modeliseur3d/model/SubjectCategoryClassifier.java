@@ -3,11 +3,14 @@ package com.chasmet.modeliseur3d.model;
 /**
  * Classifieur géométrique léger fondé sur les quatre silhouettes.
  *
- * <p>Il fonctionne hors réseau et sans nouveau modèle neuronal. Une sélection
- * manuelle reste prioritaire pour les sujets ambigus, notamment un conducteur
- * en contact avec un véhicule.</p>
+ * <p>V7.3 conserve la sélection manuelle prioritaire et ajoute un stabilisateur
+ * de continuité verticale pour les formes articulées. Une séparation de pattes,
+ * jambes ou bras observée sur plusieurs lignes ne peut plus disparaître pendant
+ * une ou deux lignes puis réapparaître comme une masse différente.</p>
  */
 public final class SubjectCategoryClassifier {
+    private static final int MAX_MERGE_ROWS = 3;
+
     private SubjectCategoryClassifier() {
     }
 
@@ -19,10 +22,19 @@ public final class SubjectCategoryClassifier {
             int depth
     ) {
         validate(masks, width, height, depth);
-        if (requested != null && requested != SubjectCategory.AUTO) {
-            return requested;
-        }
+        SubjectCategory resolved = requested != null && requested != SubjectCategory.AUTO
+                ? requested
+                : resolveAuto(masks, width, height, depth);
+        stabilizeComponentContinuity(masks, width, height, depth, resolved);
+        return resolved;
+    }
 
+    private static SubjectCategory resolveAuto(
+            boolean[][] masks,
+            int width,
+            int height,
+            int depth
+    ) {
         boolean[] front = mirroredUnion(masks[0], masks[2], width, height);
         boolean[] side = mirroredUnion(masks[1], masks[3], depth, height);
         Metrics frontMetrics = Metrics.measure(front, width, height);
@@ -56,6 +68,207 @@ public final class SubjectCategoryClassifier {
             return SubjectCategory.ARCHITECTURE_OBJECT;
         }
         return SubjectCategory.CHARACTER;
+    }
+
+    /**
+     * Corrige seulement les fusions verticales courtes dans les zones où des
+     * membres distincts sont attendus. Aucun pixel n'est ajouté : le filtre ne
+     * peut donc pas inventer une silhouette absente des prises de vue.
+     */
+    private static void stabilizeComponentContinuity(
+            boolean[][] masks,
+            int width,
+            int height,
+            int depth,
+            SubjectCategory category
+    ) {
+        if (category == SubjectCategory.ARCHITECTURE_OBJECT
+                || category == SubjectCategory.AUTO) {
+            return;
+        }
+        stabilizeMask(masks[0], width, height, category);
+        stabilizeMask(masks[2], width, height, category);
+        stabilizeMask(masks[1], depth, height, category);
+        stabilizeMask(masks[3], depth, height, category);
+    }
+
+    private static void stabilizeMask(
+            boolean[] mask,
+            int width,
+            int height,
+            SubjectCategory category
+    ) {
+        int top = firstOccupiedRow(mask, width, height);
+        int bottom = lastOccupiedRow(mask, width, height);
+        if (top < 0 || bottom <= top) {
+            return;
+        }
+
+        if (category == SubjectCategory.ANIMAL) {
+            stabilizeDirection(mask, width, top, bottom, 0.60, 0.99, false);
+        } else if (category == SubjectCategory.CHARACTER) {
+            stabilizeDirection(mask, width, top, bottom, 0.56, 0.99, false);
+        } else if (category == SubjectCategory.COMPOSITE_VEHICLE) {
+            // Le conducteur est articulé ; la base véhicule doit rester pleine.
+            stabilizeDirection(mask, width, top, bottom, 0.08, 0.47, true);
+        } else if (category == SubjectCategory.PLANT) {
+            // Stabilise seulement le tronc et les branches basses, pas la canopée.
+            stabilizeDirection(mask, width, top, bottom, 0.52, 0.99, false);
+        }
+    }
+
+    private static void stabilizeDirection(
+            boolean[] mask,
+            int width,
+            int top,
+            int bottom,
+            double startFraction,
+            double endFraction,
+            boolean topDown
+    ) {
+        int span = Math.max(1, bottom - top);
+        int start = top + (int) Math.floor(span * startFraction);
+        int end = top + (int) Math.ceil(span * endFraction);
+        start = Math.max(top, Math.min(bottom, start));
+        end = Math.max(start, Math.min(bottom, end));
+
+        TrackRun[] stable = null;
+        int mergedRows = 0;
+        int y = topDown ? start : end;
+        int stop = topDown ? end : start;
+        int step = topDown ? 1 : -1;
+
+        while (topDown ? y <= stop : y >= stop) {
+            TrackRun[] current = extractRuns(mask, width, y);
+            if (current.length >= 2) {
+                stable = current;
+                mergedRows = 0;
+            } else if (current.length == 1 && stable != null && stable.length >= 2) {
+                mergedRows++;
+                if (mergedRows <= MAX_MERGE_ROWS
+                        && canRestoreSeparation(current[0], stable, width)) {
+                    carvePredictedSeams(mask, width, y, current[0], stable);
+                    TrackRun[] repaired = extractRuns(mask, width, y);
+                    if (repaired.length >= 2) {
+                        stable = repaired;
+                        mergedRows = 0;
+                    }
+                } else if (mergedRows > MAX_MERGE_ROWS) {
+                    stable = null;
+                    mergedRows = 0;
+                }
+            } else if (current.length == 0) {
+                stable = null;
+                mergedRows = 0;
+            } else if (stable != null && current.length == 1) {
+                stable = null;
+                mergedRows = 0;
+            }
+            y += step;
+        }
+    }
+
+    private static boolean canRestoreSeparation(
+            TrackRun merged,
+            TrackRun[] stable,
+            int width
+    ) {
+        if (stable.length < 2 || merged.width() < 5) {
+            return false;
+        }
+        int inside = 0;
+        int totalStableWidth = 0;
+        for (TrackRun run : stable) {
+            if (run.center >= merged.start - 1 && run.center <= merged.end + 1) {
+                inside++;
+                totalStableWidth += run.width();
+            }
+        }
+        if (inside < 2) {
+            return false;
+        }
+        int addedBridge = merged.width() - totalStableWidth;
+        return addedBridge >= 1
+                && merged.width() <= Math.max(6, (int) Math.round(width * 0.62));
+    }
+
+    private static void carvePredictedSeams(
+            boolean[] mask,
+            int width,
+            int y,
+            TrackRun merged,
+            TrackRun[] stable
+    ) {
+        for (int i = 0; i < stable.length - 1; i++) {
+            TrackRun left = stable[i];
+            TrackRun right = stable[i + 1];
+            if (left.center < merged.start || right.center > merged.end) {
+                continue;
+            }
+            int seam = Math.round((left.center + right.center) * 0.5f);
+            seam = Math.max(merged.start + 1, Math.min(merged.end - 1, seam));
+            mask[y * width + seam] = false;
+
+            // Sur les silhouettes larges, deux pixels évitent qu'un champ
+            // sous-pixel referme immédiatement la séparation au maillage.
+            if (merged.width() >= 14 && seam + 1 < merged.end) {
+                mask[y * width + seam + 1] = false;
+            }
+        }
+    }
+
+    private static TrackRun[] extractRuns(boolean[] mask, int width, int y) {
+        TrackRun[] temporary = new TrackRun[Math.max(1, width / 2 + 1)];
+        int count = 0;
+        int row = y * width;
+        int x = 0;
+        while (x < width) {
+            while (x < width && !mask[row + x]) {
+                x++;
+            }
+            if (x >= width) {
+                break;
+            }
+            int start = x;
+            while (x + 1 < width && mask[row + x + 1]) {
+                x++;
+            }
+            int end = x;
+            if (count == temporary.length) {
+                TrackRun[] grown = new TrackRun[temporary.length * 2];
+                System.arraycopy(temporary, 0, grown, 0, temporary.length);
+                temporary = grown;
+            }
+            temporary[count++] = new TrackRun(start, end);
+            x++;
+        }
+        TrackRun[] output = new TrackRun[count];
+        System.arraycopy(temporary, 0, output, 0, count);
+        return output;
+    }
+
+    private static int firstOccupiedRow(boolean[] mask, int width, int height) {
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                if (mask[row + x]) {
+                    return y;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static int lastOccupiedRow(boolean[] mask, int width, int height) {
+        for (int y = height - 1; y >= 0; y--) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                if (mask[row + x]) {
+                    return y;
+                }
+            }
+        }
+        return -1;
     }
 
     private static boolean looksComposite(
@@ -169,6 +382,22 @@ public final class SubjectCategoryClassifier {
                 || masks[1] == null || masks[1].length != depth * height
                 || masks[3] == null || masks[3].length != depth * height) {
             throw new IllegalArgumentException("Silhouettes de classification invalides");
+        }
+    }
+
+    private static final class TrackRun {
+        final int start;
+        final int end;
+        final float center;
+
+        TrackRun(int start, int end) {
+            this.start = start;
+            this.end = end;
+            this.center = (start + end) * 0.5f;
+        }
+
+        int width() {
+            return end - start + 1;
         }
     }
 
