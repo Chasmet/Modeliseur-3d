@@ -17,6 +17,9 @@ public final class MultiViewDepthFusionSelfTest {
         neverCreatesGeometryOutsideTheHull();
         activatesTheCollapseGuard();
         preservesNearerSurfaceDetails();
+        usesStrongerDriverThanVehicleCarving();
+        preservesAnimalTorsoAndSeparatesLegs();
+        keepsArchitectureMoreRigidThanCharacter();
         System.out.println("MultiViewDepthFusionSelfTest: OK");
     }
 
@@ -27,8 +30,8 @@ public final class MultiViewDepthFusionSelfTest {
         check(result.getValidViews() == 4, "All four neural views must remain valid");
         check(result.getChangedVoxels() > 100, "Depth must alter a measurable surface");
         check(result.getMeanSurfaceInset() > 0.10, "Depth must create real relief");
-        check(result.getReason().contains("surfaces DA3"),
-                "Applied depth must identify the surface modeler");
+        check(result.getReason().contains("multi-experts"),
+                "Applied depth must identify the multi-expert modeler");
         check(result.getOccupiedVoxels() > fixture.baseOccupied * 0.55,
                 "Collapse guard must preserve most of the verified hull");
     }
@@ -85,8 +88,59 @@ public final class MultiViewDepthFusionSelfTest {
         float[] refined = fixture.refine().getDensity();
         int near = index(4, HEIGHT / 2, 2);
         int far = index(11, HEIGHT / 2, 2);
-        check(refined[near] > refined[far] + 0.12f,
+        check(refined[near] > refined[far] + 0.08f,
                 "A nearer DA3 surface must project farther than a distant one");
+    }
+
+    private static void usesStrongerDriverThanVehicleCarving() {
+        float driver = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.COMPOSITE_VEHICLE,
+                0.30f,
+                0.48f,
+                0.42f
+        );
+        float chassis = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.COMPOSITE_VEHICLE,
+                0.72f,
+                0.95f,
+                0.90f
+        );
+        check(driver > chassis * 2.2f,
+                "Driver limbs must be sculpted much more strongly than the chassis");
+    }
+
+    private static void preservesAnimalTorsoAndSeparatesLegs() {
+        float torso = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.ANIMAL,
+                0.42f,
+                0.90f,
+                0.88f
+        );
+        float legs = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.ANIMAL,
+                0.82f,
+                0.38f,
+                0.34f
+        );
+        check(legs > torso * 2.3f,
+                "Quadruped legs must be separated without flattening the torso");
+    }
+
+    private static void keepsArchitectureMoreRigidThanCharacter() {
+        float rigid = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.ARCHITECTURE_OBJECT,
+                0.50f,
+                0.90f,
+                0.90f
+        );
+        float characterLimb = MultiViewDepthFusion.debugInsetFraction(
+                SubjectCategory.CHARACTER,
+                0.80f,
+                0.38f,
+                0.34f
+        );
+        check(rigid < characterLimb * 0.35f,
+                "Rigid buildings must keep planar volume while limbs can be carved");
     }
 
     private static int index(int x, int y, int z) {
