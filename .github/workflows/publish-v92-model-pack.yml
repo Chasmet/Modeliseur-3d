@@ -1,0 +1,92 @@
+name: Publier pack IA V9.2 séparé
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-model-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Télécharger APK V9.1 validé
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v92
+          gh release download v9.1-risk \
+            --repo Chasmet/Modeliseur-3d \
+            --pattern 'Modeliseur-3D-V9.1-Risk-SAM-XL0-DA3-392.apk' \
+            --dir /tmp/v92
+          APK=/tmp/v92/Modeliseur-3D-V9.1-Risk-SAM-XL0-DA3-392.apk
+          test "$(stat -c%s "$APK")" -eq 936057609
+          echo '9f9d2b3c40b000ddadd5d632259ab0e3ffee2390cf48ff8072961b5329b5fe81  '"$APK" | sha256sum -c -
+
+      - name: Extraire les cinq modèles IA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/v92/Modeliseur-3D-V9.1-Risk-SAM-XL0-DA3-392.apk
+          PACK=/tmp/v92/model-pack
+          mkdir -p "$PACK"
+          unzip -p "$APK" assets/models/isnet_anime_fp32.onnx > "$PACK/isnet_anime_fp32.onnx"
+          unzip -p "$APK" assets/models/isnet_general_use.onnx > "$PACK/isnet_general_use.onnx"
+          unzip -p "$APK" assets/models/efficientvit_sam_xl0_encoder.onnx > "$PACK/efficientvit_sam_xl0_encoder.onnx"
+          unzip -p "$APK" assets/models/efficientvit_sam_xl0_decoder.onnx > "$PACK/efficientvit_sam_xl0_decoder.onnx"
+          unzip -p "$APK" assets/models/da3_small_four_view_392.onnx > "$PACK/da3_small_four_view_392.onnx"
+
+          test "$(stat -c%s "$PACK/isnet_anime_fp32.onnx")" -eq 176068431
+          test "$(stat -c%s "$PACK/isnet_general_use.onnx")" -eq 178648008
+          test "$(stat -c%s "$PACK/efficientvit_sam_xl0_encoder.onnx")" -eq 451763082
+          test "$(stat -c%s "$PACK/efficientvit_sam_xl0_decoder.onnx")" -eq 16470368
+          test "$(stat -c%s "$PACK/da3_small_four_view_392.onnx")" -eq 101116474
+
+          echo '6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba  '"$PACK/isnet_anime_fp32.onnx" | sha256sum -c -
+          echo '60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a  '"$PACK/isnet_general_use.onnx" | sha256sum -c -
+          echo 'b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3  '"$PACK/efficientvit_sam_xl0_encoder.onnx" | sha256sum -c -
+          echo '051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7  '"$PACK/efficientvit_sam_xl0_decoder.onnx" | sha256sum -c -
+          echo '8cb3b0f246e152e9a784bc7d5b743c174fcd2e25a18713cbcb4781a2fbce50c3  '"$PACK/da3_small_four_view_392.onnx" | sha256sum -c -
+
+          cat > "$PACK/MANIFEST.txt" <<'EOF'
+          V9.2 runtime model pack
+          isnet_anime_fp32.onnx|176068431|6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
+          isnet_general_use.onnx|178648008|60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a
+          efficientvit_sam_xl0_encoder.onnx|451763082|b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3
+          efficientvit_sam_xl0_decoder.onnx|16470368|051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7
+          da3_small_four_view_392.onnx|101116474|8cb3b0f246e152e9a784bc7d5b743c174fcd2e25a18713cbcb4781a2fbce50c3
+          EOF
+
+      - name: Publier Release pack IA V9.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK=/tmp/v92/model-pack
+          gh release delete v9.2-model-pack --cleanup-tag -y >/dev/null 2>&1 || true
+          gh release create v9.2-model-pack \
+            "$PACK/isnet_anime_fp32.onnx" \
+            "$PACK/isnet_general_use.onnx" \
+            "$PACK/efficientvit_sam_xl0_encoder.onnx" \
+            "$PACK/efficientvit_sam_xl0_decoder.onnx" \
+            "$PACK/da3_small_four_view_392.onnx" \
+            "$PACK/MANIFEST.txt" \
+            --target '${{ github.event.pull_request.head.sha || github.sha }}' \
+            --title 'Modeliseur 3D V9.2 — Pack IA local séparé' \
+            --notes 'Pack IA vérifié extrait byte-for-byte de la V9.1 validée. Le Modeliseur V9.2 léger télécharge ces fichiers séparément puis travaille hors ligne.' \
+            --prerelease
+
+      - name: Vérifier Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view v9.2-model-pack --repo Chasmet/Modeliseur-3d --json tagName,assets
