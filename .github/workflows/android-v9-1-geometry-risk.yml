@@ -1,4 +1,4 @@
-name: Compiler APK Android V9.1 Geometry Risk
+name: Compiler APK Android V9.4 Memory Safe
 
 on:
   pull_request:
@@ -111,15 +111,23 @@ jobs:
         shell: bash
         run: bash tools/ci_prepare_da3_v9_392.sh
 
-      - name: Activer V9.1 dense + quadrupède
+      - name: Activer V9.4 dense + SAM mémoire sûre
         shell: bash
         run: |
           set -euo pipefail
           SEG=app/src/main/java/com/chasmet/modeliseur3d/model/AnimeSegmentationEngine.java
+          SAM=app/src/main/java/com/chasmet/modeliseur3d/model/EfficientVitSamSegmentationEngine.java
           DEPTH=app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMultiViewDepthEngine.java
           ENGINE=app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
+
+          # Même réseau XL0 et mêmes poids. On réduit uniquement les allocations
+          # de travail : 2 threads max, arena CPU désactivée, memory pattern désactivé.
+          sed -i 's/int threads = Math.max(2, Math.min(8, processors - 1));/int threads = Math.max(1, Math.min(2, processors - 1));/' "$SAM"
+          sed -i 's/decoder = createCpuSession(decoderModel, Math.max(2, Math.min(6, threads)));/decoder = createCpuSession(decoderModel, 1);/' "$SAM"
+          sed -i '/options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);/a\        options.setCPUArenaAllocator(false);\n        options.setMemoryPatternOptimization(false);' "$SAM"
+
           sed -i 's/models\/da3_small_four_view_224.onnx/models\/da3_small_four_view_392.onnx/' "$DEPTH"
           sed -i 's/da3_small_four_view_224_v7_2.onnx/da3_small_four_view_392_v9.onnx/' "$DEPTH"
           sed -i 's/private static final int INPUT_SIZE = 224;/private static final int INPUT_SIZE = 392;/' "$DEPTH"
@@ -139,12 +147,15 @@ jobs:
           sed -i 's/atlasHeight = 2048;/atlasHeight = 4096;/g' "$ENGINE"
           sed -i 's/atlasHeight = 1024;/atlasHeight = 2048;/' "$ENGINE"
 
-          sed -i "s/versionCode 43/versionCode 48/" app/build.gradle
-          sed -i "s/versionName '7.4.0'/versionName '9.1.0'/" app/build.gradle
-          sed -i 's/Modéliseur 3D V8.1 General + DA3/Modéliseur 3D V9.1 Risk 4-Legs + SAM + DA3/' app/src/main/AndroidManifest.xml
-          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V9.1 — SAM XL0 • DA3 392 • grille dense • quadrupède 4 appuis/' app/src/main/res/layout/activity_manual_3d.xml
+          sed -i "s/versionCode 43/versionCode 49/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '9.4.0'/" app/build.gradle
+          sed -i 's/Modéliseur 3D V8.1 General + DA3/Modéliseur 3D V9.4 Memory-Safe SAM + DA3/' app/src/main/AndroidManifest.xml
+          sed -i 's/3D locale V7.3.1 — composants suivis + DA3/3D locale V9.4 — SAM XL0 mémoire sûre • DA3 392 • grille dense/' app/src/main/res/layout/activity_manual_3d.xml
 
           grep -q 'RiskSegmentationEngine' "$SEG"
+          grep -q 'setCPUArenaAllocator(false)' "$SAM"
+          grep -q 'setMemoryPatternOptimization(false)' "$SAM"
+          grep -q 'Math.min(2, processors - 1)' "$SAM"
           grep -q 'INPUT_SIZE = 392' "$DEPTH"
           grep -q 'RiskMultiViewDepthFusion.refine' "$ENGINE"
           grep -q 'width = 160' "$ENGINE"
@@ -165,10 +176,10 @@ jobs:
       - name: Tests géométriques
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK V9.1
+      - name: Compiler APK V9.4
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V9.1
+      - name: Vérifier APK V9.4
         shell: bash
         run: |
           set -euo pipefail
@@ -176,8 +187,8 @@ jobs:
           BT="$ANDROID_HOME/build-tools/34.0.0"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/aapt" dump badging "$APK" | tee /tmp/v91-badging.txt
-          grep -q "versionCode='48'" /tmp/v91-badging.txt
-          grep -q "versionName='9.1.0'" /tmp/v91-badging.txt
+          grep -q "versionCode='49'" /tmp/v91-badging.txt
+          grep -q "versionName='9.4.0'" /tmp/v91-badging.txt
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_encoder.onnx | sha256sum | cut -d' ' -f1)" = "b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3"
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_decoder.onnx | sha256sum | cut -d' ' -f1)" = "051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7"
           DA3_SHA="$(cut -d' ' -f1 app/src/main/assets/models/da3_small_four_view_392.onnx.sha256)"
@@ -190,7 +201,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p /tmp/v91
-          split -n 4 -d -a 1 app/build/outputs/apk/debug/app-debug.apk /tmp/v91/Modeliseur-V9.1-Risk.apk.part
+          split -n 4 -d -a 1 app/build/outputs/apk/debug/app-debug.apk /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part
           cp /tmp/SHA256.txt /tmp/v91/SHA256.txt
           cp /tmp/SIZE.txt /tmp/v91/SIZE.txt
           ls -lh /tmp/v91
@@ -199,7 +210,7 @@ jobs:
         name: Publier partie 0
         with:
           name: Modeliseur-V9-1-Risk-part0
-          path: /tmp/v91/Modeliseur-V9.1-Risk.apk.part0
+          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part0
           compression-level: 0
           retention-days: 30
 
@@ -207,7 +218,7 @@ jobs:
         name: Publier partie 1
         with:
           name: Modeliseur-V9-1-Risk-part1
-          path: /tmp/v91/Modeliseur-V9.1-Risk.apk.part1
+          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part1
           compression-level: 0
           retention-days: 30
 
@@ -215,7 +226,7 @@ jobs:
         name: Publier partie 2
         with:
           name: Modeliseur-V9-1-Risk-part2
-          path: /tmp/v91/Modeliseur-V9.1-Risk.apk.part2
+          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part2
           compression-level: 0
           retention-days: 30
 
@@ -224,7 +235,7 @@ jobs:
         with:
           name: Modeliseur-V9-1-Risk-part3
           path: |
-            /tmp/v91/Modeliseur-V9.1-Risk.apk.part3
+            /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part3
             /tmp/v91/SHA256.txt
             /tmp/v91/SIZE.txt
           compression-level: 0
