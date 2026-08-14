@@ -122,12 +122,14 @@ jobs:
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
 
-          # Même réseau XL0 et mêmes poids. On réduit uniquement les allocations
-          # de travail : 2 threads max, arena CPU désactivée, memory pattern désactivé.
+          # SAM XL0 : mêmes poids et même résolution, allocations mémoire plus sobres.
           sed -i 's/int threads = Math.max(2, Math.min(8, processors - 1));/int threads = Math.max(1, Math.min(2, processors - 1));/' "$SAM"
           sed -i 's/decoder = createCpuSession(decoderModel, Math.max(2, Math.min(6, threads)));/decoder = createCpuSession(decoderModel, 1);/' "$SAM"
           sed -i '/options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);/a\        options.setCPUArenaAllocator(false);\n        options.setMemoryPatternOptimization(false);' "$SAM"
 
+          # DA3 392 : mêmes cartes de profondeur, moins de mémoire de travail native.
+          sed -i 's/int threads = Math.max(2, Math.min(8, processors - 1));/int threads = Math.max(1, Math.min(3, processors - 1));/g' "$DEPTH"
+          sed -i '/options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);/a\        options.setCPUArenaAllocator(false);\n        options.setMemoryPatternOptimization(false);' "$DEPTH"
           sed -i 's/models\/da3_small_four_view_224.onnx/models\/da3_small_four_view_392.onnx/' "$DEPTH"
           sed -i 's/da3_small_four_view_224_v7_2.onnx/da3_small_four_view_392_v9.onnx/' "$DEPTH"
           sed -i 's/private static final int INPUT_SIZE = 224;/private static final int INPUT_SIZE = 392;/' "$DEPTH"
@@ -156,6 +158,9 @@ jobs:
           grep -q 'setCPUArenaAllocator(false)' "$SAM"
           grep -q 'setMemoryPatternOptimization(false)' "$SAM"
           grep -q 'Math.min(2, processors - 1)' "$SAM"
+          grep -q 'setCPUArenaAllocator(false)' "$DEPTH"
+          grep -q 'setMemoryPatternOptimization(false)' "$DEPTH"
+          grep -q 'Math.min(3, processors - 1)' "$DEPTH"
           grep -q 'INPUT_SIZE = 392' "$DEPTH"
           grep -q 'RiskMultiViewDepthFusion.refine' "$ENGINE"
           grep -q 'width = 160' "$ENGINE"
