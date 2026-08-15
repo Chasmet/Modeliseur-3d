@@ -1,5 +1,5 @@
-name: "📱 APK DIRECT TEST - TELECHARGER ICI"
-run-name: "📱 APK DIRECT — APPUYER ICI POUR TESTER"
+name: "⬇️ APK V9.5.1 - TELECHARGER DANS ACTIONS"
+run-name: "⬇️ APK V9.5.1 — TELECHARGER ICI"
 
 on:
   pull_request:
@@ -8,11 +8,11 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 jobs:
   full-single-apk:
-    name: "📱 APK ANDROID DIRECT — LIEN DANS LE RESUME"
+    name: "⬇️ APK COMPLET — ARTIFACT EN BAS DE LA PAGE"
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -41,7 +41,7 @@ jobs:
           echo "Build V9.5 Zero-Copy introuvable pour $HEAD_SHA" >&2
           exit 1
 
-      - name: Reconstituer le seul APK complet
+      - name: Reconstituer et vérifier l'APK complet
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -73,50 +73,32 @@ jobs:
           echo "$ACTUAL_SIZE" > /tmp/v95full/out/SIZE.txt
           echo "APK complet vérifié : $ACTUAL_SIZE octets"
 
-      - name: Publier une copie Artifact de secours
+      - name: "⬇️ PUBLIER APK DANS ACTIONS"
         uses: actions/upload-artifact@v4
         with:
-          name: APK-SECOURS-V9.5.1-FULL
+          name: TELECHARGER-APK-MODELISEUR-3D-V9.5.1-FULL
           path: /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
-      - name: Publier APK direct installable dans Releases
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release delete v9.5-full --repo Chasmet/Modeliseur-3d --cleanup-tag -y >/dev/null 2>&1 || true
-          gh release create v9.5-full \
-            /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk \
-            /tmp/v95full/out/SHA256.txt \
-            /tmp/v95full/out/SIZE.txt \
-            --repo Chasmet/Modeliseur-3d \
-            --target "$HEAD_SHA" \
-            --title "📱 Modeliseur 3D V9.5.1 — APK DIRECT TEST" \
-            --notes "Téléchargement direct Android : ouvre cette Release et appuie sur Modeliseur-3D-V9.5.1-FULL.apk. Aucun ZIP à extraire." \
-            --prerelease
-
-      - name: "📱 LIEN APK DIRECT"
+      - name: "⬇️ OU TELECHARGER"
         shell: bash
         run: |
           SIZE=$(cat /tmp/v95full/out/SIZE.txt | tr -d '[:space:]')
           SHA=$(awk '{print $1}' /tmp/v95full/out/SHA256.txt)
-          DIRECT_URL="https://github.com/Chasmet/Modeliseur-3d/releases/download/v9.5-full/Modeliseur-3D-V9.5.1-FULL.apk"
-          RELEASE_URL="https://github.com/Chasmet/Modeliseur-3d/releases/tag/v9.5-full"
           {
-            echo "# 📱 APK ANDROID PRÊT À TESTER"
+            echo "# ⬇️ APK V9.5.1 PRÊT"
             echo
-            echo "## [⬇️ TÉLÉCHARGER APK DIRECTEMENT]($DIRECT_URL)"
+            echo "## Descends tout en bas de CETTE page GitHub Actions"
             echo
-            echo "**Pas besoin de télécharger un Artifact ZIP.**"
+            echo "### Dans **Artifacts**, appuie sur :"
             echo
-            echo "Si Android bloque le lien direct : [ouvrir la page Release]($RELEASE_URL), puis appuyer sur **Modeliseur-3D-V9.5.1-FULL.apk**."
+            echo "# TELECHARGER-APK-MODELISEUR-3D-V9.5.1-FULL"
             echo
-            echo "Taille : ${SIZE} octets"
+            echo "Il contient : **Modeliseur-3D-V9.5.1-FULL.apk**"
+            echo
+            echo "Taille APK : ${SIZE} octets"
             echo
             echo "SHA-256 : \`${SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
