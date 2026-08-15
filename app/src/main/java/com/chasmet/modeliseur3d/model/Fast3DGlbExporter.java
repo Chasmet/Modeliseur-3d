@@ -7,6 +7,7 @@ import android.os.SystemClock;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -21,6 +22,10 @@ import java.util.Locale;
  */
 public final class Fast3DGlbExporter {
     private static final long MINIMUM_WELD_HEADROOM_BYTES = 96L * 1024L * 1024L;
+    private static final int GLB_MAGIC = 0x46546C67;
+    private static final int GLB_VERSION = 2;
+    private static final int JSON_CHUNK_TYPE = 0x4E4F534A;
+    private static final int BIN_CHUNK_TYPE = 0x004E4942;
 
     private Fast3DGlbExporter() {
     }
@@ -83,10 +88,8 @@ public final class Fast3DGlbExporter {
         MemoryDiagnostics.mark("EXPORT GLB STREAMING");
         try {
             ExternalViewerGlbExporter.write(temporary, exportMesh, texture);
+            validateWrittenGlb(temporary);
             long size = temporary.length();
-            if (size <= 0L) {
-                throw new IOException("Le fichier GLB généré est vide");
-            }
             if (!temporary.renameTo(output)) {
                 throw new IOException("Impossible de finaliser le fichier GLB externe");
             }
@@ -122,9 +125,9 @@ public final class Fast3DGlbExporter {
         int indexCount = source.getIndices() == null ? 0 : source.getIndices().length;
 
         long estimatedWorkingSet = 0L;
-        estimatedWorkingSet += (long) vertexCount * 8L;   // remap + uniqueOriginal
-        estimatedWorkingSet += (long) vertexCount * 24L;  // nouvelles positions/normales/UV
-        estimatedWorkingSet += (long) indexCount * 4L;    // nouveaux indices
+        estimatedWorkingSet += (long) vertexCount * 8L;
+        estimatedWorkingSet += (long) vertexCount * 24L;
+        estimatedWorkingSet += (long) indexCount * 4L;
 
         long tableEntries = 16L;
         long wanted = Math.max(16L, (long) vertexCount * 2L);
@@ -289,6 +292,59 @@ public final class Fast3DGlbExporter {
                 throw new IOException("Indice de triangle invalide dans le maillage 3D");
             }
         }
+    }
+
+    /** Vérifie le conteneur GLB avant de renommer le fichier temporaire. */
+    private static void validateWrittenGlb(File file) throws IOException {
+        if (file == null || !file.isFile() || file.length() < 28L) {
+            throw new IOException("GLB final incomplet");
+        }
+        try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
+            int magic = readIntLE(input);
+            int version = readIntLE(input);
+            long declaredLength = readUInt32LE(input);
+            if (magic != GLB_MAGIC || version != GLB_VERSION) {
+                throw new IOException("En-tête GLB 2.0 invalide");
+            }
+            if (declaredLength != file.length()) {
+                throw new IOException("Longueur GLB incohérente");
+            }
+
+            long jsonLength = readUInt32LE(input);
+            int jsonType = readIntLE(input);
+            if (jsonLength <= 0L || jsonType != JSON_CHUNK_TYPE) {
+                throw new IOException("Chunk JSON GLB invalide");
+            }
+            long binaryHeaderOffset = 20L + jsonLength;
+            if (binaryHeaderOffset + 8L > file.length()) {
+                throw new IOException("Chunk BIN GLB absent");
+            }
+            input.seek(binaryHeaderOffset);
+            long binaryLength = readUInt32LE(input);
+            int binaryType = readIntLE(input);
+            if (binaryLength <= 0L || binaryType != BIN_CHUNK_TYPE) {
+                throw new IOException("Chunk BIN GLB invalide");
+            }
+            long expectedEnd = binaryHeaderOffset + 8L + binaryLength;
+            if (expectedEnd != file.length()) {
+                throw new IOException("Taille du chunk BIN GLB incohérente");
+            }
+        }
+    }
+
+    private static int readIntLE(RandomAccessFile input) throws IOException {
+        int b0 = input.read();
+        int b1 = input.read();
+        int b2 = input.read();
+        int b3 = input.read();
+        if ((b0 | b1 | b2 | b3) < 0) {
+            throw new IOException("Fin de fichier GLB inattendue");
+        }
+        return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+    }
+
+    private static long readUInt32LE(RandomAccessFile input) throws IOException {
+        return readIntLE(input) & 0xFFFF_FFFFL;
     }
 
     private static void notifyProgress(
