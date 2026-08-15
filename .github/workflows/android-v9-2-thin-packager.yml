@@ -140,7 +140,19 @@ jobs:
           sha256sum /tmp/v95/Modeliseur-3D-V9.5-Thin.apk | tee /tmp/v95/SHA256.txt
           echo "$SIZE" | tee /tmp/v95/SIZE.txt
 
-      - name: Publier APK V9.5 Thin
+      - name: Publier APK directement dans GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modeliseur-3D-V9.5-Thin-APK
+          path: |
+            /tmp/v95/Modeliseur-3D-V9.5-Thin.apk
+            /tmp/v95/SHA256.txt
+            /tmp/v95/SIZE.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publier APK V9.5 Thin en Release
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -155,5 +167,5 @@ jobs:
             --repo Chasmet/Modeliseur-3d \
             --target "$HEAD_SHA" \
             --title "Modeliseur 3D V9.5 Thin Zero-Copy" \
-            --notes "APK légère V9.5 réellement issue du build Zero-Copy. SAM XL0 1024, DA3 392 et grille dense conservés. Les IA restent téléchargées via le pack vérifié existant puis l'application fonctionne hors ligne." \
+            --notes "APK légère V9.5 réellement issue du build Zero-Copy. SAM XL0 1024, DA3 392 et grille dense conservés. L'APK est aussi disponible directement comme Artifact dans GitHub Actions. Les IA restent téléchargées via le pack vérifié existant puis l'application fonctionne hors ligne." \
             --prerelease
