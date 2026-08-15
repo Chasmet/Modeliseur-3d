@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 ENGINE = Path("app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java")
 HULL = Path("app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java")
@@ -265,3 +266,8 @@ print(
     "V9.5 memory patch applied: occupancy supprimé; cartes DA3 libérées; "
     "meshing avant atlas 4K; diagnostic Java/natif actif"
 )
+
+# Le patch mesher V9.5 est séparé pour rester vérifiable et testable. Il est
+# exécuté depuis ce point afin que le workflow V9.5 existant n'ait pas besoin
+# d'une deuxième commande et que tous les gains mémoire soient atomiques.
+subprocess.run(["python3", "tools/ci_patch_v95_mesher.py"], check=True)
