@@ -1,4 +1,5 @@
-name: V9.5 FULL - 1 seul APK
+name: "⬇️ APK FULL - TELECHARGER ICI"
+run-name: "⬇️ APK V9.5.1 FULL — TÉLÉCHARGER ICI"
 
 on:
   pull_request:
@@ -11,6 +12,7 @@ permissions:
 
 jobs:
   full-single-apk:
+    name: "⬇️ APK V9.5.1 FULL — ARTIFACT EN BAS"
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -56,31 +58,31 @@ jobs:
             /tmp/v95full/p1/*.part1 \
             /tmp/v95full/p2/*.part2 \
             /tmp/v95full/p3/*.part3 \
-            > /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk
+            > /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk
 
           EXPECTED_SHA=$(awk '{print $1}' /tmp/v95full/p3/SHA256.txt)
           EXPECTED_SIZE=$(cat /tmp/v95full/p3/SIZE.txt | tr -d '[:space:]')
-          ACTUAL_SHA=$(sha256sum /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk | awk '{print $1}')
-          ACTUAL_SIZE=$(stat -c%s /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk)
+          ACTUAL_SHA=$(sha256sum /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk | awk '{print $1}')
+          ACTUAL_SIZE=$(stat -c%s /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk)
 
           test "$ACTUAL_SHA" = "$EXPECTED_SHA"
           test "$ACTUAL_SIZE" = "$EXPECTED_SIZE"
-          unzip -t /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk >/dev/null
+          unzip -t /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk >/dev/null
 
-          echo "$ACTUAL_SHA  Modeliseur-3D-V9.5-FULL.apk" > /tmp/v95full/out/SHA256.txt
+          echo "$ACTUAL_SHA  Modeliseur-3D-V9.5.1-FULL.apk" > /tmp/v95full/out/SHA256.txt
           echo "$ACTUAL_SIZE" > /tmp/v95full/out/SIZE.txt
           echo "APK complet vérifié : $ACTUAL_SIZE octets"
 
-      - name: Publier UN SEUL APK dans GitHub Actions
+      - name: "⬇️ PUBLIER APK DIRECTEMENT DANS ACTIONS"
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-3D-V9.5-FULL-UN-SEUL-APK
-          path: /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk
+          name: TELECHARGER-APK-V9.5.1-FULL
+          path: /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
-      - name: Publier l'APK complet en Release directe
+      - name: Publier aussi une Release de secours
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -89,28 +91,30 @@ jobs:
           set -euo pipefail
           gh release delete v9.5-full --repo Chasmet/Modeliseur-3d --cleanup-tag -y >/dev/null 2>&1 || true
           gh release create v9.5-full \
-            /tmp/v95full/out/Modeliseur-3D-V9.5-FULL.apk \
+            /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk \
             /tmp/v95full/out/SHA256.txt \
             /tmp/v95full/out/SIZE.txt \
             --repo Chasmet/Modeliseur-3d \
             --target "$HEAD_SHA" \
-            --title "Modeliseur 3D V9.5 FULL - un seul APK" \
-            --notes "APK V9.5 complet avec les modèles IA embarqués. Un seul fichier APK installable, sans assemblage manuel de part0/part1/part2/part3." \
+            --title "Modeliseur 3D V9.5.1 FULL" \
+            --notes "APK complet V9.5.1. Le téléchargement principal est dans GitHub Actions, Artifact TELECHARGER-APK-V9.5.1-FULL." \
             --prerelease
 
-      - name: Bouton téléchargement direct dans Actions
+      - name: Afficher où télécharger dans Actions
         shell: bash
         run: |
           SIZE=$(cat /tmp/v95full/out/SIZE.txt | tr -d '[:space:]')
           SHA=$(awk '{print $1}' /tmp/v95full/out/SHA256.txt)
           {
-            echo "## APK Android prêt"
+            echo "# ⬇️ APK V9.5.1 FULL PRÊT"
             echo
-            echo "### [⬇️ Télécharger directement Modeliseur-3D-V9.5-FULL.apk](https://github.com/Chasmet/Modeliseur-3d/releases/download/v9.5-full/Modeliseur-3D-V9.5-FULL.apk)"
+            echo "## Descends tout en bas de CETTE page GitHub Actions"
             echo
-            echo "**Un seul APK complet** — ${SIZE} octets"
+            echo "### Dans **Artifacts**, appuie sur :"
+            echo
+            echo "# TELECHARGER-APK-V9.5.1-FULL"
+            echo
+            echo "APK complet : ${SIZE} octets"
             echo
             echo "SHA-256 : \`${SHA}\`"
-            echo
-            echo "Le lien ci-dessus est affiché directement dans le résumé GitHub Actions et lance le téléchargement de l'APK dans le navigateur."
           } >> "$GITHUB_STEP_SUMMARY"
