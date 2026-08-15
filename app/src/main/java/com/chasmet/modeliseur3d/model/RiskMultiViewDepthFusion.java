@@ -1,9 +1,11 @@
 package com.chasmet.modeliseur3d.model;
 
 /**
- * V9 wrapper around the proven V8/DA3 fusion.
- * Animals receive a dedicated four-leg topology pass and composite vehicles
- * receive a driver/chassis/four-wheel separation pass.
+ * V9.5 wrapper around DA3 with memory-safe structural passes.
+ *
+ * <p>Le mode composite n'alloue plus de copies float[] complètes après DA3.
+ * Les mêmes garde-fous géométriques sont évalués avant toute sculpture, puis
+ * les modifications sont appliquées en place pour réduire fortement le pic RAM.</p>
  */
 public final class RiskMultiViewDepthFusion {
     private RiskMultiViewDepthFusion() {
@@ -19,7 +21,7 @@ public final class RiskMultiViewDepthFusion {
             int depthSize,
             SubjectCategory category
     ) {
-        MultiViewDepthFusion.Result first = MultiViewDepthFusion.refine(
+        MultiViewDepthFusion.Result first = MemorySafeMultiViewDepthFusion.refine(
                 base,
                 masks,
                 depth,
@@ -44,13 +46,26 @@ public final class RiskMultiViewDepthFusion {
         }
 
         if (category == SubjectCategory.COMPOSITE_VEHICLE) {
-            CompositeVehicleTopologyRefiner.Result vehicle = CompositeVehicleTopologyRefiner.refine(
-                    first.getDensity(), width, height, depthSize
-            );
+            MemorySafeCompositeVehicleTopologyRefiner.Result vehicle =
+                    MemorySafeCompositeVehicleTopologyRefiner.refine(
+                            first.getDensity(), width, height, depthSize
+                    );
             if (!vehicle.applied) {
-                return append(first, first.getDensity(), 0, first.getOccupiedVoxels(), vehicle.summary);
+                return append(
+                        first,
+                        first.getDensity(),
+                        0,
+                        first.getOccupiedVoxels(),
+                        vehicle.summary
+                );
             }
-            return append(first, vehicle.density, vehicle.changed, vehicle.occupied, vehicle.summary);
+            return append(
+                    first,
+                    vehicle.density,
+                    vehicle.changed,
+                    vehicle.occupied,
+                    vehicle.summary
+            );
         }
 
         return first;
