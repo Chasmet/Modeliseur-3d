@@ -1,5 +1,5 @@
-name: "⬇️ APK V9.5.1 - TELECHARGER DANS ACTIONS"
-run-name: "⬇️ APK V9.5.1 — TELECHARGER ICI"
+name: "⬇️ APK V9.5.2 DIAGNOSTIC - TELECHARGER DANS ACTIONS"
+run-name: "⬇️ APK V9.5.2 DIAGNOSTIC — TELECHARGER ICI"
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   full-single-apk:
-    name: "⬇️ APK COMPLET — ARTIFACT EN BAS DE LA PAGE"
+    name: "⬇️ APK COMPLET V9.5.2 — ARTIFACT EN BAS DE LA PAGE"
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -33,7 +33,7 @@ jobs:
             if [ "$STATUS" = "completed" ]; then
               test "$CONCLUSION" = "success"
               echo "SOURCE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
-              echo "Build source V9.5 validé : $RUN_ID"
+              echo "Build source V9.5.2 validé : $RUN_ID"
               exit 0
             fi
             sleep 10
@@ -58,26 +58,26 @@ jobs:
             /tmp/v95full/p1/*.part1 \
             /tmp/v95full/p2/*.part2 \
             /tmp/v95full/p3/*.part3 \
-            > /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk
+            > /tmp/v95full/out/Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk
 
           EXPECTED_SHA=$(awk '{print $1}' /tmp/v95full/p3/SHA256.txt)
           EXPECTED_SIZE=$(cat /tmp/v95full/p3/SIZE.txt | tr -d '[:space:]')
-          ACTUAL_SHA=$(sha256sum /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk | awk '{print $1}')
-          ACTUAL_SIZE=$(stat -c%s /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk)
+          ACTUAL_SHA=$(sha256sum /tmp/v95full/out/Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk | awk '{print $1}')
+          ACTUAL_SIZE=$(stat -c%s /tmp/v95full/out/Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk)
 
           test "$ACTUAL_SHA" = "$EXPECTED_SHA"
           test "$ACTUAL_SIZE" = "$EXPECTED_SIZE"
-          unzip -t /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk >/dev/null
+          unzip -t /tmp/v95full/out/Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk >/dev/null
 
-          echo "$ACTUAL_SHA  Modeliseur-3D-V9.5.1-FULL.apk" > /tmp/v95full/out/SHA256.txt
+          echo "$ACTUAL_SHA  Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk" > /tmp/v95full/out/SHA256.txt
           echo "$ACTUAL_SIZE" > /tmp/v95full/out/SIZE.txt
           echo "APK complet vérifié : $ACTUAL_SIZE octets"
 
       - name: "⬇️ PUBLIER APK DANS ACTIONS"
         uses: actions/upload-artifact@v4
         with:
-          name: TELECHARGER-APK-MODELISEUR-3D-V9.5.1-FULL
-          path: /tmp/v95full/out/Modeliseur-3D-V9.5.1-FULL.apk
+          name: TELECHARGER-APK-MODELISEUR-3D-V9.5.2-DIAGNOSTIC
+          path: /tmp/v95full/out/Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -88,15 +88,15 @@ jobs:
           SIZE=$(cat /tmp/v95full/out/SIZE.txt | tr -d '[:space:]')
           SHA=$(awk '{print $1}' /tmp/v95full/out/SHA256.txt)
           {
-            echo "# ⬇️ APK V9.5.1 PRÊT"
+            echo "# ⬇️ APK V9.5.2 DIAGNOSTIC PRÊT"
             echo
             echo "## Descends tout en bas de CETTE page GitHub Actions"
             echo
             echo "### Dans **Artifacts**, appuie sur :"
             echo
-            echo "# TELECHARGER-APK-MODELISEUR-3D-V9.5.1-FULL"
+            echo "# TELECHARGER-APK-MODELISEUR-3D-V9.5.2-DIAGNOSTIC"
             echo
-            echo "Il contient : **Modeliseur-3D-V9.5.1-FULL.apk**"
+            echo "Il contient : **Modeliseur-3D-V9.5.2-DIAGNOSTIC-FULL.apk**"
             echo
             echo "Taille APK : ${SIZE} octets"
             echo
