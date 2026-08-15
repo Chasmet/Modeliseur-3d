@@ -1,0 +1,38 @@
+name: Tester 2.5D V5.5 Shell
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-25d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compiler le moteur 2.5D pur Java
+        shell: bash
+        run: |
+          set -euo pipefail
+          P=app/src/main/java/com/chasmet/modeliseur3d/model
+          mkdir -p build/v55-shell-tests
+          javac -encoding UTF-8 -d build/v55-shell-tests \
+            "$P/MeshData.java" \
+            "$P/FaceBack25DMesher.java" \
+            "$P/FaceBack25DShellMesher.java" \
+            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DShellSelfTest.java
+
+      - name: Vérifier trous, parties séparées et coque fermée
+        run: java -cp build/v55-shell-tests com.chasmet.modeliseur3d.model.FaceBack25DShellSelfTest
