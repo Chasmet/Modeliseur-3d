@@ -12,14 +12,16 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * Export GLB qualité V8.
+ * Export GLB qualité sans dégradation.
  *
- * Aucun triangle n'est supprimé et aucune texture n'est dégradée. V8 retire
- * uniquement les doublons de sommets dont POSITION + NORMAL + UV sont
- * strictement identiques, puis remappe les indices. Les coutures UV restent
- * donc intactes et le rendu ne change pas.
+ * <p>Aucun triangle n'est supprimé et aucune texture n'est réduite. Une soudure
+ * strictement sans perte des sommets identiques peut être effectuée lorsqu'il
+ * reste assez de mémoire. L'écriture finale est ensuite déléguée à
+ * ExternalViewerGlbExporter, qui écrit désormais le GLB en streaming.</p>
  */
 public final class Fast3DGlbExporter {
+    private static final long MINIMUM_WELD_HEADROOM_BYTES = 96L * 1024L * 1024L;
+
     private Fast3DGlbExporter() {
     }
 
@@ -33,20 +35,24 @@ public final class Fast3DGlbExporter {
             throw new IOException("Données 3D invalides pour l'export");
         }
         long started = SystemClock.elapsedRealtime();
+        MemoryDiagnostics.mark("EXPORT PREPARATION");
         notifyProgress(listener, Stage.SIMPLIFYING, 0, 1);
 
         int sourceVertexCount = source.getVertexCount();
         MeshData exportMesh = source;
-        try {
-            MeshData welded = weldExactVertices(source);
-            if (welded != null
-                    && welded.getTriangleCount() == source.getTriangleCount()
-                    && welded.getVertexCount() <= sourceVertexCount) {
-                exportMesh = welded;
+        if (hasMemoryForExactWeld(source)) {
+            try {
+                MeshData welded = weldExactVertices(source);
+                if (welded != null
+                        && welded.getTriangleCount() == source.getTriangleCount()
+                        && welded.getVertexCount() <= sourceVertexCount) {
+                    exportMesh = welded;
+                }
+            } catch (RuntimeException | OutOfMemoryError ignored) {
+                exportMesh = source;
+                MemoryDiagnostics.mark("EXPORT SOUDURE IGNORÉE");
+                Runtime.getRuntime().gc();
             }
-        } catch (RuntimeException | OutOfMemoryError ignored) {
-            exportMesh = source;
-            Runtime.getRuntime().gc();
         }
         validateMesh(exportMesh);
         notifyProgress(listener, Stage.SIMPLIFYING, 1, 1);
@@ -62,18 +68,19 @@ public final class Fast3DGlbExporter {
         ).format(new Date());
         File directory = new File(
                 documents,
-                "Modeliseur3D/Modele_3D_V8_Modulaire_" + stamp
+                "Modeliseur3D/Modele_3D_Qualite_" + stamp
         );
         if (!directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Impossible de créer le dossier GLB");
         }
 
-        File temporary = new File(directory, "modele_3d_v8_modulaire.tmp");
-        File output = new File(directory, "modele_3d_v8_modulaire_da3.glb");
+        File temporary = new File(directory, "modele_3d_qualite.tmp");
+        File output = new File(directory, "modele_3d_qualite.glb");
         deleteQuietly(temporary);
         deleteQuietly(output);
 
-        notifyProgress(listener, Stage.ENCODING, 1, 1);
+        notifyProgress(listener, Stage.ENCODING, 0, 1);
+        MemoryDiagnostics.mark("EXPORT GLB STREAMING");
         try {
             ExternalViewerGlbExporter.write(temporary, exportMesh, texture);
             long size = temporary.length();
@@ -83,6 +90,8 @@ public final class Fast3DGlbExporter {
             if (!temporary.renameTo(output)) {
                 throw new IOException("Impossible de finaliser le fichier GLB externe");
             }
+            notifyProgress(listener, Stage.ENCODING, 1, 1);
+            MemoryDiagnostics.mark("EXPORT GLB TERMINÉ");
             return new PreparedExport(
                     output,
                     size,
@@ -95,11 +104,44 @@ public final class Fast3DGlbExporter {
         } catch (IOException | RuntimeException error) {
             deleteQuietly(temporary);
             deleteQuietly(output);
+            MemoryDiagnostics.mark("EXPORT GLB ÉCHEC");
             if (error instanceof IOException) {
                 throw (IOException) error;
             }
             throw new IOException(error.getMessage(), error);
         }
+    }
+
+    /**
+     * Évite de lancer la soudure si ses tables temporaires risquent de pousser
+     * inutilement le heap Java vers un OOM. Dans ce cas le maillage original,
+     * déjà valide, est exporté directement sans perte de qualité.
+     */
+    private static boolean hasMemoryForExactWeld(MeshData source) {
+        int vertexCount = Math.max(0, source.getVertexCount());
+        int indexCount = source.getIndices() == null ? 0 : source.getIndices().length;
+
+        long estimatedWorkingSet = 0L;
+        estimatedWorkingSet += (long) vertexCount * 8L;   // remap + uniqueOriginal
+        estimatedWorkingSet += (long) vertexCount * 24L;  // nouvelles positions/normales/UV
+        estimatedWorkingSet += (long) indexCount * 4L;    // nouveaux indices
+
+        long tableEntries = 16L;
+        long wanted = Math.max(16L, (long) vertexCount * 2L);
+        while (tableEntries < wanted && tableEntries < (1L << 30)) {
+            tableEntries <<= 1;
+        }
+        estimatedWorkingSet += tableEntries * 4L;
+        estimatedWorkingSet += 16L * 1024L * 1024L;
+
+        Runtime runtime = Runtime.getRuntime();
+        long used = Math.max(0L, runtime.totalMemory() - runtime.freeMemory());
+        long headroom = Math.max(0L, runtime.maxMemory() - used);
+        long required = Math.max(
+                MINIMUM_WELD_HEADROOM_BYTES,
+                estimatedWorkingSet + estimatedWorkingSet / 3L
+        );
+        return headroom >= required;
     }
 
     /**
@@ -177,7 +219,7 @@ public final class Fast3DGlbExporter {
         for (int index = 0; index < sourceIndices.length; index++) {
             int sourceVertex = sourceIndices[index];
             if (sourceVertex < 0 || sourceVertex >= vertexCount) {
-                throw new IllegalArgumentException("Indice invalide avant soudure V8");
+                throw new IllegalArgumentException("Indice invalide avant soudure");
             }
             compactIndices[index] = remap[sourceVertex];
         }
@@ -267,7 +309,7 @@ public final class Fast3DGlbExporter {
     }
 
     public enum Stage {
-        /** Conservé pour compatibilité : V8 y effectue la soudure exacte. */
+        /** Conservé pour compatibilité : contrôle/soudure exacte du maillage. */
         SIMPLIFYING,
         ENCODING
     }
