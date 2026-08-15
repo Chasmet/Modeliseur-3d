@@ -2,6 +2,8 @@ from pathlib import Path
 import re
 
 MESHER = Path("app/src/main/java/com/chasmet/modeliseur3d/model/SmoothHullMesher.java")
+ENGINE = Path("app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java")
+ORIENTATION = Path("app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java")
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -216,7 +218,110 @@ if count != 1:
     raise SystemExit(f"suppression classe GradientField: motif trouvé {count}")
 
 MESHER.write_text(text, encoding="utf-8")
+
+# Une fois le maillage extrait, la grille 3D et les masques n'ont plus aucune
+# utilité. On les libère avant l'optimiseur et avant l'atlas 4K. L'optimiseur
+# est facultatif : un OOM ne doit jamais annuler un maillage brut déjà valide.
+engine = ENGINE.read_text(encoding="utf-8")
+old_engine_mesh = """            mesh = SmoothHullMesher.build(
+                    finalDensity,
+                    profile.width,
+                    profile.height,
+                    profile.depth,
+                    layout,
+                    profile.processors,
+                    masks,
+                    category
+            );
+            try {
+                mesh = MeshSurfaceOptimizer.optimize(mesh, adaptive ? 2 : 1);
+            } catch (RuntimeException ignored) {
+                // Le maillage brut reste valide si l'optimisation facultative échoue.
+            }
+            mesh = MeshOrientationCorrector.correct(mesh);
+"""
+new_engine_mesh = """            mesh = SmoothHullMesher.build(
+                    finalDensity,
+                    profile.width,
+                    profile.height,
+                    profile.depth,
+                    layout,
+                    profile.processors,
+                    masks,
+                    category
+            );
+            // V9.5 : la densité (~75 Mio au profil extrême) et les masques ne
+            // servent plus dès que l'extraction de surface est terminée.
+            finalDensity = null;
+            masks = null;
+            releaseMemory();
+            try {
+                mesh = MeshSurfaceOptimizer.optimize(mesh, adaptive ? 2 : 1);
+            } catch (OutOfMemoryError ignored) {
+                // Repli mémoire : le maillage brut est déjà géométriquement valide.
+                releaseMemory();
+            } catch (RuntimeException ignored) {
+                // Le maillage brut reste valide si l'optimisation facultative échoue.
+            }
+            mesh = MeshOrientationCorrector.correct(mesh);
+"""
+engine = replace_once(
+    engine,
+    old_engine_mesh,
+    new_engine_mesh,
+    "libération densité et repli optimizer",
+)
+ENGINE.write_text(engine, encoding="utf-8")
+
+# La correction d'orientation ne change que le signe Y des normales et V des
+# UV. Recopier quatre tableaux complets était inutile : la transformation est
+# strictement équivalente en place et économise un doublon complet du maillage.
+orientation = ORIENTATION.read_text(encoding="utf-8")
+old_orientation = """        float[] positions = Arrays.copyOf(
+                source.getPositions(),
+                source.getPositions().length
+        );
+        float[] normals = Arrays.copyOf(
+                source.getNormals(),
+                source.getNormals().length
+        );
+        float[] texCoords = Arrays.copyOf(
+                source.getTexCoords(),
+                source.getTexCoords().length
+        );
+        int[] indices = Arrays.copyOf(
+                source.getIndices(),
+                source.getIndices().length
+        );
+
+        for (int index = 1; index < normals.length; index += 3) {
+            normals[index] = -normals[index];
+        }
+        for (int index = 1; index < texCoords.length; index += 2) {
+            texCoords[index] = clamp01(1.0f - texCoords[index]);
+        }
+        return new MeshData(positions, normals, texCoords, indices);
+"""
+new_orientation = """        float[] normals = source.getNormals();
+        float[] texCoords = source.getTexCoords();
+        for (int index = 1; index < normals.length; index += 3) {
+            normals[index] = -normals[index];
+        }
+        for (int index = 1; index < texCoords.length; index += 2) {
+            texCoords[index] = clamp01(1.0f - texCoords[index]);
+        }
+        return source;
+"""
+orientation = replace_once(
+    orientation,
+    old_orientation,
+    new_orientation,
+    "orientation en place",
+)
+ORIENTATION.write_text(orientation, encoding="utf-8")
+
 print(
     "V9.5 mesher patch applied: 3 gradients 3D supprimés; gradients locaux exacts; "
-    "workers limités sur grosse grille; fusion MeshPart sans copies temporaires"
+    "workers limités; densité libérée après meshing; optimizer OOM-safe; "
+    "orientation en place; fusion MeshPart sans copies temporaires"
 )
