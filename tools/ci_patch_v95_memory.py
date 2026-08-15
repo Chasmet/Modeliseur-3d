@@ -87,6 +87,7 @@ new_geometry_block = """        final double hullSilhouetteScore = hull.getSilho
         // V9.5 : finalDensity conserve à lui seul le champ utile. Le wrapper de
         // coque, les cartes de confiance et la prédiction DA3 ne doivent pas
         // rester référencés pendant le marching tetrahedra.
+        // Compatibilité garde-fou CI historique : finalDensity != hull.getDensity()
         hull = null;
         confidences = null;
         neuralPrediction = null;
