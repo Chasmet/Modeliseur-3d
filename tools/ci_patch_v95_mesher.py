@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Chaîne atomique des patches V9.5 mémoire + V5.5 coque 2.5D.
+"""Chaîne atomique des patches V9.5 mémoire + V5.5 coque 2.5D + V9.5.1 kart streaming.
 
 Le patch mémoire/mesher validé est relu depuis le commit de référence pour ne
-pas dupliquer ses centaines de lignes ici. Ensuite seulement le patch 2.5D
-Shell est appliqué. Le checkout GitHub Actions étant shallow, le commit est
-récupéré explicitement si nécessaire.
+pas dupliquer ses centaines de lignes ici. Ensuite le patch 2.5D Shell puis le
+streaming mémoire kart sont appliqués. Le checkout GitHub Actions étant shallow,
+le commit est récupéré explicitement si nécessaire.
 """
 from pathlib import Path
 import subprocess
@@ -31,4 +31,5 @@ def git_show_core() -> bytes:
 TMP.write_bytes(git_show_core())
 subprocess.run(["python3", str(TMP)], check=True)
 subprocess.run(["python3", "tools/ci_patch_v955_25d_shell.py"], check=True)
-print("V9.5 mémoire + V5.5 coque 2.5D appliqués.")
+subprocess.run(["python3", "tools/ci_patch_v951_kart_memory_streaming.py"], check=True)
+print("V9.5 mémoire + V5.5 coque 2.5D + V9.5.1 kart streaming appliqués.")
