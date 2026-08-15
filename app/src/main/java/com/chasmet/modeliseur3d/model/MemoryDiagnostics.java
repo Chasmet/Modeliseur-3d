@@ -22,19 +22,26 @@ public final class MemoryDiagnostics {
         String safeStage = stage == null || stage.trim().isEmpty()
                 ? "étape inconnue"
                 : stage.trim();
+        currentStage = safeStage;
+        lastSnapshot = safeStage + " — " + snapshot();
+        return lastSnapshot;
+    }
+
+    /**
+     * Mesure la mémoire courante sans modifier l'étape mémorisée. Cette méthode
+     * est utilisée par le journal visible dans l'application : écrire une ligne
+     * de log ne doit jamais remplacer MESHING/DA3/TEXTURE comme étape OOM.
+     */
+    public static String snapshot() {
         Runtime runtime = Runtime.getRuntime();
         long javaUsed = Math.max(0L, runtime.totalMemory() - runtime.freeMemory());
         long javaMax = Math.max(1L, runtime.maxMemory());
         long javaHeadroom = Math.max(0L, javaMax - javaUsed);
         long nativeAllocated = Math.max(0L, Debug.getNativeHeapAllocatedSize());
         long nativeSize = Math.max(nativeAllocated, Debug.getNativeHeapSize());
-
-        currentStage = safeStage;
-        lastSnapshot = safeStage
-                + " — Java " + mb(javaUsed) + "/" + mb(javaMax) + " Mo"
+        return "Java " + mb(javaUsed) + "/" + mb(javaMax) + " Mo"
                 + " (libre " + mb(javaHeadroom) + " Mo)"
                 + " • natif " + mb(nativeAllocated) + "/" + mb(nativeSize) + " Mo";
-        return lastSnapshot;
     }
 
     public static String lastSnapshot() {
