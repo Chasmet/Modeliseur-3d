@@ -10,6 +10,7 @@
         android:required="true" />
 
     <application
+        android:name=".ModeliseurApplication"
         android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
