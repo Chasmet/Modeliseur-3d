@@ -1,8 +1,6 @@
-name: Tester 2.5D V5.5 Shell
+name: Tester 2.5D V5.5 Shell — MANUEL
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
