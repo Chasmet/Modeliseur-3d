@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chaîne atomique des patches V9.5 mémoire + V5.5 coque 2.5D + V9.5.1 kart streaming + V9.5.2 diagnostic."""
+"""Chaîne atomique V9.5 mémoire + V5.5 2.5D + V9.5.1 streaming + V9.5.2 logs + V9.5.3 meshing final."""
 from pathlib import Path
 import subprocess
 
@@ -27,4 +27,8 @@ subprocess.run(["python3", str(TMP)], check=True)
 subprocess.run(["python3", "tools/ci_patch_v955_25d_shell.py"], check=True)
 subprocess.run(["python3", "tools/ci_patch_v951_kart_memory_streaming.py"], check=True)
 subprocess.run(["python3", "tools/ci_patch_v952_runtime_log.py"], check=True)
-print("V9.5 mémoire + V5.5 coque 2.5D + V9.5.1 kart streaming + V9.5.2 diagnostic appliqués.")
+subprocess.run(["python3", "tools/ci_patch_v953_final_meshing.py"], check=True)
+print(
+    "V9.5.3 FINAL appliquée : mémoire V9.5 + coque 2.5D + streaming kart + "
+    "logs copiables + meshing indexé pré-dimensionné."
+)
