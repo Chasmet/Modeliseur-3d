@@ -1,4 +1,4 @@
-name: ✅ APK UNIQUE V9.5.3 FINAL — TELECHARGER ICI
+name: ✅ APK UNIQUE V9.5.4 APERCU GRAND — TELECHARGER ICI
 
 on:
   pull_request:
@@ -117,7 +117,7 @@ jobs:
       - name: Préparer DA3 392
         run: bash tools/ci_prepare_da3_v9_392.sh
 
-      - name: Activer V9.5.3 FINAL
+      - name: Activer V9.5.4 APERCU GRAND
         shell: bash
         run: |
           set -euo pipefail
@@ -126,6 +126,8 @@ jobs:
           DEPTH=app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMultiViewDepthEngine.java
           ENGINE=app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
           FINAL_MESHER=app/src/main/java/com/chasmet/modeliseur3d/model/MemorySafeIndexedMesher.java
+          RENDERER=app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
+          UI=app/src/main/res/layout/activity_manual_3d.xml
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
 
@@ -156,14 +158,14 @@ jobs:
 
           python3 tools/ci_patch_v95_memory.py
 
-          sed -i "s/versionCode 43/versionCode 51/" app/build.gradle
-          sed -i "s/versionName '7.4.0'/versionName '9.5.3'/" app/build.gradle
+          sed -i "s/versionCode 43/versionCode 52/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '9.5.4'/" app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           import re
           p=Path('app/src/main/AndroidManifest.xml')
           s=p.read_text(encoding='utf-8')
-          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5.3 Final"', s, count=1)
+          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5.4"', s, count=1)
           assert n == 1
           p.write_text(s, encoding='utf-8')
           PY
@@ -179,8 +181,12 @@ jobs:
           grep -q 'maximumDepth = 384' "$ENGINE"
           grep -q 'MemorySafeIndexedMesher.build' "$ENGINE"
           grep -q 'Deux passes sont utilisées' "$FINAL_MESHER"
-          grep -q 'V9.5.3 — FINAL meshing indexé + DA3' app/src/main/res/layout/activity_manual_3d.xml
-          grep -q 'Modéliseur 3D V9.5.3 Final' app/src/main/AndroidManifest.xml
+          grep -q 'V9.5.4 — aperçu grand + meshing indexé + DA3' "$UI"
+          grep -q 'android:minHeight="260dp"' "$UI"
+          grep -q 'android:maxLines="2"' "$UI"
+          grep -q 'updateFraming(mesh)' "$RENDERER"
+          grep -q 'fitScale' "$RENDERER"
+          grep -q 'Modéliseur 3D V9.5.4' app/src/main/AndroidManifest.xml
 
       - name: SDK Android 34
         shell: bash
@@ -195,20 +201,20 @@ jobs:
       - name: Tests géométriques
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK V9.5.3 FINAL
+      - name: Compiler APK V9.5.4
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V9.5.3 FINAL
+      - name: Vérifier APK V9.5.4
         shell: bash
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT="$ANDROID_HOME/build-tools/34.0.0"
           "$BT/apksigner" verify --verbose "$APK"
-          "$BT/aapt" dump badging "$APK" | tee /tmp/v953-badging.txt
-          grep -q "versionCode='51'" /tmp/v953-badging.txt
-          grep -q "versionName='9.5.3'" /tmp/v953-badging.txt
-          grep -q "application-label:'Modéliseur 3D V9.5.3 Final'" /tmp/v953-badging.txt
+          "$BT/aapt" dump badging "$APK" | tee /tmp/v954-badging.txt
+          grep -q "versionCode='52'" /tmp/v954-badging.txt
+          grep -q "versionName='9.5.4'" /tmp/v954-badging.txt
+          grep -q "application-label:'Modéliseur 3D V9.5.4'" /tmp/v954-badging.txt
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_encoder.onnx | sha256sum | cut -d' ' -f1)" = "b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3"
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_decoder.onnx | sha256sum | cut -d' ' -f1)" = "051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7"
           DA3_SHA="$(cut -d' ' -f1 app/src/main/assets/models/da3_small_four_view_392.onnx.sha256)"
@@ -216,24 +222,24 @@ jobs:
           sha256sum "$APK" > /tmp/SHA256.txt
           stat -c '%s' "$APK" > /tmp/SIZE.txt
 
-      - name: Préparer APK V9.5.3 FINAL unique
+      - name: Préparer APK V9.5.4 unique
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/v953-final
-          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
-          cp /tmp/SHA256.txt /tmp/v953-final/SHA256.txt
-          cp /tmp/SIZE.txt /tmp/v953-final/SIZE.txt
-          ls -lh /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
+          mkdir -p /tmp/v954-final
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
+          cp /tmp/SHA256.txt /tmp/v954-final/SHA256.txt
+          cp /tmp/SIZE.txt /tmp/v954-final/SIZE.txt
+          ls -lh /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
 
       - uses: actions/upload-artifact@v4
-        name: Publier UN SEUL APK V9.5.3 FINAL complet
+        name: Publier UN SEUL APK V9.5.4 complet
         with:
-          name: Modeliseur-V9.5.3-FINAL-APK-UNIQUE
+          name: Modeliseur-V9.5.4-APERCU-GRAND-APK-UNIQUE
           path: |
-            /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
-            /tmp/v953-final/SHA256.txt
-            /tmp/v953-final/SIZE.txt
+            /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
+            /tmp/v954-final/SHA256.txt
+            /tmp/v954-final/SIZE.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
