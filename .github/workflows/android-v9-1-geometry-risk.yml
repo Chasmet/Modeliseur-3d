@@ -202,46 +202,24 @@ jobs:
           stat -c '%s' "$APK" > /tmp/SIZE.txt
           cat /tmp/SHA256.txt /tmp/SIZE.txt
 
-      - name: Découper en quatre parties
+      - name: Préparer l'APK unique
         shell: bash
         run: |
-          mkdir -p /tmp/v91
-          split -n 4 -d -a 1 app/build/outputs/apk/debug/app-debug.apk /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part
-          cp /tmp/SHA256.txt /tmp/v91/SHA256.txt
-          cp /tmp/SIZE.txt /tmp/v91/SIZE.txt
-          ls -lh /tmp/v91
+          set -euo pipefail
+          mkdir -p /tmp/modeliseur-single
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/modeliseur-single/Modeliseur-3D-V9.4-Memory-Safe.apk
+          cp /tmp/SHA256.txt /tmp/modeliseur-single/SHA256.txt
+          cp /tmp/SIZE.txt /tmp/modeliseur-single/SIZE.txt
+          ls -lh /tmp/modeliseur-single
 
       - uses: actions/upload-artifact@v4
-        name: Publier partie 0
+        name: Publier un seul APK complet
         with:
-          name: Modeliseur-V9-1-Risk-part0
-          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part0
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 1
-        with:
-          name: Modeliseur-V9-1-Risk-part1
-          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part1
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 2
-        with:
-          name: Modeliseur-V9-1-Risk-part2
-          path: /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part2
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 3 et contrôles
-        with:
-          name: Modeliseur-V9-1-Risk-part3
+          name: Modeliseur-3D-V9.4-APK-UNIQUE
           path: |
-            /tmp/v91/Modeliseur-V9.4-Memory-Safe.apk.part3
-            /tmp/v91/SHA256.txt
-            /tmp/v91/SIZE.txt
+            /tmp/modeliseur-single/Modeliseur-3D-V9.4-Memory-Safe.apk
+            /tmp/modeliseur-single/SHA256.txt
+            /tmp/modeliseur-single/SIZE.txt
           compression-level: 0
+          if-no-files-found: error
           retention-days: 30
