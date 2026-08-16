@@ -1,4 +1,4 @@
-name: Compiler APK Android V9.5 Zero-Copy
+name: ✅ APK UNIQUE V9.5 Zero-Copy — TELECHARGER ICI
 
 on:
   pull_request:
@@ -128,12 +128,10 @@ jobs:
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
 
-          # SAM XL0 1024 inchangé : uniquement allocations et threads réduits.
           sed -i 's/int threads = Math.max(2, Math.min(8, processors - 1));/int threads = Math.max(1, Math.min(2, processors - 1));/' "$SAM"
           sed -i 's/decoder = createCpuSession(decoderModel, Math.max(2, Math.min(6, threads)));/decoder = createCpuSession(decoderModel, 1);/' "$SAM"
           sed -i '/options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);/a\        options.setCPUArenaAllocator(false);\n        options.setMemoryPatternOptimization(false);' "$SAM"
 
-          # DA3 392 inchangé : mémoire de travail native plus sobre.
           sed -i 's/int threads = Math.max(2, Math.min(8, processors - 1));/int threads = Math.max(1, Math.min(3, processors - 1));/g' "$DEPTH"
           sed -i '/options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);/a\        options.setCPUArenaAllocator(false);\n        options.setMemoryPatternOptimization(false);' "$DEPTH"
           sed -i 's/models\/da3_small_four_view_224.onnx/models\/da3_small_four_view_392.onnx/' "$DEPTH"
@@ -141,7 +139,6 @@ jobs:
           sed -i 's/private static final int INPUT_SIZE = 224;/private static final int INPUT_SIZE = 392;/' "$DEPTH"
           sed -i 's/private static final int CONTENT_MARGIN = 7;/private static final int CONTENT_MARGIN = 12;/' "$DEPTH"
 
-          # Même grille dense que V9.4.
           sed -i 's/MultiViewDepthFusion\.refine(/RiskMultiViewDepthFusion.refine(/' "$ENGINE"
           sed -i 's/private static final int MAXIMUM_COMPONENTS = 16;/private static final int MAXIMUM_COMPONENTS = 24;/' "$ENGINE"
           sed -i 's/width = 128;/width = 160;/' "$ENGINE"
@@ -218,46 +215,24 @@ jobs:
           sha256sum "$APK" > /tmp/SHA256.txt
           stat -c '%s' "$APK" > /tmp/SIZE.txt
 
-      - name: Découper en quatre parties
+      - name: Préparer APK V9.5 unique
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/v95
-          split -n 4 -d -a 1 app/build/outputs/apk/debug/app-debug.apk /tmp/v95/Modeliseur-V9.5-Zero-Copy.apk.part
-          cp /tmp/SHA256.txt /tmp/v95/SHA256.txt
-          cp /tmp/SIZE.txt /tmp/v95/SIZE.txt
+          mkdir -p /tmp/v95-unique
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
+          cp /tmp/SHA256.txt /tmp/v95-unique/SHA256.txt
+          cp /tmp/SIZE.txt /tmp/v95-unique/SIZE.txt
+          ls -lh /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
 
       - uses: actions/upload-artifact@v4
-        name: Publier partie 0
+        name: Publier UN SEUL APK V9.5 complet
         with:
-          name: Modeliseur-V9-5-ZeroCopy-part0
-          path: /tmp/v95/Modeliseur-V9.5-Zero-Copy.apk.part0
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 1
-        with:
-          name: Modeliseur-V9-5-ZeroCopy-part1
-          path: /tmp/v95/Modeliseur-V9.5-Zero-Copy.apk.part1
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 2
-        with:
-          name: Modeliseur-V9-5-ZeroCopy-part2
-          path: /tmp/v95/Modeliseur-V9.5-Zero-Copy.apk.part2
-          compression-level: 0
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        name: Publier partie 3 et contrôles
-        with:
-          name: Modeliseur-V9-5-ZeroCopy-part3
+          name: Modeliseur-V9.5-Zero-Copy-APK-UNIQUE
           path: |
-            /tmp/v95/Modeliseur-V9.5-Zero-Copy.apk.part3
-            /tmp/v95/SHA256.txt
-            /tmp/v95/SIZE.txt
+            /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
+            /tmp/v95-unique/SHA256.txt
+            /tmp/v95-unique/SIZE.txt
+          if-no-files-found: error
           compression-level: 0
           retention-days: 30
