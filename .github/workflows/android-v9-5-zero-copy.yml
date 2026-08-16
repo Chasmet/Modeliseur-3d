@@ -1,4 +1,4 @@
-name: ✅ APK UNIQUE V9.5 Zero-Copy — TELECHARGER ICI
+name: ✅ APK UNIQUE V9.5.3 FINAL — TELECHARGER ICI
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-v9-5:
+  build-v9-5-final:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -117,7 +117,7 @@ jobs:
       - name: Préparer DA3 392
         run: bash tools/ci_prepare_da3_v9_392.sh
 
-      - name: Activer V9.5 Zero-Copy
+      - name: Activer V9.5.3 FINAL
         shell: bash
         run: |
           set -euo pipefail
@@ -125,6 +125,7 @@ jobs:
           SAM=app/src/main/java/com/chasmet/modeliseur3d/model/EfficientVitSamSegmentationEngine.java
           DEPTH=app/src/main/java/com/chasmet/modeliseur3d/model/NeuralMultiViewDepthEngine.java
           ENGINE=app/src/main/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DEngine.java
+          FINAL_MESHER=app/src/main/java/com/chasmet/modeliseur3d/model/MemorySafeIndexedMesher.java
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
 
@@ -155,18 +156,15 @@ jobs:
 
           python3 tools/ci_patch_v95_memory.py
 
-          sed -i "s/versionCode 43/versionCode 50/" app/build.gradle
-          sed -i "s/versionName '7.4.0'/versionName '9.5.0'/" app/build.gradle
+          sed -i "s/versionCode 43/versionCode 51/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '9.5.3'/" app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           import re
           p=Path('app/src/main/AndroidManifest.xml')
           s=p.read_text(encoding='utf-8')
-          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5 Zero-Copy"', s, count=1)
+          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5.3 Final"', s, count=1)
           assert n == 1
-          p.write_text(s, encoding='utf-8')
-          p=Path('app/src/main/java/com/chasmet/modeliseur3d/ModelPackActivity.java')
-          s=p.read_text(encoding='utf-8').replace('Modeliseur 3D V9.2 — Installation IA','Modeliseur 3D V9.5 — Installation IA')
           p.write_text(s, encoding='utf-8')
           PY
 
@@ -179,7 +177,10 @@ jobs:
           grep -q 'width = 160' "$ENGINE"
           grep -q 'height = 320' "$ENGINE"
           grep -q 'maximumDepth = 384' "$ENGINE"
-          grep -q 'Modéliseur 3D V9.5 Zero-Copy' app/src/main/AndroidManifest.xml
+          grep -q 'MemorySafeIndexedMesher.build' "$ENGINE"
+          grep -q 'Deux passes sont utilisées' "$FINAL_MESHER"
+          grep -q 'V9.5.3 — FINAL meshing indexé + DA3' app/src/main/res/layout/activity_manual_3d.xml
+          grep -q 'Modéliseur 3D V9.5.3 Final' app/src/main/AndroidManifest.xml
 
       - name: SDK Android 34
         shell: bash
@@ -194,20 +195,20 @@ jobs:
       - name: Tests géométriques
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK V9.5
+      - name: Compiler APK V9.5.3 FINAL
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V9.5
+      - name: Vérifier APK V9.5.3 FINAL
         shell: bash
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT="$ANDROID_HOME/build-tools/34.0.0"
           "$BT/apksigner" verify --verbose "$APK"
-          "$BT/aapt" dump badging "$APK" | tee /tmp/v95-badging.txt
-          grep -q "versionCode='50'" /tmp/v95-badging.txt
-          grep -q "versionName='9.5.0'" /tmp/v95-badging.txt
-          grep -q "application-label:'Modéliseur 3D V9.5 Zero-Copy'" /tmp/v95-badging.txt
+          "$BT/aapt" dump badging "$APK" | tee /tmp/v953-badging.txt
+          grep -q "versionCode='51'" /tmp/v953-badging.txt
+          grep -q "versionName='9.5.3'" /tmp/v953-badging.txt
+          grep -q "application-label:'Modéliseur 3D V9.5.3 Final'" /tmp/v953-badging.txt
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_encoder.onnx | sha256sum | cut -d' ' -f1)" = "b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3"
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_decoder.onnx | sha256sum | cut -d' ' -f1)" = "051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7"
           DA3_SHA="$(cut -d' ' -f1 app/src/main/assets/models/da3_small_four_view_392.onnx.sha256)"
@@ -215,24 +216,24 @@ jobs:
           sha256sum "$APK" > /tmp/SHA256.txt
           stat -c '%s' "$APK" > /tmp/SIZE.txt
 
-      - name: Préparer APK V9.5 unique
+      - name: Préparer APK V9.5.3 FINAL unique
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/v95-unique
-          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
-          cp /tmp/SHA256.txt /tmp/v95-unique/SHA256.txt
-          cp /tmp/SIZE.txt /tmp/v95-unique/SIZE.txt
-          ls -lh /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
+          mkdir -p /tmp/v953-final
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
+          cp /tmp/SHA256.txt /tmp/v953-final/SHA256.txt
+          cp /tmp/SIZE.txt /tmp/v953-final/SIZE.txt
+          ls -lh /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
 
       - uses: actions/upload-artifact@v4
-        name: Publier UN SEUL APK V9.5 complet
+        name: Publier UN SEUL APK V9.5.3 FINAL complet
         with:
-          name: Modeliseur-V9.5-Zero-Copy-APK-UNIQUE
+          name: Modeliseur-V9.5.3-FINAL-APK-UNIQUE
           path: |
-            /tmp/v95-unique/Modeliseur-V9.5-Zero-Copy.apk
-            /tmp/v95-unique/SHA256.txt
-            /tmp/v95-unique/SIZE.txt
+            /tmp/v953-final/Modeliseur-V9.5.3-FINAL.apk
+            /tmp/v953-final/SHA256.txt
+            /tmp/v953-final/SIZE.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
