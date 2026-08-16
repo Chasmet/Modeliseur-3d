@@ -1,8 +1,6 @@
-name: V7.3 Feature Mesh Tests
+name: V7.3 Feature Mesh Tests — MANUEL
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
