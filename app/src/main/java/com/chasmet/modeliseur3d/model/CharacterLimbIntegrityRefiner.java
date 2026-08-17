@@ -1,7 +1,5 @@
 package com.chasmet.modeliseur3d.model;
 
-import java.util.Arrays;
-
 /**
  * V9.5.6 conservative character integrity pass.
  *
@@ -135,7 +133,6 @@ final class CharacterLimbIntegrityRefiner {
                 + " • " + newlyOccupied + " nouveaux voxels de surface"
                 + " • " + supportedRows + " lignes anatomiques"
                 + " • aucune suppression";
-        MemoryDiagnostics.mark(summary);
         return new Result(density, true, restored, occupied, summary);
     }
 
