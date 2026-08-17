@@ -1,13 +1,12 @@
 package com.chasmet.modeliseur3d.model;
 
 /**
- * V9.5 memory-safe DA3 fusion.
+ * V9.5.6 memory-safe DA3 fusion.
  *
- * <p>La V8 faisait deux copies complètes supplémentaires de la grille 3D
- * après DepthV74Engine. Sur un objet composé large (kart + pilote), chaque
- * copie peut dépasser plusieurs dizaines de Mo. Cette variante valide d'abord
- * le raffinement, puis l'applique en place sur la densité DA3. La géométrie,
- * les seuils et les garde-fous restent identiques.</p>
+ * <p>Personnages et quadrupèdes sont désormais conservateurs : le passage
+ * structurel générique ne retire plus de matière sur ces deux familles. Les
+ * corrections anatomiques sont faites ensuite par des passes dédiées qui ne
+ * peuvent qu'ajouter/récupérer des zones soutenues par les silhouettes.</p>
  */
 public final class MemorySafeMultiViewDepthFusion {
     private static final float ISO = 0.50f;
@@ -74,12 +73,26 @@ public final class MemorySafeMultiViewDepthFusion {
             SubjectCategory category
     ) {
         if (density == null || density.length != width * height * depth) {
-            return StructuralResult.unchanged(0, "V9.5 mémoire : champ invalide");
+            return StructuralResult.unchanged(0, "V9.5.6 mémoire : champ invalide");
+        }
+
+        int occupied = countOccupied(density);
+        if (category == SubjectCategory.CHARACTER) {
+            return StructuralResult.unchanged(
+                    occupied,
+                    "V9.5.6 mémoire : personnage préservé avant réparation des membres"
+            );
+        }
+        if (category == SubjectCategory.ANIMAL) {
+            return StructuralResult.unchanged(
+                    occupied,
+                    "V9.5.6 mémoire : quadrupède préservé avant intégrité 4 appuis"
+            );
         }
         if (category == SubjectCategory.ARCHITECTURE_OBJECT) {
             return StructuralResult.unchanged(
-                    countOccupied(density),
-                    "V9.5 mémoire : objet rigide conservé"
+                    occupied,
+                    "V9.5.6 mémoire : objet rigide conservé"
             );
         }
 
@@ -87,7 +100,7 @@ public final class MemorySafeMultiViewDepthFusion {
         if (bounds.occupied < 96 || bounds.top < 0) {
             return StructuralResult.unchanged(
                     bounds.occupied,
-                    "V9.5 mémoire : volume trop petit"
+                    "V9.5.6 mémoire : volume trop petit"
             );
         }
 
@@ -99,9 +112,6 @@ public final class MemorySafeMultiViewDepthFusion {
 
         int changed = 0;
         int occupiedAfter = 0;
-
-        // Passe 1 : calcul uniquement. Aucune modification tant que le garde-fou
-        // anti-effondrement n'a pas validé le résultat potentiel.
         for (int y = bounds.top; y <= bounds.bottom; y++) {
             float vertical = (y - bounds.top) / (float) verticalSpan;
             for (int x = bounds.minX; x <= bounds.maxX; x++) {
@@ -109,18 +119,12 @@ public final class MemorySafeMultiViewDepthFusion {
                 for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
                     int voxel = index(x, y, z, width, depth);
                     float value = density[voxel];
-                    if (value <= 0.02f) {
-                        continue;
-                    }
+                    if (value <= 0.02f) continue;
                     float az = Math.abs((z - centerZ) / halfZ);
                     float factor = structuralFactor(category, vertical, ax, az);
                     float refined = factor >= 0.9999f ? value : value * factor;
-                    if (refined < value - 1.0e-6f) {
-                        changed++;
-                    }
-                    if (refined >= ISO) {
-                        occupiedAfter++;
-                    }
+                    if (refined < value - 1.0e-6f) changed++;
+                    if (refined >= ISO) occupiedAfter++;
                 }
             }
         }
@@ -130,11 +134,10 @@ public final class MemorySafeMultiViewDepthFusion {
                 || occupiedAfter < Math.round(bounds.occupied * minimumOccupancyRatio(category))) {
             return StructuralResult.unchanged(
                     bounds.occupied,
-                    "V9.5 mémoire : garde-fou anti-effondrement"
+                    "V9.5.6 mémoire : garde-fou anti-effondrement"
             );
         }
 
-        // Passe 2 : mêmes décisions, appliquées directement dans le tableau DA3.
         for (int y = bounds.top; y <= bounds.bottom; y++) {
             float vertical = (y - bounds.top) / (float) verticalSpan;
             for (int x = bounds.minX; x <= bounds.maxX; x++) {
@@ -142,14 +145,10 @@ public final class MemorySafeMultiViewDepthFusion {
                 for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
                     int voxel = index(x, y, z, width, depth);
                     float value = density[voxel];
-                    if (value <= 0.02f) {
-                        continue;
-                    }
+                    if (value <= 0.02f) continue;
                     float az = Math.abs((z - centerZ) / halfZ);
                     float factor = structuralFactor(category, vertical, ax, az);
-                    if (factor < 0.9999f) {
-                        density[voxel] = value * factor;
-                    }
+                    if (factor < 0.9999f) density[voxel] = value * factor;
                 }
             }
         }
@@ -163,7 +162,7 @@ public final class MemorySafeMultiViewDepthFusion {
                 true,
                 changed,
                 occupiedAfter,
-                "V9.5 mémoire " + familyName(category)
+                "V9.5.6 mémoire " + familyName(category)
                         + " • raffinement en place"
                         + " • " + changed + " voxels reclassés"
                         + " • retrait " + removedPercent + "%"
@@ -177,27 +176,6 @@ public final class MemorySafeMultiViewDepthFusion {
             float az
     ) {
         switch (category) {
-            case CHARACTER:
-                if (vertical >= 0.57f && ax <= 0.085f && az <= 0.84f) {
-                    return vertical >= 0.70f ? 0.06f : 0.32f;
-                }
-                if (vertical >= 0.27f && vertical <= 0.54f
-                        && ax >= 0.48f && ax <= 0.72f && az <= 0.46f) {
-                    return 0.68f;
-                }
-                return 1.0f;
-            case ANIMAL:
-                if (vertical >= 0.61f && ax <= 0.075f && az <= 0.82f) {
-                    return 0.08f;
-                }
-                if (vertical >= 0.66f && az <= 0.075f && ax <= 0.86f) {
-                    return 0.10f;
-                }
-                if (vertical >= 0.50f && vertical < 0.66f
-                        && ax <= 0.20f && az <= 0.28f) {
-                    return 0.72f;
-                }
-                return 1.0f;
             case COMPOSITE_VEHICLE:
                 if (vertical >= 0.46f && vertical <= 0.61f
                         && ax >= 0.31f && ax <= 0.76f && az <= 0.48f) {
@@ -224,38 +202,28 @@ public final class MemorySafeMultiViewDepthFusion {
 
     private static float minimumOccupancyRatio(SubjectCategory category) {
         switch (category) {
-            case CHARACTER:
-                return 0.84f;
-            case ANIMAL:
-                return 0.80f;
             case COMPOSITE_VEHICLE:
                 return 0.78f;
             case PLANT:
                 return 0.90f;
             default:
-                return 0.95f;
+                return 0.98f;
         }
     }
 
     private static String familyName(SubjectCategory category) {
         switch (category) {
-            case CHARACTER:
-                return "anatomie personnage";
-            case ANIMAL:
-                return "quadrupède";
             case COMPOSITE_VEHICLE:
                 return "pilote + châssis + roues";
             case PLANT:
                 return "tronc + branches";
             default:
-                return "objet rigide";
+                return "forme conservatrice";
         }
     }
 
     private static String appendReason(String first, String second) {
-        if (first == null || first.trim().isEmpty()) {
-            return second;
-        }
+        if (first == null || first.trim().isEmpty()) return second;
         return first + " • " + second;
     }
 
@@ -263,9 +231,7 @@ public final class MemorySafeMultiViewDepthFusion {
         int occupied = 0;
         if (density != null) {
             for (float value : density) {
-                if (value >= ISO) {
-                    occupied++;
-                }
+                if (value >= ISO) occupied++;
             }
         }
         return occupied;
@@ -313,9 +279,7 @@ public final class MemorySafeMultiViewDepthFusion {
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
                     for (int z = 0; z < depth; z++) {
-                        if (density[index(x, y, z, width, depth)] < ISO) {
-                            continue;
-                        }
+                        if (density[index(x, y, z, width, depth)] < ISO) continue;
                         result.occupied++;
                         result.minX = Math.min(result.minX, x);
                         result.maxX = Math.max(result.maxX, x);
