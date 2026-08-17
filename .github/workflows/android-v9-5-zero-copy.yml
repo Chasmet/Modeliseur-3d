@@ -1,4 +1,4 @@
-name: ✅ APK UNIQUE V9.5.4 APERCU GRAND — TELECHARGER ICI
+name: ✅ APK UNIQUE V9.5.6 INTEGRITE — TELECHARGER ICI
 
 on:
   pull_request:
@@ -117,7 +117,7 @@ jobs:
       - name: Préparer DA3 392
         run: bash tools/ci_prepare_da3_v9_392.sh
 
-      - name: Activer V9.5.4 APERCU GRAND
+      - name: Activer V9.5.6 INTEGRITE
         shell: bash
         run: |
           set -euo pipefail
@@ -128,6 +128,8 @@ jobs:
           FINAL_MESHER=app/src/main/java/com/chasmet/modeliseur3d/model/MemorySafeIndexedMesher.java
           RENDERER=app/src/main/java/com/chasmet/modeliseur3d/gl/ModelRendererV52.java
           UI=app/src/main/res/layout/activity_manual_3d.xml
+          CHARACTER=app/src/main/java/com/chasmet/modeliseur3d/model/CharacterLimbIntegrityRefiner.java
+          ANIMAL=app/src/main/java/com/chasmet/modeliseur3d/model/AnimalLegTopologyRefiner.java
 
           sed -i 's/ExtremeSegmentationEngine/RiskSegmentationEngine/g' "$SEG"
 
@@ -158,20 +160,24 @@ jobs:
 
           python3 tools/ci_patch_v95_memory.py
 
-          sed -i "s/versionCode 43/versionCode 52/" app/build.gradle
-          sed -i "s/versionName '7.4.0'/versionName '9.5.4'/" app/build.gradle
+          sed -i "s/versionCode 43/versionCode 54/" app/build.gradle
+          sed -i "s/versionName '7.4.0'/versionName '9.5.6'/" app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           import re
           p=Path('app/src/main/AndroidManifest.xml')
           s=p.read_text(encoding='utf-8')
-          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5.4"', s, count=1)
+          s,n=re.subn(r'android:label="[^"]+"', 'android:label="Modéliseur 3D V9.5.6 Intégrité"', s, count=1)
           assert n == 1
           p.write_text(s, encoding='utf-8')
           PY
 
           grep -q 'MemorySafeMultiViewDepthFusion.refine' app/src/main/java/com/chasmet/modeliseur3d/model/RiskMultiViewDepthFusion.java
+          grep -q 'CharacterLimbIntegrityRefiner.refine' app/src/main/java/com/chasmet/modeliseur3d/model/RiskMultiViewDepthFusion.java
+          grep -q 'AnimalLegTopologyRefiner.refine' app/src/main/java/com/chasmet/modeliseur3d/model/RiskMultiViewDepthFusion.java
           grep -q 'MemorySafeCompositeVehicleTopologyRefiner.refine' app/src/main/java/com/chasmet/modeliseur3d/model/RiskMultiViewDepthFusion.java
+          grep -q 'aucune suppression' "$CHARACTER"
+          grep -q 'aucune suppression' "$ANIMAL"
           grep -q 'finalDensity != hull.getDensity()' "$ENGINE"
           grep -q 'density\[base + z\] >= ISO' app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
           ! grep -q 'boolean\[\] occupancy = new boolean\[size\]' app/src/main/java/com/chasmet/modeliseur3d/model/ContinuousVisualHull.java
@@ -181,12 +187,12 @@ jobs:
           grep -q 'maximumDepth = 384' "$ENGINE"
           grep -q 'MemorySafeIndexedMesher.build' "$ENGINE"
           grep -q 'Deux passes sont utilisées' "$FINAL_MESHER"
-          grep -q 'V9.5.4 — aperçu grand + meshing indexé + DA3' "$UI"
+          grep -q 'V9.5.6 — intégrité personnage + animal + DA3' "$UI"
           grep -q 'android:minHeight="260dp"' "$UI"
           grep -q 'android:maxLines="2"' "$UI"
           grep -q 'updateFraming(mesh)' "$RENDERER"
           grep -q 'fitScale' "$RENDERER"
-          grep -q 'Modéliseur 3D V9.5.4' app/src/main/AndroidManifest.xml
+          grep -q 'Modéliseur 3D V9.5.6 Intégrité' app/src/main/AndroidManifest.xml
 
       - name: SDK Android 34
         shell: bash
@@ -198,23 +204,23 @@ jobs:
           "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew tools/ci_v74_test.sh
 
-      - name: Tests géométriques
+      - name: Tests géométriques cheval + personnage
         run: bash tools/ci_v74_test.sh
 
-      - name: Compiler APK V9.5.4
+      - name: Compiler APK V9.5.6
         run: ./gradlew --no-daemon clean lintDebug assembleDebug
 
-      - name: Vérifier APK V9.5.4
+      - name: Vérifier APK V9.5.6
         shell: bash
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT="$ANDROID_HOME/build-tools/34.0.0"
           "$BT/apksigner" verify --verbose "$APK"
-          "$BT/aapt" dump badging "$APK" | tee /tmp/v954-badging.txt
-          grep -q "versionCode='52'" /tmp/v954-badging.txt
-          grep -q "versionName='9.5.4'" /tmp/v954-badging.txt
-          grep -q "application-label:'Modéliseur 3D V9.5.4'" /tmp/v954-badging.txt
+          "$BT/aapt" dump badging "$APK" | tee /tmp/v956-badging.txt
+          grep -q "versionCode='54'" /tmp/v956-badging.txt
+          grep -q "versionName='9.5.6'" /tmp/v956-badging.txt
+          grep -q "application-label:'Modéliseur 3D V9.5.6 Intégrité'" /tmp/v956-badging.txt
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_encoder.onnx | sha256sum | cut -d' ' -f1)" = "b39add8f7e2f8a612af867e864d962eff5ac98c8336b32feca08327a89cc8de3"
           test "$(unzip -p "$APK" assets/models/efficientvit_sam_xl0_decoder.onnx | sha256sum | cut -d' ' -f1)" = "051bfae9a07c1ff180fd7c5238334fdc45eaa0227c46f29740d98662865e01f7"
           DA3_SHA="$(cut -d' ' -f1 app/src/main/assets/models/da3_small_four_view_392.onnx.sha256)"
@@ -222,24 +228,24 @@ jobs:
           sha256sum "$APK" > /tmp/SHA256.txt
           stat -c '%s' "$APK" > /tmp/SIZE.txt
 
-      - name: Préparer APK V9.5.4 unique
+      - name: Préparer APK V9.5.6 unique
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/v954-final
-          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
-          cp /tmp/SHA256.txt /tmp/v954-final/SHA256.txt
-          cp /tmp/SIZE.txt /tmp/v954-final/SIZE.txt
-          ls -lh /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
+          mkdir -p /tmp/v956-final
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/v956-final/Modeliseur-V9.5.6-INTEGRITE.apk
+          cp /tmp/SHA256.txt /tmp/v956-final/SHA256.txt
+          cp /tmp/SIZE.txt /tmp/v956-final/SIZE.txt
+          ls -lh /tmp/v956-final/Modeliseur-V9.5.6-INTEGRITE.apk
 
       - uses: actions/upload-artifact@v4
-        name: Publier UN SEUL APK V9.5.4 complet
+        name: Publier UN SEUL APK V9.5.6 complet
         with:
-          name: Modeliseur-V9.5.4-APERCU-GRAND-APK-UNIQUE
+          name: Modeliseur-V9.5.6-INTEGRITE-APK-UNIQUE
           path: |
-            /tmp/v954-final/Modeliseur-V9.5.4-APERCU-GRAND.apk
-            /tmp/v954-final/SHA256.txt
-            /tmp/v954-final/SIZE.txt
+            /tmp/v956-final/Modeliseur-V9.5.6-INTEGRITE.apk
+            /tmp/v956-final/SHA256.txt
+            /tmp/v956-final/SIZE.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
