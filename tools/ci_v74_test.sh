@@ -13,7 +13,6 @@ java -cp build/v74-tests com.chasmet.modeliseur3d.model.V74CorrespondenceSelfTes
 # V9.5.5 : un cheval dont DA3 a perdu les deux jambes arrière doit récupérer
 # quatre appuis à partir des silhouettes, sans supprimer le corps ni la queue.
 javac -encoding UTF-8 -cp build/v74-tests -d build/v74-tests \
- "$P/MemoryDiagnostics.java" \
  "$P/AnimalLegTopologyRefiner.java" \
  validation/java/com/chasmet/modeliseur3d/model/AnimalLegTopologyRefinerSelfTest.java
 java -cp build/v74-tests com.chasmet.modeliseur3d.model.AnimalLegTopologyRefinerSelfTest
