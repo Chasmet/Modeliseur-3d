@@ -1,11 +1,7 @@
 package com.chasmet.modeliseur3d.model;
 
 /**
- * V9.5 wrapper around DA3 with memory-safe structural passes.
- *
- * <p>Le mode composite n'alloue plus de copies float[] complètes après DA3.
- * Les mêmes garde-fous géométriques sont évalués avant toute sculpture, puis
- * les modifications sont appliquées en place pour réduire fortement le pic RAM.</p>
+ * V9.5.6 wrapper around DA3 with memory-safe, non-destructive integrity passes.
  */
 public final class RiskMultiViewDepthFusion {
     private RiskMultiViewDepthFusion() {
@@ -33,6 +29,32 @@ public final class RiskMultiViewDepthFusion {
         );
         if (!first.isApplied()) {
             return first;
+        }
+
+        if (category == SubjectCategory.CHARACTER) {
+            CharacterLimbIntegrityRefiner.Result limbs = CharacterLimbIntegrityRefiner.refine(
+                    first.getDensity(),
+                    masks,
+                    width,
+                    height,
+                    depthSize
+            );
+            if (!limbs.applied) {
+                return append(
+                        first,
+                        first.getDensity(),
+                        0,
+                        first.getOccupiedVoxels(),
+                        limbs.summary
+                );
+            }
+            return append(
+                    first,
+                    limbs.density,
+                    limbs.changed,
+                    limbs.occupied,
+                    limbs.summary
+            );
         }
 
         if (category == SubjectCategory.ANIMAL) {
@@ -97,6 +119,10 @@ public final class RiskMultiViewDepthFusion {
             int occupied,
             String summary
     ) {
+        String reason = first.getReason();
+        String combined = reason == null || reason.trim().isEmpty()
+                ? summary
+                : reason + " • " + summary;
         return new MultiViewDepthFusion.Result(
                 density,
                 true,
@@ -106,7 +132,7 @@ public final class RiskMultiViewDepthFusion {
                 first.getMeanSurfaceInset(),
                 first.isCollapseGuardUsed(),
                 first.getCorrespondencePrunedVoxels(),
-                first.getReason() + " • " + summary
+                combined
         );
     }
 }
