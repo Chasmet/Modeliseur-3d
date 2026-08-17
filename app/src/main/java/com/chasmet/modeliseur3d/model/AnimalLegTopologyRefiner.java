@@ -174,7 +174,6 @@ final class AnimalLegTopologyRefiner {
                 + " • centres Z " + zCenters[0] + "/" + zCenters[1]
                 + " • " + restored + " voxels de membres restaurés"
                 + " • aucune suppression";
-        MemoryDiagnostics.mark(summary);
         return new Result(source, true, restored, occupied, summary);
     }
 
