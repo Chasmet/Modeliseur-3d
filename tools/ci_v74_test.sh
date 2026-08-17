@@ -10,9 +10,13 @@ javac -encoding UTF-8 -d build/v74-tests \
  validation/java/com/chasmet/modeliseur3d/model/V74CorrespondenceSelfTest.java
 java -cp build/v74-tests com.chasmet.modeliseur3d.model.V74CorrespondenceSelfTest
 
-# V9.5.5 : un cheval dont DA3 a perdu les deux jambes arrière doit récupérer
-# quatre appuis à partir des silhouettes, sans supprimer le corps ni la queue.
+# Les passes d'intégrité utilisent le diagnostic runtime dans l'application.
 javac -encoding UTF-8 -cp build/v74-tests -d build/v74-tests \
+ "$P/MemoryDiagnostics.java" \
  "$P/AnimalLegTopologyRefiner.java" \
- validation/java/com/chasmet/modeliseur3d/model/AnimalLegTopologyRefinerSelfTest.java
+ "$P/CharacterLimbIntegrityRefiner.java" \
+ validation/java/com/chasmet/modeliseur3d/model/AnimalLegTopologyRefinerSelfTest.java \
+ validation/java/com/chasmet/modeliseur3d/model/CharacterLimbIntegrityRefinerSelfTest.java
+
 java -cp build/v74-tests com.chasmet.modeliseur3d.model.AnimalLegTopologyRefinerSelfTest
+java -cp build/v74-tests com.chasmet.modeliseur3d.model.CharacterLimbIntegrityRefinerSelfTest
