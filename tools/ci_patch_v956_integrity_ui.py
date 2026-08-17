@@ -5,17 +5,25 @@ LAYOUT = Path("app/src/main/res/layout/activity_manual_3d.xml")
 ANIMAL = Path("app/src/main/java/com/chasmet/modeliseur3d/model/AnimalLegTopologyRefiner.java")
 
 # ---------------------------------------------------------------------------
-# Intégrité quadrupède : les centres sont détectés sur les silhouettes, mais
-# une jambe arrière large ne doit pas être restaurée seulement sur son bord.
-# La zone de récupération longitudinale est donc élargie sans jamais retirer
-# un voxel : seule de la matière confirmée par les vues peut être rajoutée.
+# Intégrité quadrupède.
+# Deux pics d'un même membre ne doivent pas être pris pour deux jambes.
+# On impose donc une séparation anatomique suffisante entre gauche/droite et
+# avant/arrière, puis on élargit légèrement la récupération longitudinale.
+# Toutes les modifications restent additives et bornées par les silhouettes.
 # ---------------------------------------------------------------------------
 animal = ANIMAL.read_text(encoding="utf-8")
-old_radius = "float radiusZ = Math.max(2.2f, spanZ * (0.115f - 0.045f * progress));"
-new_radius = "float radiusZ = Math.max(3.6f, spanZ * (0.160f - 0.050f * progress));"
-if old_radius not in animal:
-    raise SystemExit("V9.5.6 quadrupède : rayon longitudinal attendu introuvable")
-animal = animal.replace(old_radius, new_radius, 1)
+replacements = {
+    "Math.max(3, Math.round(spanX * 0.12f))":
+        "Math.max(4, Math.round(spanX * 0.28f))",
+    "Math.max(4, Math.round(spanZ * 0.18f))":
+        "Math.max(6, Math.round(spanZ * 0.30f))",
+    "float radiusZ = Math.max(2.2f, spanZ * (0.115f - 0.045f * progress));":
+        "float radiusZ = Math.max(3.6f, spanZ * (0.160f - 0.050f * progress));",
+}
+for old_value, new_value in replacements.items():
+    if old_value not in animal:
+        raise SystemExit("V9.5.6 quadrupède : motif attendu introuvable : " + old_value)
+    animal = animal.replace(old_value, new_value, 1)
 ANIMAL.write_text(animal, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
@@ -28,12 +36,11 @@ if old not in text:
     raise SystemExit("V9.5.6 UI : titre V9.5.4 introuvable après patch aperçu")
 text = text.replace(old, new, 1)
 
-# Compatibilité du garde-fou du workflow historique tant que le nom du workflow
-# n'est pas migré : le grep CI trouve encore ce marqueur, sans l'afficher.
+# Compatibilité temporaire avec les contrôles du workflow V9.5.4.
 text += "\n<!-- V9.5.4 — aperçu grand + meshing indexé + DA3 -->\n"
 LAYOUT.write_text(text, encoding="utf-8")
 
 print(
-    "V9.5.6 intégrité : rayon jambes quadrupède élargi sans suppression + "
-    "interface personnage/animal activée"
+    "V9.5.6 intégrité : quatre appuis quadrupède séparés anatomiquement, "
+    "récupération additive élargie et intégrité personnage active"
 )
