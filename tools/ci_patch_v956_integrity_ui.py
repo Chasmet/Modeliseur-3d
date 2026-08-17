@@ -25,40 +25,35 @@ replacements = {
 }
 for old_value, new_value in replacements.items():
     if old_value not in animal:
-        raise SystemExit("V9.5.6 quadrupède : motif attendu introuvable : " + old_value)
+        raise SystemExit("V9.5.7 quadrupède : motif attendu introuvable : " + old_value)
     animal = animal.replace(old_value, new_value, 1)
 ANIMAL.write_text(animal, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
 # Intégrité personnage.
-# Le premier garde-fou ne réparait les bras qu'à partir de 22 % de la hauteur
-# utile. Sur un personnage avec épaules hautes, manches longues ou manteau,
-# cette limite arrivait trop tard et pouvait laisser un bras incomplet. La
-# bande bras commence désormais à 8 % et reste strictement additive.
+# Le garde-fou répare les bras dès la zone des épaules, toujours de manière
+# additive : le pilote IA pourra ensuite contrôler la couverture des 4 vues.
 # ---------------------------------------------------------------------------
 character = CHARACTER.read_text(encoding="utf-8")
 old_arm_band = "boolean armBand = progress >= 0.22f && progress <= 0.63f;"
 new_arm_band = "boolean armBand = progress >= 0.08f && progress <= 0.66f;"
 if old_arm_band not in character:
-    raise SystemExit("V9.5.6 personnage : bande des bras attendue introuvable")
+    raise SystemExit("V9.5.7 personnage : bande des bras attendue introuvable")
 character = character.replace(old_arm_band, new_arm_band, 1)
 CHARACTER.write_text(character, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
-# Interface : version fonctionnelle visible sur l'écran 3D.
+# Interface : le téléphone doit montrer clairement la nouvelle génération.
 # ---------------------------------------------------------------------------
 text = LAYOUT.read_text(encoding="utf-8")
 old = "3D locale V9.5.4 — aperçu grand + meshing indexé + DA3"
-new = "3D locale V9.5.6 — intégrité personnage + animal + DA3"
+new = "3D locale V9.5.7 — AUTO-PILOTE IA + DA3"
 if old not in text:
-    raise SystemExit("V9.5.6 UI : titre V9.5.4 introuvable après patch aperçu")
+    raise SystemExit("V9.5.7 UI : titre V9.5.4 introuvable après patch aperçu")
 text = text.replace(old, new, 1)
-
-# Compatibilité temporaire avec les contrôles du workflow V9.5.4.
-text += "\n<!-- V9.5.4 — aperçu grand + meshing indexé + DA3 -->\n"
 LAYOUT.write_text(text, encoding="utf-8")
 
 print(
-    "V9.5.6 intégrité : quatre appuis quadrupède séparés, membres restaurés "
-    "sans suppression et bande bras personnage étendue jusqu'aux épaules"
+    "V9.5.7 AUTO-PILOTE IA : intégrité personnage/quadrupède conservée, "
+    "contrôle adaptatif des projections 4 vues activé"
 )
