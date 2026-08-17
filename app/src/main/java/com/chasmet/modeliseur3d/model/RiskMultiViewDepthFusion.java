@@ -37,18 +37,37 @@ public final class RiskMultiViewDepthFusion {
 
         if (category == SubjectCategory.ANIMAL) {
             AnimalLegTopologyRefiner.Result legs = AnimalLegTopologyRefiner.refine(
-                    first.getDensity(), width, height, depthSize
+                    first.getDensity(),
+                    masks,
+                    width,
+                    height,
+                    depthSize
             );
             if (!legs.applied) {
-                return append(first, first.getDensity(), 0, first.getOccupiedVoxels(), legs.summary);
+                return append(
+                        first,
+                        first.getDensity(),
+                        0,
+                        first.getOccupiedVoxels(),
+                        legs.summary
+                );
             }
-            return append(first, legs.density, legs.changed, legs.occupied, legs.summary);
+            return append(
+                    first,
+                    legs.density,
+                    legs.changed,
+                    legs.occupied,
+                    legs.summary
+            );
         }
 
         if (category == SubjectCategory.COMPOSITE_VEHICLE) {
             MemorySafeCompositeVehicleTopologyRefiner.Result vehicle =
                     MemorySafeCompositeVehicleTopologyRefiner.refine(
-                            first.getDensity(), width, height, depthSize
+                            first.getDensity(),
+                            width,
+                            height,
+                            depthSize
                     );
             if (!vehicle.applied) {
                 return append(
