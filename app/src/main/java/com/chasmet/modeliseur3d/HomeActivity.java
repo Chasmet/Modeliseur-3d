@@ -6,7 +6,7 @@ import android.os.Bundle;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-/** Accueil des deux moteurs de reconstruction et du catalogue d'assets 3D. */
+/** Accueil des moteurs de reconstruction et du catalogue d'assets 3D. */
 public final class HomeActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {

@@ -10,11 +10,13 @@
         android:required="true" />
 
     <application
-        android:allowBackup="true"
+        android:name=".ModeliseurApplication"
+        android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
+        android:usesCleartextTraffic="false"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V5.9.10"
+        android:label="Modéliseur 3D V9.4 Memory-Safe"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
