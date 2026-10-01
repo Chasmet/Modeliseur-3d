@@ -74,3 +74,7 @@ python -m pytest backend/tests -q
 Les tests utilisent le vrai transport MCP et un moteur GPU simulé pour vérifier
 l'isolation, la révocation, l'envoi borné, le cycle commandes/acquittement et l'arrêt
 sur quota. Ils ne valident pas une génération GPU réelle ni le téléphone physique.
+
+## Signature de publication
+
+`/ci/signing` est réservé au workflow de publication : JWT GitHub OIDC signé, audience/émetteur, IDs du dépôt et du propriétaire, acteur, branche et workflow contrôlés. Les requêtes MCP/Android ne peuvent pas récupérer la clé. La clé V6.0.0 est persistée comme variable privée Render ; pas dans le stockage éphémère ni dans le dépôt. Ne jamais activer les logs d’accès ni afficher la réponse de signature dans les logs CI.

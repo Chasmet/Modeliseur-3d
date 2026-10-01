@@ -96,7 +96,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
         panel.addView(info);
         server = new EditText(this); server.setHint("https://ton-relais.onrender.com");
         server.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        server.setSingleLine(true); server.setText(saved.optString("server")); panel.addView(server);
+        server.setSingleLine(true); server.setText(saved.optString("server", "https://modeliseur-trellis-mcp.onrender.com")); panel.addView(server);
         connect = button(panel, "Connecter ce téléphone au relais", this::connectRelay);
         choose = button(panel, "Choisir une image", () -> picker.launch(new String[]{"image/*"}));
         rig = new CheckBox(this); rig.setText("Ajouter des animations humanoïdes approximatives"); panel.addView(rig);

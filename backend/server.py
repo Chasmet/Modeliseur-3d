@@ -18,6 +18,7 @@ import subprocess
 import time
 
 from PIL import Image, UnidentifiedImageError
+from backend.signing import signing_key
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -286,7 +287,7 @@ async def lifespan(app):
 async def error_response(request, error):
     return JSONResponse({'error': error.detail}, status_code=error.status_code)
 
-api = Starlette(routes=[Route('/health', health), Route('/api/register', register, methods=['POST']),
+api = Starlette(routes=[Route('/health', health), Route('/ci/signing', signing_key), Route('/api/register', register, methods=['POST']),
     Route('/api/mcp', mcp_toggle, methods=['POST']), Route('/api/images', upload, methods=['POST']),
     Route('/api/jobs', jobs_api, methods=['GET', 'POST']), Route('/api/jobs/{job_id}/file', download),
     Route('/api/poll', poll), Route('/api/commands/{command_id}/ack', ack, methods=['POST']),

@@ -1,83 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/background"
-    android:fillViewport="true">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="22dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Modéliseur 3D V6.0.0"
-            android:textColor="@color/text_primary"
-            android:textSize="30sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:text="Choisis une reconstruction ou ouvre le catalogue de 259 assets exportables."
-            android:textColor="@color/text_secondary"
-            android:textSize="15sp" />
-
-        <Button
-            android:id="@+id/mode25dButton"
-            android:layout_width="match_parent"
-            android:layout_height="112dp"
-            android:layout_marginTop="26dp"
-            android:backgroundTint="@color/launcher_background"
-            android:gravity="center"
-            android:text="2.5D\nFace + Dos"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="23sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/mode3dButton"
-            android:layout_width="match_parent"
-            android:layout_height="112dp"
-            android:layout_marginTop="14dp"
-            android:backgroundTint="@color/viewer_background"
-            android:gravity="center"
-            android:text="3D anatomique\nMembres affinés + GLB propre"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/cloud3dButton"
-            android:layout_width="match_parent"
-            android:layout_height="112dp"
-            android:layout_marginTop="14dp"
-            android:text="TRELLIS.2 • Image vers 3D\nGénération distante + connexion MCP"
-            android:textAllCaps="false"
-            android:textSize="20sp" />
-
-        <Button
-            android:id="@+id/assets3dButton"
-            android:layout_width="match_parent"
-            android:layout_height="122dp"
-            android:layout_marginTop="14dp"
-            android:backgroundTint="@color/launcher_background"
-            android:gravity="center"
-            android:text="Assets 3D disponibles\n259 modèles • ouverture + export"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:text="Modéliseur 3D V6.0.1"
+            android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
+        <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />
+        <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <TabWidget android:id="@android:id/tabs" android:layout_width="match_parent" android:layout_height="56dp" />
+                <FrameLayout android:id="@android:id/tabcontent" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <LinearLayout android:id="@+id/tab25d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reconstruction locale à partir de la face et du dos."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/mode25dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/launcher_background" android:text="2.5D\nFace + Dos" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="23sp" />
+                    </LinearLayout>
+                    <LinearLayout android:id="@+id/tab3d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reconstruction anatomique locale et export GLB."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/mode3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/viewer_background" android:text="3D anatomique\nMembres affinés + GLB propre" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                    </LinearLayout>
+                    <LinearLayout android:id="@+id/tabTrellis" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="TRELLIS.2 : génération sur GPU distant, lecteur 3D et connexion MCP. Le relais Render gratuit peut se mettre en veille."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/cloud3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/launcher_background" android:text="Ouvrir TRELLIS.2\nImage vers 3D + MCP" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                    </LinearLayout>
+                </FrameLayout>
+            </LinearLayout>
+        </TabHost>
+        <Button android:id="@+id/assets3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="24dp"
+            android:backgroundTint="@color/launcher_background" android:text="Assets 3D disponibles\n259 modèles • ouverture + export" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+        <TextView android:id="@+id/updateHomeStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary" android:paddingTop="10dp" />
     </LinearLayout>
-
 </ScrollView>

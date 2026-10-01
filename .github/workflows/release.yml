@@ -1,16 +1,16 @@
-name: Compiler l'APK Android
+name: Publier APK signé avec mise à jour automatique
 
 on:
   push:
-    branches: [main]
-    paths: ['app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
-  pull_request:
-    branches: [main]
-    paths: ['app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
+    branches: [agent/trellis-third-tab-auto-update]
+    paths: ['app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', '.github/workflows/release.yml']
   workflow_dispatch:
-
 permissions:
-  contents: read
+  contents: write
+  id-token: write
+concurrency:
+  group: modeliseur-public-release
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -30,26 +30,15 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Conserver la signature APK de test
-        uses: actions/cache@v4
-        with:
-          path: .ci-signing/debug.keystore
-          key: modeliseur-debug-keystore-v1
+      - name: Récupérer la signature persistante sans clé API
+        run: python3 signing/prepare_ci.py
 
-      - name: Préparer la signature APK de test
+      - name: Vérifier l'identité de signature V6.0.0
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f "$MODELISEUR_DEBUG_KEYSTORE" ]; then
-            mkdir -p "$(dirname "$MODELISEUR_DEBUG_KEYSTORE")"
-            keytool -genkeypair -noprompt \
-              -keystore "$MODELISEUR_DEBUG_KEYSTORE" \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" \
-              -keyalg RSA -keysize 2048 -validity 10950
-          fi
+          keytool -exportcert -keystore "$MODELISEUR_DEBUG_KEYSTORE" -storepass android -alias androiddebugkey -file /tmp/modeliseur-cert.der
+          test "$(sha256sum /tmp/modeliseur-cert.der | cut -d' ' -f1)" = "29e4bf6469e65741750b25f7ea50c97e7b538d5ead63bffebfd93cf197dd9335"
 
       - name: Mettre en cache IS-Net Anime FP32
         uses: actions/cache@v4
@@ -204,3 +193,28 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publier une vraie GitHub Release avec APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          TAG="v$VERSION"
+          APK="Modeliseur-3D-$VERSION.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Cette version est déjà publiée : augmenter versionCode et versionName."
+            exit 1
+          fi
+          cat > /tmp/modeliseur-release.md <<'NOTES'
+          Trois onglets : 2.5D, 3D et TRELLIS.2. Le catalogue de 259 assets reste accessible.
+          Relais Render gratuit préconfiguré, génération distante et lecteur GLB intégré.
+          Réglages > Mise à jour automatique : GitHub Releases publiques, progression et installateur Android.
+          Même package et même signature que l'APK 6.0.0 fournie le 1 octobre 2026.
+          L'ancienne 5.9.10 possède une autre signature : ne pas la désinstaller pour contourner ce conflit.
+          Les moteurs de reconstruction locale n'ont pas été modifiés.
+          NOTES
+          gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --latest

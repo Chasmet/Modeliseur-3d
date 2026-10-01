@@ -1,157 +1,22 @@
-# Version 6.0.0 : TRELLIS.2 dans l’APK et relais MCP
+# Modéliseur 3D V6.0.1 — branche TRELLIS isolée
 
-L’écran TRELLIS.2/MCP importe une photo, suit une génération distante et récupère un GLB au format mobile. Les 12 Go de RAM ne permettent pas d’exécuter le modèle CUDA directement sur Android. Le relais HTTPS doit être déployé puis appairé ; aucune connexion ChatGPT n’est annoncée active avant ces étapes. Voir [le relais Android/MCP](backend/README.md).
+Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.
+Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troisième onglet ouvre la génération distante et le lecteur GLB intégré.
 
-# Modéliseur 3D V4.4 — Android local, image et vidéo
+Le relais Render gratuit préconfiguré est `https://modeliseur-trellis-mcp.onrender.com`.
+Voir [le relais Android/MCP](backend/README.md) pour les quotas et l’appairage privé. Render peut se mettre en veille ; les fichiers distants sont éphémères. Les GLB téléchargés restent sur le téléphone.
 
-> La version Android courante est 5.9.10 ; la description historique ci-dessous
-> concerne le pipeline V4.4. Une chaîne séparée de génération cloud TRELLIS.2,
-> rigging humanoïde et compression GLB est disponible dans
-> [tools/trellis](tools/trellis/README.md), avec son workflow GitHub Actions.
+## Mise à jour automatique
 
-Application Android Java qui transforme localement :
+**Réglages → Mise à jour automatique** affiche la version installée, vérifie les GitHub Releases publiques, télécharge l’APK avec progression et ouvre l’installateur Android.
+Aucune clé API ou PAT n’est demandé. Le téléchargement vérifie taille, SHA-256, package, versionCode supérieur et identité du certificat avant l’installation. Android demande l’autorisation d’installer puis une confirmation.
+La vérification automatique est périodique (WorkManager, toutes les 12 h sous réserve des contraintes Android) et se fait aussi au démarrage, sans bloquer l’interface.
 
-- une image unique ;
-- une planche contenant plusieurs vues ;
-- une courte vidéo de rotation ;
+La publication utilise le GITHUB_TOKEN natif et une identité GitHub Actions OIDC de courte durée. La signature Android existante de **l’APK 6.0.0 fournie le 1 octobre 2026** est conservée dans l’environnement privé Render. Aucune clé privée ne figure dans ce dépôt ni dans l’APK. La publication refuse une identité de signature différente et ne crée jamais une clé de remplacement.
 
-en un modèle 3D texturé exportable en GLB.
+**Attention :** l’APK 5.9.10 du 5 septembre 2026 avait un certificat différent. Sa clé n’est pas dans la sauvegarde V6. Sans cette clé d’origine, une mise à jour directe par-dessus 5.9.10 est impossible. Ne pas désinstaller cette ancienne application pour contourner le conflit : le système de mise à jour refuse cette opération.
 
-## Confidentialité et fonctionnement
+## Vérification
 
-La V4.4 n’utilise :
-
-- aucune API distante ;
-- aucune clé ;
-- aucun compte ;
-- aucun crédit ni abonnement ;
-- aucune permission Internet.
-
-Les images, les trames vidéo, les modèles neuronaux et les GLB restent sur le téléphone. Internet est seulement utilisé par GitHub Actions pendant la compilation pour télécharger les modèles open source avant de les intégrer à l’APK.
-
-## Vidéo locale en huit vues
-
-Pour une vidéo, l’application :
-
-1. vérifie que sa durée est comprise entre 1,2 seconde et 2 minutes ;
-2. répartit huit zones sur la rotation ;
-3. compare plusieurs trames dans chaque zone ;
-4. conserve la trame la plus nette et la mieux exposée ;
-5. corrige l’orientation de la vidéo ;
-6. compose localement une planche 4 × 2 ;
-7. transmet cette planche au moteur multivue embarqué.
-
-Le MP4 n’est jamais envoyé ni copié sur un serveur.
-
-## Reconstruction locale
-
-Pipeline principal :
-
-1. décodage de l’entrée jusqu’à 2048 px ;
-2. détourage par **IS-Net Anime FP32** ;
-3. regroupement des morceaux appartenant au même sujet ;
-4. détection des vues réellement exploitables ;
-5. enveloppe volumique multivue ou volume monoculaire arrondi ;
-6. maillage lissé préservant les membres et accessoires ;
-7. relief par **Depth Anything V2 Small FP32** ;
-8. calcul NNAPI quand il est compatible, avec repli CPU multi-cœurs ;
-9. affichage OpenGL ES 3 ;
-10. export GLB, OBJ, MTL et texture.
-
-## Deux GLB à chaque export
-
-### GLB haute définition
-
-```text
-personnage_v44_local_hd.glb
-```
-
-Il conserve le maillage complet et la texture PNG intégrée.
-
-### GLB mobile limité à 200 Ko
-
-```text
-personnage_v44_mobile_200ko.glb
-```
-
-L’application réduit progressivement :
-
-- le nombre de triangles ;
-- la taille de la texture ;
-- la qualité JPEG ;
-
-puis mesure le fichier réellement écrit. Le GLB mobile n’est accepté que si sa taille est comprise entre 1 et **200 000 octets**.
-
-Une limite de 200 Ko impose nécessairement une perte de détails. Le GLB HD reste disponible pour conserver la meilleure qualité produite par le téléphone.
-
-## Modèles embarqués
-
-### IS-Net Anime FP32
-
-```text
-SHA-256 : 6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
-```
-
-### Depth Anything V2 Small FP32
-
-```text
-SHA-256 : afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
-```
-
-Runtime : ONNX Runtime Android 1.20.0.
-
-## Configuration Android
-
-- langage : Java ;
-- `minSdkVersion 21` ;
-- `compileSdkVersion 34` ;
-- `targetSdkVersion 34` ;
-- ABI : `arm64-v8a` ;
-- version : `4.4.0` ;
-- versionCode : `10`.
-
-## Compilation
-
-```bash
-chmod +x gradlew
-./gradlew --no-daemon clean lintDebug assembleDebug
-```
-
-APK produit :
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-Le workflow `.github/workflows/android.yml` exécute les tests Java, vérifie l’absence de permission Internet, compile l’APK, contrôle sa signature et les SHA-256 des deux modèles, puis publie l’artefact :
-
-```text
-Modeliseur3D-V4.4-Local-Video8-debug
-```
-
-## Principaux fichiers V4.4
-
-```text
-app/src/main/java/com/chasmet/modeliseur3d/
-├── MainActivity.java
-├── media/
-│   ├── VideoFrameExtractor.java
-│   └── VideoSheetComposer.java
-├── model/
-│   ├── AnimeSegmentationEngine.java
-│   ├── NeuralDepthEngine.java
-│   ├── NeuralReconstructionEngine.java
-│   ├── MobileMeshOptimizer.java
-│   ├── MobileGlbExporter.java
-│   ├── GlbExporter.java
-│   └── ObjExporter.java
-└── gl/
-    ├── ModelGLSurfaceView.java
-    └── ModelRenderer.java
-```
-
-## Limites réelles
-
-Cette application n’exécute pas un grand générateur 3D distant. Elle combine segmentation, profondeur neuronale et reconstruction géométrique sur Android. La précision dépend directement de la qualité de l’image ou de la rotation vidéo : pose stable, sujet entier visible, fond propre, éclairage régulier et angles suffisamment différents.
-
-Les zones constamment cachées, l’intérieur des vêtements et les détails très fins ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est généré dans cette version.
+CI : `testDebugUnitTest lintDebug assembleDebug`, catalogue/reconstruction historiques, tests d’isolation/révocation MCP, arrêt sur quota GPU et test navigateur du lecteur/animations. Les tests ne remplacent pas un essai d’installation sur le téléphone.
+La branche `main` et les services Render préexistants restent séparés de cette branche.
