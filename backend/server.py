@@ -100,8 +100,8 @@ def generate_sync(job):
     prepared = client.predict(input=handle_file(str(DATA / (job['reference'] + '.png'))), api_name='/preprocess_image')
     update_job(job['id'], 'running', 'Calcul TRELLIS.2 sur le GPU distant…')
     client.predict(image=handle_file(prepared), seed=secrets.randbelow(2**31), resolution='512', api_name='/image_to_3d')
-    update_job(job['id'], 'running', 'Export mobile : 50 000 triangles, texture 1 024 pixels…')
-    result = client.predict(decimation_target=50_000, texture_size=1024, api_name='/extract_glb')
+    update_job(job['id'], 'running', 'Export mobile : 100 000 triangles, texture 1 024 pixels…')
+    result = client.predict(decimation_target=100_000, texture_size=1024, api_name='/extract_glb')
     source = Path(result[0] if isinstance(result, (list, tuple)) else result)
     if source.stat().st_size > 64 * 1024 * 1024:
         raise ValueError('Export exceeds mobile limit')
@@ -250,7 +250,7 @@ def application_status() -> dict:
     owner = owner_context.get()
     with db() as c: seen = c.execute('SELECT seen FROM devices WHERE id=?', (owner,)).fetchone()[0]
     return {'phone_online': time.time() - seen < 20, 'last_seen': seen, 'generation_runs_on': 'remote GPU',
-            'profile': '512 generation / 50000 triangles / 1024 texture', 'local_trellis_supported': False}
+            'profile': '512 generation / 100000 triangles / 1024 texture', 'local_trellis_supported': False}
 
 @mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': False})
 def list_models_and_images() -> dict:
@@ -267,7 +267,7 @@ async def generate_model(reference_id: str, humanoid: bool = False) -> dict:
 
 @mcp.tool(annotations={'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': False})
 def open_model_on_phone(job_id: str) -> dict:
-    """Ask the paired phone to download/open its ready GLB in an installed external 3D viewer.
+    """Ask the paired phone to download/open its ready GLB in its built-in 3D viewer.
     Requires the app's TRELLIS/MCP screen to be open. Does not control other applications.
     """
     owner = owner_context.get()

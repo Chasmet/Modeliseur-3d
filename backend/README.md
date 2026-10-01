@@ -1,13 +1,13 @@
 # TRELLIS.2 Android + MCP (V6.0.0)
 
 L'APK possède un écran TRELLIS.2/MCP, un sélecteur d'image, une connexion HTTPS,
-le suivi de génération, un téléchargement GLB, l'ouverture dans un lecteur externe
+le suivi de génération, un téléchargement GLB, l'ouverture et la lecture des animations dans l'APK
 et l'export par le sélecteur Android. Aucun compte OpenAI/API payante n'est nécessaire.
 Les modèles TRELLIS.2 ne sont **pas** exécutés sur le téléphone : leur implémentation
 officielle exige CUDA/NVIDIA. Les 12 Go de RAM du téléphone ne changent pas cela.
 Les modes de reconstruction locale précédents restent disponibles à l'accueil.
 
-Profil distant mobile : résolution 512, 50 000 triangles, texture 1 024 pixels.
+Profil distant mobile : résolution 512, 100 000 triangles, texture 1 024 pixels.
 Images normalisées à 1 024 pixels, transferts par blocs de 64 Ko, GLB limité à
 64 Mo. Le résultat est un GLB standard, sans décodeur Meshopt obligatoire.
 Les animations optionnelles sont des approximations procédurales, adaptées aux

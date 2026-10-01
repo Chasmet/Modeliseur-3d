@@ -16,3 +16,6 @@ captures/
 /tools/trellis/node_modules/
 /tools/trellis/output/
 __pycache__/
+
+tools/viewer/node_modules/
+app/src/main/assets/viewer/viewer.js

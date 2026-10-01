@@ -91,7 +91,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
         ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
         if (am != null) am.getMemoryInfo(mem);
         info.setText(String.format(java.util.Locale.FRANCE,
-                "RAM détectée : %.1f Go • mémoire de l'appli : %d Mo\nProfil mobile : 50 000 triangles, texture 1 024 px.\nTRELLIS.2 calcule sur un GPU distant. L'image est envoyée au relais et à Hugging Face. Les modes locaux restent accessibles à l'accueil.\nLe MCP répond lorsque cet écran est ouvert.",
+                "RAM détectée : %.1f Go • mémoire de l'appli : %d Mo\nProfil mobile : 100 000 triangles, texture 1 024 px.\nTRELLIS.2 calcule sur un GPU distant. L'image est envoyée au relais et à Hugging Face. Les modes locaux restent accessibles à l'accueil.\nLe MCP répond lorsque cet écran est ouvert.",
                 mem.totalMem / 1073741824.0, Runtime.getRuntime().maxMemory() / 1048576));
         panel.addView(info);
         server = new EditText(this); server.setHint("https://ton-relais.onrender.com");
@@ -205,12 +205,8 @@ public final class Cloud3DActivity extends AppCompatActivity {
     }
     private void openModel(File file) {
         if (file == null || !file.isFile()) return;
-        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
-        Intent intent = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "model/gltf-binary")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setClipData(ClipData.newRawUri("GLB", uri));
-        try { startActivity(intent); }
-        catch (ActivityNotFoundException e) { status.setText("Aucun lecteur GLB installé. Utilise Exporter pour enregistrer le modèle."); }
+        String id = file.getName().replace(".glb", "");
+        startActivity(new Intent(this, CloudModelViewerActivity.class).putExtra("job", id));
     }
     private final Runnable polling = new Runnable() {
         @Override public void run() {
