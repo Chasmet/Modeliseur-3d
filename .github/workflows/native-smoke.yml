@@ -1,0 +1,40 @@
+name: Vérifier les onglets et la mise à jour Android
+on:
+  pull_request:
+    branches: [main]
+    paths: ['tools/android-smoke/**', '.github/workflows/native-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+      - name: Préparer les tests Android sans modifier l'APK publiée
+        run: |
+          cp tools/android-smoke/NavigationUpdateTest.java app/src/test/java/com/chasmet/modeliseur3d/NavigationUpdateTest.java
+          cat >> app/build.gradle <<'GRADLE'
+          android { testOptions { unitTests.includeAndroidResources = true } }
+          dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }
+          GRADLE
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew
+      - name: Tester la navigation, le téléchargement réel et l'installateur Android
+        run: ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-navigation-update-test-reports
+          path: app/build/reports/tests/testDebugUnitTest
