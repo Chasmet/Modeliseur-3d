@@ -19,6 +19,9 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.mode3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Manual3DActivity.class))
         );
+        findViewById(R.id.cloud3dButton).setOnClickListener(view ->
+                startActivity(new Intent(this, Cloud3DActivity.class))
+        );
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
