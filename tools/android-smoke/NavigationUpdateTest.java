@@ -59,7 +59,9 @@ public class NavigationUpdateTest {
     @Test public void threeTabsKeepBothEnginesAndAssetsAccessible(){
         try(var controller=Robolectric.buildActivity(HomeActivity.class).setup()){
             HomeActivity home=controller.get();TabHost tabs=home.findViewById(android.R.id.tabhost);
-            assertEquals(3,shadowOf(tabs).getAllTabSpecs().size());
+            List<?> specs=ReflectionHelpers.getField(shadowOf(tabs),"tabSpecs");
+            assertEquals(3,specs.size());
+            for(String tag:new String[]{"25d","3d","trellis"})assertNotNull(shadowOf(tabs).getSpecByTag(tag));
             int[] ids={R.id.mode25dButton,R.id.mode3dButton,R.id.cloud3dButton,R.id.assets3dButton,R.id.settingsButton};
             Class<?>[] targets={MainActivityV52.class,Manual3DActivity.class,Cloud3DActivity.class,Asset3DActivity.class,SettingsActivity.class};
             for(int i=0;i<ids.length;i++){
