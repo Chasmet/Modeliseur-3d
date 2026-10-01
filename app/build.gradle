@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 35
-        versionName '5.9.10'
+        versionCode 36
+        versionName '6.0.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -134,7 +134,22 @@ android {
     }
 }
 
+def viewerNpm = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+tasks.register('installMobileViewer', Exec) {
+    workingDir rootProject.projectDir
+    commandLine viewerNpm, 'ci', '--prefix', 'tools/viewer', '--ignore-scripts'
+    inputs.files(rootProject.file('tools/viewer/package.json'), rootProject.file('tools/viewer/package-lock.json'))
+    outputs.dir(rootProject.file('tools/viewer/node_modules'))
+}
+tasks.register('buildMobileViewer', Exec) {
+    dependsOn tasks.named('installMobileViewer')
+    workingDir rootProject.projectDir
+    commandLine viewerNpm, 'run', 'build', '--prefix', 'tools/viewer'
+    inputs.file(rootProject.file('tools/viewer/viewer.js'))
+    outputs.file(file('src/main/assets/viewer/viewer.js'))
+}
 tasks.named('preBuild').configure {
+    dependsOn tasks.named('buildMobileViewer')
     dependsOn tasks.named('downloadAnimeSegmentationModel')
 }
 

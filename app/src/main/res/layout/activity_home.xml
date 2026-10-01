@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="Modéliseur 3D V5.9.10"
+            android:text="Modéliseur 3D V6.0.0"
             android:textColor="@color/text_primary"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -55,6 +55,15 @@
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/cloud3dButton"
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:layout_marginTop="14dp"
+            android:text="TRELLIS.2 • Image vers 3D\nGénération distante + connexion MCP"
+            android:textAllCaps="false"
+            android:textSize="20sp" />
 
         <Button
             android:id="@+id/assets3dButton"

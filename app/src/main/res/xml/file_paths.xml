@@ -3,4 +3,5 @@
     <external-files-path
         name="exports"
         path="Documents/" />
+    <files-path name="cloud_models" path="cloud_models/" />
 </paths>

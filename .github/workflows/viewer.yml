@@ -1,0 +1,42 @@
+name: Vérifier le lecteur GLB intégré
+on:
+  pull_request:
+    branches: [main]
+    paths: ['tools/viewer/**', 'tools/trellis/**', 'app/src/main/assets/viewer/**', '.github/workflows/viewer.yml']
+  push:
+    branches: [main]
+    paths: ['tools/viewer/**', 'tools/trellis/**', 'app/src/main/assets/viewer/**', '.github/workflows/viewer.yml']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tools/viewer && npm run build --prefix tools/viewer
+      - run: npm ci --prefix tools/trellis
+      - run: node tools/trellis/viewer-fixture.mjs app/src/main/assets/model
+      - run: npx --yes agent-browser@0.38.1 install --with-deps
+      - name: Vérifier le chargement, les animations et le rendu
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/viewer-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000000'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || document.querySelector("#clips").options.length !== 17 || !document.querySelector("#status").textContent.startsWith("Rotation")) throw new Error("GLB non chargé ou animations absentes"); return "GLB + 16 animations chargés"; })()'
+          npx --yes agent-browser@0.38.1 select '#clips' Walk
+          npx --yes agent-browser@0.38.1 screenshot viewer.png
+          npx --yes agent-browser@0.38.1 snapshot -i
+          npx --yes agent-browser@0.38.1 errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lecteur-GLB-verification
+          path: viewer.png

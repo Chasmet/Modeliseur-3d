@@ -13,3 +13,9 @@ captures/
 .build-cacerts-*
 /app/src/main/assets/models/*.onnx
 /app/src/main/assets/models/*.onnx.part
+/tools/trellis/node_modules/
+/tools/trellis/output/
+__pycache__/
+
+tools/viewer/node_modules/
+app/src/main/assets/viewer/viewer.js

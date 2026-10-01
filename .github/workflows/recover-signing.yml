@@ -1,0 +1,41 @@
+name: Sauvegarder la signature existante chiffrée
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/recover-signing.yml', 'signing/recovery-public.pem']
+permissions:
+  contents: read
+jobs:
+  recover:
+    if: github.event.pull_request.number == 39 && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci-signing/debug.keystore
+          key: modeliseur-debug-keystore-v1
+          fail-on-cache-miss: true
+      - run: python -m pip install cryptography==46.0.1
+      - name: Chiffrer la sauvegarde sans exposer le keystore
+        run: |
+          python - <<'PY'
+          import os, json, base64
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization, hashes
+          from cryptography.hazmat.primitives.asymmetric import padding
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          public=serialization.load_pem_public_key(Path('signing/recovery-public.pem').read_bytes())
+          key=os.urandom(32);nonce=os.urandom(12)
+          raw=json.dumps({'keystoreBase64':base64.b64encode(Path('.ci-signing/debug.keystore').read_bytes()).decode(),
+                          'storePassword':'android','keyPassword':'android','alias':'androiddebugkey'}).encode()
+          ciphertext=AESGCM(key).encrypt(nonce,raw,b'Modeliseur3D-signing-backup')
+          wrapped=public.encrypt(key,padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+          Path('signing-encrypted.json').write_text(json.dumps({k:base64.b64encode(v).decode() for k,v in
+              [('key',wrapped),('nonce',nonce),('ciphertext',ciphertext)]}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signature-modeliseur-chiffree
+          path: signing-encrypted.json
+          retention-days: 1

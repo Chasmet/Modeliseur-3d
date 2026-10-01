@@ -1,4 +1,13 @@
+# Version 6.0.0 : TRELLIS.2 dans l’APK et relais MCP
+
+L’écran TRELLIS.2/MCP importe une photo, suit une génération distante et récupère un GLB au format mobile. Les 12 Go de RAM ne permettent pas d’exécuter le modèle CUDA directement sur Android. Le relais HTTPS doit être déployé puis appairé ; aucune connexion ChatGPT n’est annoncée active avant ces étapes. Voir [le relais Android/MCP](backend/README.md).
+
 # Modéliseur 3D V4.4 — Android local, image et vidéo
+
+> La version Android courante est 5.9.10 ; la description historique ci-dessous
+> concerne le pipeline V4.4. Une chaîne séparée de génération cloud TRELLIS.2,
+> rigging humanoïde et compression GLB est disponible dans
+> [tools/trellis](tools/trellis/README.md), avec son workflow GitHub Actions.
 
 Application Android Java qui transforme localement :
 
