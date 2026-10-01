@@ -3,8 +3,10 @@ name: Compiler l'APK Android
 on:
   push:
     branches: [main]
+    paths: ['app/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
   pull_request:
     branches: [main]
+    paths: ['app/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:

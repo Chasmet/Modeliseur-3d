@@ -1,5 +1,10 @@
 # Modéliseur 3D V4.4 — Android local, image et vidéo
 
+> La version Android courante est 5.9.10 ; la description historique ci-dessous
+> concerne le pipeline V4.4. Une chaîne séparée de génération cloud TRELLIS.2,
+> rigging humanoïde et compression GLB est disponible dans
+> [tools/trellis](tools/trellis/README.md), avec son workflow GitHub Actions.
+
 Application Android Java qui transforme localement :
 
 - une image unique ;
