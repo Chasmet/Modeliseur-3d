@@ -34,10 +34,9 @@ public class NavigationUpdateTest {
         UpdateManager.prefs(app).edit().putBoolean("automatic",false).commit();
         try { WorkManager.getInstance(app); }
         catch(IllegalStateException e) { WorkManager.initialize(app,new Configuration.Builder().build()); }
-        installed=app.getPackageManager().getPackageInfo(app.getPackageName(),PackageManager.GET_SIGNATURES);
+        installed=shadowOf(app.getPackageManager()).getInternalMutablePackageInfo(app.getPackageName());
         installed.versionCode=36;installed.versionName="6.0.0";
         installed.signatures=new Signature[]{new Signature(new byte[]{1,2,3})};
-        shadowOf(app.getPackageManager()).installPackage(installed);
         app.getSharedPreferences("saved_projects",0).edit().putString("project","keep").commit();
         project=new File(app.getFilesDir(),"saved-project.glb");
         try(FileOutputStream out=new FileOutputStream(project)){out.write(new byte[]{7,8,9});}
@@ -60,7 +59,7 @@ public class NavigationUpdateTest {
     @Test public void threeTabsKeepBothEnginesAndAssetsAccessible(){
         try(var controller=Robolectric.buildActivity(HomeActivity.class).setup()){
             HomeActivity home=controller.get();TabHost tabs=home.findViewById(android.R.id.tabhost);
-            assertEquals(3,tabs.getTabWidget().getTabCount());
+            assertEquals(3,shadowOf(tabs).getAllTabSpecs().size());
             int[] ids={R.id.mode25dButton,R.id.mode3dButton,R.id.cloud3dButton,R.id.assets3dButton,R.id.settingsButton};
             Class<?>[] targets={MainActivityV52.class,Manual3DActivity.class,Cloud3DActivity.class,Asset3DActivity.class,SettingsActivity.class};
             for(int i=0;i<ids.length;i++){
