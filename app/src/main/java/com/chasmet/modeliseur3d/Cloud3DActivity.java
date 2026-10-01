@@ -135,7 +135,8 @@ public final class Cloud3DActivity extends AppCompatActivity {
             if (!"remote_trellis2".equals(health.optString("generation"))) throw new IOException("Ce serveur n'est pas un relais Modéliseur 3D.");
             // Explicit reconnect: revoke the previous MCP link when reachable.
             if (api != null && !saved.optString("mcp").isEmpty()) {
-                api.json("/api/mcp", new JSONObject().put("enabled", false));
+                try { api.json("/api/mcp", new JSONObject().put("enabled", false)); }
+                catch (CloudApi.HttpFailure e) { if (e.code != 401) throw e; }
             }
             JSONObject registration = candidate.json("/api/register", new JSONObject());
             api = new CloudApi(candidate.base(), registration.getString("token"));

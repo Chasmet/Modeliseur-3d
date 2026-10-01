@@ -37,10 +37,14 @@ public final class CloudApi {
         if (token != null && !token.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + token);
         return c;
     }
+    public static final class HttpFailure extends IOException {
+        public final int code;
+        public HttpFailure(int code, String message) { super(message); this.code = code; }
+    }
     private static void ensureSuccess(HttpURLConnection c) throws IOException {
         int code = c.getResponseCode();
         if (code < 200 || code >= 300) {
-            if (code == 401) throw new IOException("Connexion expirée : reconnecte ce téléphone au relais.");
+            if (code == 401) throw new HttpFailure(code, "Connexion expirée : reconnecte ce téléphone au relais.");
             if (code == 413) throw new IOException("Image trop volumineuse.");
             if (code == 429) throw new IOException("Limite du relais atteinte. Efface les anciens travaux ou attends.");
             if (code == 409) throw new IOException("Travail en cours : attends sa fin.");
