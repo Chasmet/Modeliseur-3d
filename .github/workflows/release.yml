@@ -3,7 +3,7 @@ name: Publier APK signé avec mise à jour automatique
 on:
   push:
     branches: [agent/trellis-third-tab-auto-update]
-    paths: ['tools/offline-models/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', '.github/workflows/release.yml']
+    paths: ['tools/offline-models/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', 'signing/publish_source_snapshot.sh', '.github/workflows/release.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -272,4 +272,8 @@ jobs:
           Mise à jour automatique par GitHub Releases publiques, même package et même signature que les versions 6.0.x. APK vérifiée sous la limite de 512 Mio de l’ancienne mise à jour.
           MCP reporté. Aucun abonnement ni compte requis pour générer hors connexion.
           NOTES
-          gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --latest
+          bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
+          SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")
+          printf '\nSources APK : %s. Application compilée et testée depuis %s, avec les workflows de la branche principale conservés dans la branche de sources de publication.\n' "$SOURCE_COMMIT" "$GITHUB_SHA" >> /tmp/modeliseur-release.md
+          gh release create "$TAG" "$APK" "$APK.sha256" --target "$SOURCE_COMMIT" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --draft
+          gh release edit "$TAG" --draft=false --latest
