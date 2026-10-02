@@ -43,7 +43,7 @@ public class TripoSROfflineTest {
             long started=System.nanoTime();TripoSRField[] fields=TripoSREngine.reconstruct(app,images,caches,keys,callback);
             assertEquals(4,progress.stream().filter(s->s.contains("TripoSR IA 3D")).count());
             for(int i=0;i<4;i++){
-                assertEquals(64,fields[i].side);assertEquals(8+64*64*64*4,caches[i].length());
+                assertEquals(64,fields[i].side);assertEquals(8+3L*40*64*64*4,caches[i].length());assertTrue(new File(caches[i].getPath()+".field-64").isFile());
                 float min=1,max=0,difference=0;
                 for(int x=-4;x<=4;x++)for(int y=-4;y<=4;y++)for(int z=-4;z<=4;z++){
                     float p=fields[i].probability(i,x/5f,y/5f,z/5f);assertTrue(Float.isFinite(p)&&p>=0&&p<=1);min=Math.min(min,p);max=Math.max(max,p);
@@ -64,8 +64,12 @@ public class TripoSROfflineTest {
             // Cached reuse must perform neither encoder nor decoder work and preserve each file.
             long[] times=new long[4];for(int i=0;i<4;i++)times[i]=caches[i].lastModified();progress.clear();
             TripoSRField[] restored=TripoSREngine.reconstruct(app,images,caches,keys,callback);assertEquals(1,progress.size());assertTrue(progress.get(0).contains("cache local"));
-            OfflineImageVolume.Result adjusted=TripoSRFourViewVolume.build(images,restored,88,1.1f);adjusted.texture.recycle();
             for(int i=0;i<4;i++)assertEquals(times[i],caches[i].lastModified());
+            progress.clear();
+            TripoSRField[] high=TripoSREngine.reconstruct(app,images,caches,keys,112,callback);
+            for(int i=0;i<4;i++){assertEquals(112,high[i].side);assertEquals(times[i],caches[i].lastModified());assertTrue(new File(caches[i].getPath()+".field-112").isFile());}
+            assertTrue(progress.stream().anyMatch(s->s.contains("112³")));
+            OfflineImageVolume.Result adjusted=TripoSRFourViewVolume.build(images,high,112,1.1f);adjusted.texture.recycle();
             // Each actually inferred view influences fusion even if it is not the maximum here.
             for(int view=0;view<4;view++){
                 float[] values=new float[32*32*32];
