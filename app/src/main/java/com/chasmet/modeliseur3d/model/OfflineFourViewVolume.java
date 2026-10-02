@@ -1,7 +1,6 @@
 package com.chasmet.modeliseur3d.model;
 
 import android.graphics.Bitmap;
-import java.util.Arrays;
 import java.util.concurrent.CancellationException;
 
 /** Offline four-view approximation, independent of the original character engine. */
@@ -75,7 +74,7 @@ public final class OfflineFourViewVolume {
             check();width=Math.max(12,Math.min(128,Math.round(height*fa)));depth=Math.max(12,Math.min(128,Math.round(height*sa)));
             boolean[][] masks={silhouette(images[0],width,height,fa),silhouette(images[1],width,height,fa),silhouette(images[2],depth,height,sa),silhouette(images[3],depth,height,sa)};
             boolean[] occupied=OfflineFourViewHull.intersect(masks,width,height,depth);
-            mesh=SmoothHullMesher.build(occupied,width,height,depth,SmoothHullMesher.AtlasLayout.create(width,height,depth,128),3);
+            mesh=OfflineHullMesher.build(occupied,width,height,depth);
             if(mesh.getTriangleCount()<=120000)break;
             mesh=null;height=Math.max(32,Math.round(height*.72f));
         }

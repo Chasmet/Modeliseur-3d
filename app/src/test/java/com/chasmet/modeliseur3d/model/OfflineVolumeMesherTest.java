@@ -77,4 +77,17 @@ public class OfflineVolumeMesherTest {
         assertThrows(IllegalArgumentException.class,()->OfflineFourViewHull.intersect(masks,w,h,d));
         assertThrows(IllegalArgumentException.class,()->OfflineFourViewHull.intersect(masks,129,h,d));
     }
+    @Test public void fourViewSurfaceHasSharedVerticesClosedEdgesAndOutwardWinding(){
+        int w=30,h=48,d=18;boolean[] volume=new boolean[w*h*d];
+        for(int y=3;y<h-3;y++)for(int x=3;x<w-3;x++)for(int z=3;z<d-3;z++)volume[(y*w+x)*d+z]=!(x>12&&x<17&&y>24);
+        MeshData mesh=OfflineHullMesher.build(volume,w,h,d);int[] indices=mesh.getIndices();float[] p=mesh.getPositions();
+        Map<Long,Integer> counts=new HashMap<>(),directions=new HashMap<>();double signedVolume=0;
+        for(int t=0;t<indices.length;t+=3){
+            for(int k=0;k<3;k++){int a=indices[t+k],b=indices[t+(k+1)%3];assertNotEquals(a,b);long edge=((long)Math.min(a,b)<<32)|Math.max(a,b);counts.merge(edge,1,Integer::sum);directions.merge(edge,a<b?1:-1,Integer::sum);}
+            int a=indices[t]*3,b=indices[t+1]*3,c=indices[t+2]*3;
+            signedVolume+=(p[a]*(p[b+1]*p[c+2]-p[b+2]*p[c+1])+p[a+1]*(p[b+2]*p[c]-p[b]*p[c+2])+p[a+2]*(p[b]*p[c+1]-p[b+1]*p[c]))/6;
+        }
+        for(int count:counts.values())assertEquals(2,count);for(int direction:directions.values())assertEquals(0,direction);assertTrue(signedVolume>0);
+        for(float value:mesh.getNormals())assertTrue(Float.isFinite(value));
+    }
 }
