@@ -46,6 +46,26 @@ class TrainingTests(unittest.TestCase):
             model.parameters[index][location] = old
             self.assertAlmostEqual((upper-lower)/(2*epsilon), gradients[index][location], delta=2e-5)
 
+    def test_four_view_fusion_gradient_matches_finite_differences(self):
+        model = Decoder(ASSETS / "triposr_decoder.onnx")
+        model.parameters = [v.astype(np.float64) for v in model.parameters]
+        model.initial = [v.copy() for v in model.parameters]
+        rng = np.random.default_rng(83)
+        views = [rng.normal(size=(11, 120))*.4 for _ in range(4)]
+        labels = np.arange(11) % 2
+        _, gradients = model.fused_loss_and_gradient(views, labels)
+        for index in (0, 8, 16, 18, 19):
+            location = np.unravel_index(np.abs(gradients[index]).argmax(), gradients[index].shape)
+            old, epsilon = model.parameters[index][location], 1e-5
+            model.parameters[index][location] = old+epsilon
+            upper, _ = model.fused_loss_and_gradient(views, labels)
+            model.parameters[index][location] = old-epsilon
+            lower, _ = model.fused_loss_and_gradient(views, labels)
+            model.parameters[index][location] = old
+            self.assertAlmostEqual((upper-lower)/(2*epsilon), gradients[index][location], delta=2e-5)
+        np.testing.assert_array_equal(gradients[-2][1:], 0)
+        np.testing.assert_array_equal(gradients[-1][1:], 0)
+
     def test_trained_onnx_export_matches_the_cpu_model_and_keeps_rgb_output_rows(self):
         model = Decoder(ASSETS / "triposr_decoder.onnx")
         x = np.random.default_rng(45).normal(size=(32, 120)).astype(np.float32)

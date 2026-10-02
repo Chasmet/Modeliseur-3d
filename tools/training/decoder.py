@@ -52,6 +52,38 @@ class Decoder:
         loss = np.mean(np.logaddexp(0, logits) - labels * logits)
         derivative = np.zeros_like(out)
         derivative[:, 0] = 2 * (sigmoid(logits) - labels) / len(labels)
+        gradients = self._backward(tape, derivative)
+        return self._regularize(loss, gradients, anchor)
+
+    def fused_loss_and_gradient(self, views, labels, anchor=1e-4):
+        """Differentiate the same top-two-plus-mean four-view occupancy fusion.
+
+        Each row must describe the same world point in all four image fields.
+        This changes only the shared decoder, not the frozen image encoder.
+        """
+        if len(views) != 4 or any(len(x) != len(labels) for x in views):
+            raise ValueError("Four corresponding feature batches are required")
+        out, tape = self.forward(np.concatenate(views), tape=True)
+        logits = 2*(out[:, 0].reshape(4, -1).astype(np.float64)-ISO)
+        probabilities = sigmoid(logits)
+        complements = sigmoid(-logits)
+        order = np.argsort(logits, axis=0, kind="stable")
+        weights = np.full(probabilities.shape, .05, dtype=probabilities.dtype)
+        columns = np.arange(len(labels))
+        weights[order[-1], columns] += .4
+        weights[order[-2], columns] += .4
+        fused = (weights*probabilities).sum(0)
+        # Compute the complementary probability independently to avoid 1-1=0
+        # and 0*log(0) on saturated fields. Keep the BCE gradient useful there.
+        fused_complement = (weights*complements).sum(0)
+        loss = -np.mean(labels*np.log(fused)+(1-labels)*np.log(fused_complement))
+        derivative_fused = ((1-labels)/fused_complement-labels/fused)/len(labels)
+        derivative = np.zeros_like(out)
+        derivative[:, 0] = (derivative_fused[None]*weights*2*probabilities*complements).reshape(-1)
+        gradients = self._backward(tape, derivative)
+        return self._regularize(loss, gradients, anchor)
+
+    def _backward(self, tape, derivative):
         gradients = [None] * len(self.parameters)
         for layer in range(len(tape)-1, -1, -1):
             x, z, s = tape[layer]
@@ -61,12 +93,15 @@ class Decoder:
             gradients[index] = derivative.T @ x
             gradients[index+1] = derivative.sum(axis=0)
             derivative = derivative @ self.parameters[index]
+        return gradients
+
+    def _regularize(self, loss, gradients, anchor):
         # Keep the RGB output layer fixed: the app projects the original photos.
-        gradients[-2][1:] = 0
-        gradients[-1][1:] = 0
         for i, (p, original) in enumerate(zip(self.parameters, self.initial)):
             loss += anchor * np.mean((p-original)**2)
             gradients[i] += (2 * anchor / p.size) * (p-original)
+        gradients[-2][1:] = 0
+        gradients[-1][1:] = 0
         return float(loss), gradients
 
     def update(self, gradients, learning_rate):
