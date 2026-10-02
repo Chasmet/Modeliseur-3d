@@ -108,13 +108,13 @@ public class OfflineWorkshopTest {
             for(int j=0;j<mesh.getVertexCount();j++){
                 float u=uv[j*2],v=uv[j*2+1];assertTrue(u>=0&&u<=1&&v>=0&&v<=1);
                 int view=(u<.5f?0:1)+(v<.5f?0:2);seen[view]=true;
-                int pixel=base.texture.getPixel(Math.round(u*1023),Math.round(v*1023));
+                int pixel=base.texture.getPixel(Math.round(u*(base.texture.getWidth()-1)),Math.round(v*(base.texture.getHeight()-1)));
                 if(positions[j*3+1]<.3f)assertEquals(colors[view],pixel);
                 for(int k=0;k<3;k++)assertTrue(Float.isFinite(positions[j*3+k])&&Float.isFinite(normals[j*3+k]));
             }
             for(boolean used:seen)assertTrue(used);
             // Top of every photograph maps to the top of the geometry (GLTF V origin).
-            for(int view=0;view<4;view++)assertEquals(Color.MAGENTA,base.texture.getPixel((view%2)*512+256,(view/2)*512+35));
+            for(int view=0;view<4;view++)assertEquals(Color.MAGENTA,base.texture.getPixel((view%2)*1024+512,(view/2)*1024+70));
             // Coincident vertices remain joined even across the four texture seams.
             java.util.Map<String,Integer> welded=new java.util.HashMap<>();int[] ids=new int[mesh.getVertexCount()];
             for(int j=0;j<ids.length;j++){String key=Math.round(positions[j*3]*100000)+":"+Math.round(positions[j*3+1]*100000)+":"+Math.round(positions[j*3+2]*100000);ids[j]=welded.computeIfAbsent(key,k->welded.size());}
