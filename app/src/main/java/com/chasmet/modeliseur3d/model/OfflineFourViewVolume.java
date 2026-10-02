@@ -5,7 +5,7 @@ import java.util.concurrent.CancellationException;
 
 /** Offline four-view approximation, independent of the original character engine. */
 public final class OfflineFourViewVolume {
-    private static final int CELL=512;
+    private static final int CELL=1024;
     private OfflineFourViewVolume() {}
     private static void check(){if(Thread.currentThread().isInterrupted())throw new CancellationException();}
     private static float clamp(float v){return Math.max(0,Math.min(1,v));}
@@ -99,22 +99,36 @@ public final class OfflineFourViewVolume {
     /** Reuses the four-photo atlas for either silhouettes or actual learned geometry. */
     static OfflineImageVolume.Result texture(MeshData mesh,Bitmap[] images,float fa,float sa,float scale,String method){
         float[] p=mesh.getPositions(),n=mesh.getNormals();
-        // A triangle uses one photograph, with separate UV seams and GLTF top-origin V.
-        int[] original=mesh.getIndices();float[] outP=new float[original.length*3],outN=new float[outP.length],uv=new float[original.length*2];int[] indices=new int[original.length];
-        for(int t=0;t<original.length;t+=3) {
-            float nx=0,nz=0;for(int k=0;k<3;k++){nx+=n[original[t+k]*3];nz+=n[original[t+k]*3+2];}
+        int[] original=mesh.getIndices();
+
+        // V6.2: share vertices inside the same camera projection. A vertex is
+        // duplicated only at a real face/back/left/right UV seam, not per triangle.
+        int max=original.length;
+        float[] outP=new float[max*3],outN=new float[max*3],uv=new float[max*2];
+        int[] indices=new int[original.length];int vertexCount=0;
+        java.util.HashMap<Long,Integer> mapped=new java.util.HashMap<>(Math.max(16,mesh.getVertexCount()*2));
+        for(int t=0;t<original.length;t+=3){
+            float nx=0,nz=0;
+            for(int k=0;k<3;k++){nx+=n[original[t+k]*3];nz+=n[original[t+k]*3+2];}
             int view=Math.abs(nz)>=Math.abs(nx)*.82f?(nz>=0?0:1):(nx>=0?2:3);
-            for(int k=0;k<3;k++) {
-                int j=t+k,i=original[j]*3;System.arraycopy(p,i,outP,j*3,3);System.arraycopy(n,i,outN,j*3,3);indices[j]=j;
+            for(int k=0;k<3;k++){
+                int j=t+k,source=original[j],i=source*3;
+                long key=((long)source<<3)|view;
+                Integer existing=mapped.get(key);
+                if(existing!=null){indices[j]=existing;continue;}
+                int dst=vertexCount++;mapped.put(key,dst);indices[j]=dst;
+                System.arraycopy(p,i,outP,dst*3,3);System.arraycopy(n,i,outN,dst*3,3);
                 float x=clamp(.5f+p[i]/(2*fa)),z=clamp(.5f+p[i+2]/(2*sa*scale));
                 float u=view==0?x:view==1?1-x:view==2?1-z:z,v=clamp((1-p[i+1])/2);
-                // Half-texel inset prevents neighbouring cells from bleeding into seams.
-                uv[j*2]=((view%2)*CELL+.5f+u*(CELL-1))/(CELL*2);
-                uv[j*2+1]=((view/2)*CELL+.5f+v*(CELL-1))/(CELL*2);
+                uv[dst*2]=((view%2)*CELL+.5f+u*(CELL-1))/(CELL*2);
+                uv[dst*2+1]=((view/2)*CELL+.5f+v*(CELL-1))/(CELL*2);
             }
         }
         check();Bitmap texture=atlas(images,fa,sa);
-        return new OfflineImageVolume.Result(new MeshData(outP,outN,uv,indices),texture,
-            method);
+        return new OfflineImageVolume.Result(
+            new MeshData(java.util.Arrays.copyOf(outP,vertexCount*3),java.util.Arrays.copyOf(outN,vertexCount*3),
+                java.util.Arrays.copyOf(uv,vertexCount*2),indices),
+            texture,method+" · atlas 2048² · UV partagés hors coutures");
     }
+
 }
