@@ -80,6 +80,15 @@ jobs:
           npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || !document.querySelector("#status").textContent.startsWith("Sans animation")) throw new Error("Volume local non chargé"); return "Volume Android chargé"; })()'
           npx --yes agent-browser@0.38.1 screenshot offline-volume.png
           npx --yes agent-browser@0.38.1 errors
+          python3 - <<'PY'
+          from PIL import Image
+          image=Image.open('offline-volume.png').convert('RGB')
+          red=sum(r>160 and g<80 and b<80 for r,g,b in image.getdata())
+          blue=sum(b>160 and r<80 and g<80 for r,g,b in image.getdata())
+          green=sum(g>160 and r<80 and b<80 for r,g,b in image.getdata())
+          print('Texture visible:',red,blue,green)
+          assert min(red,blue,green)>100,'Texture missing, blocked or mapped incorrectly'
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

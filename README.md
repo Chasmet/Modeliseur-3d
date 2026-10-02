@@ -1,4 +1,4 @@
-# Modéliseur 3D V6.0.2 — branche TRELLIS isolée
+# Modéliseur 3D V6.0.3 — branche TRELLIS isolée
 
 Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.
 Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troisième onglet ouvre la génération distante et le lecteur GLB intégré.
@@ -21,7 +21,7 @@ La publication utilise le GITHUB_TOKEN natif et une identité GitHub Actions OID
 CI : `testDebugUnitTest lintDebug assembleDebug`, catalogue/reconstruction historiques, tests d’isolation/révocation MCP, arrêt sur quota GPU et test navigateur du lecteur/animations. Les tests ne remplacent pas un essai d’installation sur le téléphone.
 La branche `main` et les services Render préexistants restent séparés de cette branche.
 
-## Atelier hors connexion V6.0.2
+## Atelier hors connexion V6.0.3
 
 Le deuxième onglet affiche explicitement le mode original à quatre images (face, dos, droite, gauche). Ses moteurs et son écran de capture restent inchangés. Les onglets utilisent des couleurs contrastées et mémorisent le dernier choix.
 
@@ -29,4 +29,4 @@ Dans le troisième onglet, **Atelier hors connexion** reconstruit une silhouette
 
 Les GLB sont enregistrés dans le stockage privé du téléphone, disponibles dans la galerie locale, affichés avec le lecteur embarqué et exportables via le sélecteur de documents Android. Le service TRELLIS.2 distant/MCP reste disponible séparément dans ce même onglet.
 
-V6.0.2 : versionCode 38, même applicationId et certificat V6.0.0/V6.0.1. Les projets existants restent conservés.
+V6.0.3 : versionCode 39, même applicationId et certificat V6.0.0/V6.0.1. Les projets existants restent conservés.
