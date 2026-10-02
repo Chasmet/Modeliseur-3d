@@ -92,6 +92,90 @@ public class OfflineWorkshopTest {
             }
         }finally{image.recycle();}
     }
+    private Bitmap fourPhoto(int view){
+        int width=view<2?96:56;Bitmap image=Bitmap.createBitmap(width,128,Bitmap.Config.ARGB_8888);
+        Canvas c=new Canvas(image);Paint p=new Paint();p.setColor(new int[]{Color.RED,Color.BLUE,Color.GREEN,Color.YELLOW}[view]);
+        c.drawRect(5,5,width-5,123,p);p.setColor(Color.MAGENTA);c.drawRect(5,5,width-5,22,p);return image;
+    }
+    @Test public void fourViewsBuildClosedColouredHullAndEveryDepthSurfaceContributesOffline()throws Exception{
+        Bitmap[] images=new Bitmap[4];OfflineImageVolume.Result base=null;
+        try(NoNetwork forbidden=new NoNetwork()){
+            for(int i=0;i<4;i++)images[i]=fourPhoto(i);
+            base=OfflineFourViewVolume.build(images,64,1,null);MeshData mesh=base.mesh;
+            assertTrue(mesh.getTriangleCount()>100);assertTrue(mesh.getTriangleCount()<=120000);
+            int[] colors={Color.RED,Color.BLUE,Color.GREEN,Color.YELLOW};boolean[] seen=new boolean[4];
+            float[] uv=mesh.getTexCoords(),positions=mesh.getPositions(),normals=mesh.getNormals();
+            for(int j=0;j<mesh.getVertexCount();j++){
+                float u=uv[j*2],v=uv[j*2+1];assertTrue(u>=0&&u<=1&&v>=0&&v<=1);
+                int view=(u<.5f?0:1)+(v<.5f?0:2);seen[view]=true;
+                int pixel=base.texture.getPixel(Math.round(u*1023),Math.round(v*1023));
+                if(positions[j*3+1]<.3f)assertEquals(colors[view],pixel);
+                for(int k=0;k<3;k++)assertTrue(Float.isFinite(positions[j*3+k])&&Float.isFinite(normals[j*3+k]));
+            }
+            for(boolean used:seen)assertTrue(used);
+            // Top of every photograph maps to the top of the geometry (GLTF V origin).
+            for(int view=0;view<4;view++)assertEquals(Color.MAGENTA,base.texture.getPixel((view%2)*512+256,(view/2)*512+35));
+            // Coincident vertices remain joined even across the four texture seams.
+            java.util.Map<String,Integer> welded=new java.util.HashMap<>();int[] ids=new int[mesh.getVertexCount()];
+            for(int j=0;j<ids.length;j++){String key=Math.round(positions[j*3]*100000)+":"+Math.round(positions[j*3+1]*100000)+":"+Math.round(positions[j*3+2]*100000);ids[j]=welded.computeIfAbsent(key,k->welded.size());}
+            java.util.Map<Long,Integer> edges=new java.util.HashMap<>();int[] indices=mesh.getIndices();
+            for(int t=0;t<indices.length;t+=3)for(int k=0;k<3;k++){int a=ids[indices[t+k]],b=ids[indices[t+(k+1)%3]];assertNotEquals(a,b);long edge=((long)Math.min(a,b)<<32)|Math.max(a,b);edges.merge(edge,1,Integer::sum);}
+            for(int count:edges.values())assertEquals(2,count);
+            for(int view=0;view<4;view++){
+                OfflineDepthField[] fields=new OfflineDepthField[4];fields[view]=new OfflineDepthField(new float[]{1,1,1,1},2,2);
+                OfflineImageVolume.Result shaped=OfflineFourViewVolume.build(images,64,1,fields);
+                boolean changed=false;for(int j=0;j<positions.length;j++)if(Math.abs(positions[j]-shaped.mesh.getPositions()[j])>1e-6f)changed=true;
+                assertTrue("Depth view "+view+" ignored",changed);shaped.texture.recycle();
+            }
+            File folder=new File("build/offline-fixture");assertTrue(folder.isDirectory()||folder.mkdirs());
+            ExternalViewerGlbExporter.write(new File(folder,"00000000000000000000000000000004.glb"),mesh,base.texture);
+        }finally{for(Bitmap image:images)if(image!=null)image.recycle();if(base!=null)base.texture.recycle();}
+    }
+    @Test public void fourPhotoActivityRequiresAllViewsKeepsCachesAndRestoresPicturesOffline()throws Exception{
+        android.app.Application app=RuntimeEnvironment.getApplication();var prefs=app.getSharedPreferences("offline_workshop",0);
+        prefs.edit().clear().putBoolean("fourViews",true).putBoolean("depthAi",false).commit();
+        for(int slot=0;slot<4;slot++)for(String kind:new String[]{"image","cutout"})new File(app.getFilesDir(),"offline-workshop-"+kind+(slot==0?"":"-"+slot)+".png").delete();
+        String id;
+        try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            Offline3DActivity activity=controller.get();View root=activity.getWindow().getDecorView();
+            assertFalse(button(root,"Générer sur ce téléphone").isEnabled());
+            for(int slot=0;slot<4;slot++){
+                Bitmap image=fourPhoto(slot);ReflectionHelpers.callInstanceMethod(activity,"saveImage",ReflectionHelpers.ClassParameter.from(Bitmap.class,image),ReflectionHelpers.ClassParameter.from(int.class,slot));image.recycle();
+                ReflectionHelpers.callInstanceMethod(activity,"buttons");
+                assertEquals(slot==3,button(root,"Générer sur ce téléphone").isEnabled());
+            }
+            button(root,"Vérifier le détourage").performClick();finishWork(activity);long[] modified=new long[4];
+            for(int slot=0;slot<4;slot++){
+                File cutout=new File(app.getFilesDir(),"offline-workshop-cutout"+(slot==0?"":"-"+slot)+".png");assertTrue(cutout.length()>0);modified[slot]=cutout.lastModified();
+            }
+            button(root,"Générer sur ce téléphone").performClick();finishWork(activity);
+            id=prefs.getString("last","");assertTrue(id.matches("[a-f0-9]{32}"));assertTrue(new File(app.getFilesDir(),"cloud_models/"+id+".glb").length()>0);
+            // Populate independent cached depth maps; the production path must reuse all four.
+            for(int slot=0;slot<4;slot++){
+                File cache=new File(app.getFilesDir(),"offline-workshop-depth"+(slot==0?"":"-"+slot)+".bin");
+                new OfflineDepthField(new float[]{0,1,0,1},2,2).write(cache);
+                prefs.edit().putString("depthKey"+(slot==0?"":"_"+slot),"depth-v1:"+prefs.getString("cutoutKey"+(slot==0?"":"_"+slot),"")).commit();
+            }
+            ((CheckBox)ReflectionHelpers.getField(activity,"depthAi")).setChecked(true);
+            button(root,"Générer sur ce téléphone").performClick();finishWork(activity);
+            assertNotEquals(id,prefs.getString("last",""));assertTrue(new File(app.getFilesDir(),"cloud_models/"+id+".glb").isFile());
+            for(int slot=0;slot<4;slot++)assertEquals(modified[slot],new File(app.getFilesDir(),"offline-workshop-cutout"+(slot==0?"":"-"+slot)+".png").lastModified());
+            long other=new File(app.getFilesDir(),"offline-workshop-cutout-2.png").lastModified();
+            ReflectionHelpers.callInstanceMethod(activity,"rotateImage",ReflectionHelpers.ClassParameter.from(int.class,1));finishWork(activity);
+            assertFalse(new File(app.getFilesDir(),"offline-workshop-cutout-1.png").isFile());assertEquals(other,new File(app.getFilesDir(),"offline-workshop-cutout-2.png").lastModified());
+        }
+        try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            assertTrue(((CheckBox)ReflectionHelpers.getField(controller.get(),"fourViews")).isChecked());
+            assertTrue(button(controller.get().getWindow().getDecorView(),"Générer sur ce téléphone").isEnabled());
+            for(ImageView preview:(ImageView[])ReflectionHelpers.getField(controller.get(),"previews"))assertNotNull(preview.getDrawable());
+        }
+    }
+    @Test @Config(qualifiers="night") public void offlineTextRemainsReadableInAndroidNightMode(){
+        try(var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            TextView label=ReflectionHelpers.getField(controller.get(),"countLabel");assertEquals(0xFF121722,label.getCurrentTextColor());
+            android.util.TypedValue background=new android.util.TypedValue();assertTrue(controller.get().getTheme().resolveAttribute(android.R.attr.windowBackground,background,true));assertEquals(0xFFF4F6FA,background.data);
+        }
+    }
     private static Button button(View root,String title){
         if(root instanceof Button&&((Button)root).getText().toString().contains(title))return (Button)root;
         if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){
@@ -110,6 +194,7 @@ public class OfflineWorkshopTest {
         String id;
         try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
             Offline3DActivity activity=controller.get();View root=activity.getWindow().getDecorView();
+            ((CheckBox)ReflectionHelpers.getField(activity,"fourViews")).setChecked(false);
             button(root,"Vérifier le détourage").performClick();finishWork(activity);
             File cutout=new File(app.getFilesDir(),"offline-workshop-cutout.png");assertTrue(cutout.length()>0);long modified=cutout.lastModified();
             button(root,"Générer sur ce téléphone").performClick();finishWork(activity);

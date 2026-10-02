@@ -15,7 +15,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V6.0.5"
+        android:label="Modéliseur 3D V6.0.6"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
@@ -45,7 +45,7 @@
             android:screenOrientation="portrait" />
 
         <activity android:name=".SettingsActivity" android:exported="false" />
-        <activity android:name=".Offline3DActivity" android:exported="false" />
+        <activity android:name=".Offline3DActivity" android:theme="@style/Theme.Modeliseur3D.Offline" android:exported="false" />
         <activity android:name=".CloudModelViewerActivity" android:exported="false" />
         <activity android:name=".Cloud3DActivity" android:exported="false" android:screenOrientation="portrait" />
 

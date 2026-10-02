@@ -81,14 +81,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0.5
+      - name: Vérifier l'architecture V6.0.6
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0.5" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.5'" app/build.gradle
-          grep -q "versionCode 41" app/build.gradle
+          grep -q "Modéliseur 3D V6.0.6" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.0.6'" app/build.gradle
+          grep -q "versionCode 42" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -216,10 +216,10 @@ jobs:
           }
           JS
 
-      - name: Publier l'APK V6.0.5
+      - name: Publier l'APK V6.0.6
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0.5-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.0.6-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -241,7 +241,9 @@ jobs:
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
           Trois onglets contrastés : 2.5D, 3D original à quatre images et TRELLIS. Le catalogue de 259 assets reste accessible.
-          Atelier local hors connexion : image vers volume approximatif, réglages de détail/épaisseur, détourage IS-Net optionnel, aperçu et export GLB.
+          Atelier local hors connexion : face, dos, profil droit et profil gauche combinés en une enveloppe 3D texturée. Quatre silhouettes, quatre textures, profondeur IA optionnelle sur chaque vue.
+          Photos, détourages et profondeurs conservés séparément. Thème lisible en mode nuit, compteur 4/4, génération après les quatre imports.
+          Option une image conservée pour relief, volume et vase/bouteille ; aucune donnée existante supprimée.
           Les modèles locaux et téléchargés sont conservés pour être ouverts sans connexion.
           Troisième onglet entièrement local : aucun parcours serveur, aucune connexion requise.
           Nouveau profil objet rond à 360° (vases/bouteilles), contrôle visuel du détourage, cache local réutilisable et arrêt après l’étape en cours.

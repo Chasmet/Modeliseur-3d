@@ -102,8 +102,31 @@ jobs:
           print('Texture visible:',red,blue,green)
           assert min(red,blue,green)>100,'Texture missing, blocked or mapped incorrectly'
           PY
+      - name: Afficher les quatre photographies sur le vrai maillage Android
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/four-viewer.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000004'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          for VIEW in front back right left; do
+            npx --yes agent-browser@0.38.1 click "[data-view='$VIEW']"
+            npx --yes agent-browser@0.38.1 wait 1000
+            npx --yes agent-browser@0.38.1 screenshot "offline-four-$VIEW.png"
+          done
+          npx --yes agent-browser@0.38.1 errors
+          python3 - <<'PY'
+          from PIL import Image
+          predicates={'front':lambda r,g,b:r>160 and g<80 and b<80,'back':lambda r,g,b:b>160 and r<80 and g<80,'right':lambda r,g,b:g>160 and r<80 and b<80,'left':lambda r,g,b:r>160 and g>160 and b<80}
+          for view,predicate in predicates.items():
+              image=Image.open('offline-four-'+view+'.png').convert('RGB')
+              count=sum(predicate(*pixel) for pixel in image.getdata())
+              print('Photographie visible',view,count)
+              assert count>100,'Wrong photograph or missing surface: '+view
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: offline-volume-render
-          path: offline-volume.png
+          path: offline-*.png

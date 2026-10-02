@@ -61,4 +61,20 @@ public class OfflineVolumeMesherTest {
         assertThrows(IllegalArgumentException.class,()->OfflineVolumeMesher.build(new boolean[1],1,1,1,.2f,true));
         assertThrows(IllegalArgumentException.class,()->OfflineVolumeMesher.build(mask,144,144,Float.NaN,.2f,true));
     }
+    @Test public void allFourSilhouettesConstrainTheHullAndOppositeViewsAreMirrored(){
+        int w=12,h=16,d=10;boolean[][] masks={new boolean[w*h],new boolean[w*h],new boolean[d*h],new boolean[d*h]};
+        for(boolean[] mask:masks)Arrays.fill(mask,true);
+        boolean[] original=OfflineFourViewHull.intersect(masks,w,h,d);
+        for(int view=0;view<4;view++){
+            int span=view<2?w:d,index=7*span+3;masks[view][index]=false;
+            boolean[] carved=OfflineFourViewHull.intersect(masks,w,h,d);int removed=0;
+            for(int k=0;k<original.length;k++)if(original[k]&&!carved[k])removed++;
+            assertEquals(view<2?d-2:w-2,removed);
+            int x=view==0?3:view==1?w-1-3:4,z=view==2?d-1-3:view==3?3:4;
+            assertFalse(carved[(7*w+x)*d+z]);masks[view][index]=true;
+        }
+        Arrays.fill(masks[2],false);
+        assertThrows(IllegalArgumentException.class,()->OfflineFourViewHull.intersect(masks,w,h,d));
+        assertThrows(IllegalArgumentException.class,()->OfflineFourViewHull.intersect(masks,129,h,d));
+    }
 }

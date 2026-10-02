@@ -22,6 +22,15 @@ try {
     const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3()), span = Math.max(size.x,size.y,size.z,0.1);
     controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(span*1.2,span*0.7,span*2));
+    for (const button of document.querySelectorAll('[data-view]')) {
+      button.disabled = false;
+      button.onclick = () => {
+        const directions = {front:[0,0,1],back:[0,0,-1],right:[1,0,0],left:[-1,0,0]};
+        controls.target.copy(center);
+        camera.position.copy(center).add(new THREE.Vector3(...directions[button.dataset.view]).multiplyScalar(span*2.2));
+        camera.up.set(0,1,0); controls.update(); dirty = true;
+      };
+    }
     camera.near = span/1000; camera.far = span*100; camera.updateProjectionMatrix(); controls.update();
     clips = gltf.animations; mixer = new THREE.AnimationMixer(gltf.scene);
     dirty = true;
