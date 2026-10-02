@@ -10,7 +10,7 @@ public final class TripoSRField {
     private final float[] density;
     private final float[] low=new float[3],high=new float[3];
     public TripoSRField(float[] density,int side){
-        if(side<16||side>80||density==null||density.length!=side*side*side)throw new IllegalArgumentException("Champ TripoSR invalide.");
+        if(side<16||side>128||density==null||density.length!=side*side*side)throw new IllegalArgumentException("Champ TripoSR invalide.");
         this.density=density;this.side=side;
         int[] min={side,side,side},max={-1,-1,-1};int count=0;
         for(int x=0;x<side;x++)for(int y=0;y<side;y++)for(int z=0;z<side;z++){
@@ -46,7 +46,7 @@ public final class TripoSRField {
     public static TripoSRField read(File file)throws IOException{
         try(DataInputStream in=new DataInputStream(new BufferedInputStream(new FileInputStream(file)))){
             if(in.readInt()!=MAGIC)throw new IOException("Cache TripoSR invalide.");int side=in.readInt();
-            if(side<16||side>80||file.length()!=8L+4L*side*side*side)throw new IOException("Cache TripoSR incomplet.");
+            if(side<16||side>128||file.length()!=8L+4L*side*side*side)throw new IOException("Cache TripoSR incomplet.");
             float[] values=new float[side*side*side];for(int i=0;i<values.length;i++)values[i]=in.readFloat();
             try{return new TripoSRField(values,side);}catch(IllegalArgumentException e){throw new IOException(e.getMessage(),e);}
         }
