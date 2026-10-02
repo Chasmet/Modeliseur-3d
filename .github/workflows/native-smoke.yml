@@ -2,7 +2,7 @@ name: Vérifier les onglets et la mise à jour Android
 on:
   pull_request:
     branches: [main]
-    paths: ['tools/android-smoke/**', 'app/src/main/**', '.github/workflows/native-smoke.yml']
+    paths: ['tools/offline-models/**', 'tools/android-smoke/**', 'app/src/main/**', '.github/workflows/native-smoke.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,14 @@ jobs:
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
           key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+      - name: Mettre en cache la profondeur IA embarquée
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+          key: modeliseur-depth-small-fp32-afb6a5c2
+      - name: Vérifier les poids de profondeur avant compilation
+        run: python3 tools/offline-models/fetch_depth.py
+
       - name: Préparer les tests Android sans modifier l'APK publiée
         run: |
           cp tools/android-smoke/NavigationUpdateTest.java app/src/test/java/com/chasmet/modeliseur3d/NavigationUpdateTest.java

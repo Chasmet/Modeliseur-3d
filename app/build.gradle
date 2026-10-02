@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 40
-        versionName '6.0.4'
+        versionCode 41
+        versionName '6.0.5'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -148,9 +148,17 @@ tasks.register('buildMobileViewer', Exec) {
     inputs.file(rootProject.file('tools/viewer/viewer.js'))
     outputs.file(file('src/main/assets/viewer/viewer.js'))
 }
+tasks.register('downloadOfflineDepthModel', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'python3', 'tools/offline-models/fetch_depth.py'
+    outputs.file(file('src/main/assets/models/depth_anything_v2_small_fp32.onnx'))
+    // Also verify cached bytes each build; no model URL is referenced by Android code.
+    outputs.upToDateWhen { false }
+}
 tasks.named('preBuild').configure {
     dependsOn tasks.named('buildMobileViewer')
     dependsOn tasks.named('downloadAnimeSegmentationModel')
+    dependsOn tasks.named('downloadOfflineDepthModel')
 }
 
 configurations.configureEach {

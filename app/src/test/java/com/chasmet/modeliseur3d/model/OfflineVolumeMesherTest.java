@@ -3,6 +3,17 @@ import java.util.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class OfflineVolumeMesherTest {
+    @Test public void depthChangesFrontGeometryAndItsCacheRejectsCorruption()throws Exception{
+        boolean[] mask=new boolean[20*30];Arrays.fill(mask,true);float[] values={0,1,0,1};OfflineDepthField field=new OfflineDepthField(values,2,2);
+        MeshData mesh=OfflineVolumeMesher.build(mask,20,30,1,.2f,false,field);float min=1,max=0;int front=mesh.getVertexCount()/2;
+        for(int i=0;i<front;i++){min=Math.min(min,mesh.getPositions()[i*3+2]);max=Math.max(max,mesh.getPositions()[i*3+2]);}
+        assertTrue(max-min>.1f);assertEquals(.5f,field.sample(.5f,.5f),1e-5);
+        java.io.File cache=java.io.File.createTempFile("depth-cache",".bin");
+        try{field.write(cache);OfflineDepthField saved=OfflineDepthField.read(cache);assertEquals(.5f,saved.sample(.5f,.5f),1e-5);
+            try(java.io.RandomAccessFile out=new java.io.RandomAccessFile(cache,"rw")){out.seek(12);out.writeFloat(Float.NaN);}
+            assertThrows(java.io.IOException.class,()->OfflineDepthField.read(cache));
+        }finally{cache.delete();}
+    }
     @Test public void revolutionIsClosedAfterWeldingItsSeamAndKeepsTheBottleNeck(){
         int w=80,h=120;boolean[] mask=new boolean[w*h];
         for(int y=3;y<116;y++)for(int x=(y<35?32:12);x<(y<35?48:68);x++)mask[y*w+x]=true;

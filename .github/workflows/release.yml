@@ -3,7 +3,7 @@ name: Publier APK signé avec mise à jour automatique
 on:
   push:
     branches: [agent/trellis-third-tab-auto-update]
-    paths: ['app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', '.github/workflows/release.yml']
+    paths: ['tools/offline-models/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', '.github/workflows/release.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -62,6 +62,14 @@ jobs:
             mv "$PART" "$MODEL"
           fi
 
+      - name: Mettre en cache la profondeur IA embarquée
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+          key: modeliseur-depth-small-fp32-afb6a5c2
+      - name: Vérifier les poids de profondeur avant compilation
+        run: python3 tools/offline-models/fetch_depth.py
+
       - name: Préparer le SDK Android
         shell: bash
         run: |
@@ -73,14 +81,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0.4
+      - name: Vérifier l'architecture V6.0.5
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0.4" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.4'" app/build.gradle
-          grep -q "versionCode 40" app/build.gradle
+          grep -q "Modéliseur 3D V6.0.5" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.0.5'" app/build.gradle
+          grep -q "versionCode 41" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -185,6 +193,7 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
+          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
       - name: Vérifier l'atelier hors connexion et les onglets avant publication
         run: |
@@ -207,10 +216,10 @@ jobs:
           }
           JS
 
-      - name: Publier l'APK V6.0.4
+      - name: Publier l'APK V6.0.5
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0.4-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.0.5-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -237,10 +246,11 @@ jobs:
           Troisième onglet entièrement local : aucun parcours serveur, aucune connexion requise.
           Nouveau profil objet rond à 360° (vases/bouteilles), contrôle visuel du détourage, cache local réutilisable et arrêt après l’étape en cours.
           Ce moteur local géométrique ne constitue pas une inférence du modèle TRELLIS complet. Le MCP est reporté.
-          Détourage IS-Net embarqué testé avec les connexions sortantes interdites.
+          Deux IA embarquées : détourage IS-Net et profondeur Depth Anything V2 Small, toutes deux testées avec les connexions sortantes interdites.
+          Profondeur CPU sur deux threads, cache local réutilisé pour les réglages, aucun téléchargement de modèle dans l’application.
           Réglages > Mise à jour automatique : GitHub Releases publiques, progression et installateur Android.
           Même package et même signature que l'APK 6.0.0 fournie le 1 octobre 2026.
           L'ancienne 5.9.10 possède une autre signature : ne pas la désinstaller pour contourner ce conflit.
-          Les moteurs de reconstruction locale n'ont pas été modifiés.
+          Les deux parcours de reconstruction d’origine restent conservés.
           NOTES
           gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --latest

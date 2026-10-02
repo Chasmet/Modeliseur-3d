@@ -56,6 +56,30 @@ public class OfflineWorkshopTest {
             }
         }finally{image.recycle();}
     }
+    @Test public void bundledDepthAiReallyRunsOfflineAndShapesTheVisibleSurface()throws Exception{
+        Bitmap image=character(false);NeuralDepthEngine.DepthMap map;
+        try(NoNetwork forbidden=new NoNetwork();NeuralDepthEngine engine=new NeuralDepthEngine(RuntimeEnvironment.getApplication(),2,false)){
+            map=engine.estimate(image);
+        }
+        float[] samples=new float[32*32];float low=1,high=0;
+        for(int y=0;y<32;y++)for(int x=0;x<32;x++){
+            float value=map.sample(x/31f,y/31f);assertTrue(Float.isFinite(value));assertTrue(value>=0&&value<=1);
+            samples[y*32+x]=value;low=Math.min(low,value);high=Math.max(high,value);
+        }
+        assertTrue(high-low>.001f);
+        try(NoNetwork forbidden=new NoNetwork();OfflineImageVolume.Prepared cutout=OfflineImageVolume.prepare(image,40,null)){
+            // Estimate again in cutout coordinates, exactly as the production workshop does.
+            try(NeuralDepthEngine engine=new NeuralDepthEngine(RuntimeEnvironment.getApplication(),2,false)){map=engine.estimate(cutout.bitmap);}
+            for(int y=0;y<32;y++)for(int x=0;x<32;x++)samples[y*32+x]=map.sample(x/31f,y/31f);
+            OfflineDepthField field=new OfflineDepthField(samples,32,32);
+            OfflineImageVolume.Result local=OfflineImageVolume.buildPrepared(cutout.bitmap,112,.2f,1,cutout.method,field);
+            assertTrue(local.method.contains("profondeur IA locale"));
+            float min=1,max=0;for(int i=2;i<local.mesh.getPositions().length;i+=3){float z=local.mesh.getPositions()[i];if(z>0){min=Math.min(min,z);max=Math.max(max,z);}}
+            assertTrue(max-min>.001f);
+            File folder=new File("build/offline-fixture");assertTrue(folder.isDirectory()||folder.mkdirs());
+            ExternalViewerGlbExporter.write(new File(folder,"00000000000000000000000000000003.glb"),local.mesh,local.texture);local.texture.recycle();
+        }finally{image.recycle();}
+    }
     @Test public void cutoutCanBeReusedForAllThreeLocalShapesWithoutNetwork() throws Exception {
         Bitmap image=character(false);
         try(OfflineImageVolume.Prepared prepared=OfflineImageVolume.prepare(image,40,null);NoNetwork forbidden=new NoNetwork()){
@@ -92,6 +116,18 @@ public class OfflineWorkshopTest {
             id=app.getSharedPreferences("offline_workshop",0).getString("last","");assertTrue(id.matches("[a-f0-9]{32}"));
             assertTrue(new File(app.getFilesDir(),"cloud_models/"+id+".glb").length()>0);assertEquals(modified,cutout.lastModified());
             assertTrue(button(root,"Exporter mon GLB").isEnabled());assertTrue(button(root,"Ouvrir mon modèle").isEnabled());
+            File depth=new File(app.getFilesDir(),"offline-workshop-depth.bin");assertEquals(12+128*128*4,depth.length());long depthModified=depth.lastModified();
+            ((SeekBar)ReflectionHelpers.getField(activity,"depth")).setProgress(70);
+            button(root,"Générer sur ce téléphone").performClick();finishWork(activity);
+            assertEquals(depthModified,depth.lastModified());assertEquals(modified,cutout.lastModified());
+            id=app.getSharedPreferences("offline_workshop",0).getString("last","");
+            // Hold the queue so that cancellation deterministically arrives before the next operation.
+            java.util.concurrent.ExecutorService worker=ReflectionHelpers.getField(activity,"worker");
+            java.util.concurrent.CountDownLatch waiting=new java.util.concurrent.CountDownLatch(1),release=new java.util.concurrent.CountDownLatch(1);
+            worker.submit(()->{waiting.countDown();try{release.await();}catch(InterruptedException e){Thread.currentThread().interrupt();}});
+            assertTrue(waiting.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            button(root,"Générer sur ce téléphone").performClick();button(root,"Arrêter après").performClick();release.countDown();finishWork(activity);
+            assertEquals(id,app.getSharedPreferences("offline_workshop",0).getString("last",""));
         }
         try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
             assertEquals(id,ReflectionHelpers.getField(controller.get(),"lastId"));

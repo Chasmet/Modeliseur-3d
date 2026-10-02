@@ -58,6 +58,9 @@ public final class OfflineImageVolume {
     }
     /** Uses a checked, cached local PNG cutout; no inference is repeated for adjustments. */
     public static Result buildPrepared(Bitmap source,int detail,float depth,int shape,String method){
+        return buildPrepared(source,detail,depth,shape,method,null);
+    }
+    public static Result buildPrepared(Bitmap source,int detail,float depth,int shape,String method,OfflineDepthField field){
         int cw=source.getWidth(),ch=source.getHeight();
         if(cw<3||ch<3||cw>1024||ch>1024||shape<0||shape>2)throw new IllegalArgumentException("Détourage local invalide.");
         int[] pixels=new int[cw*ch];source.getPixels(pixels,0,cw,0,0,cw,ch);
@@ -72,10 +75,10 @@ public final class OfflineImageVolume {
             grid[y*gw+x]=hits>=3;
         }
         MeshData mesh=shape==2?OfflineRevolutionMesher.build(grid,gw,gh,cw/(float)ch,Math.min(64,longest/2))
-                :OfflineVolumeMesher.build(grid,gw,gh,cw/(float)ch,depth,shape==0);
+                :OfflineVolumeMesher.build(grid,gw,gh,cw/(float)ch,depth,shape==0,field);
         Bitmap texture=source.copy(Bitmap.Config.ARGB_8888,false);
         if(texture==null)throw new IllegalStateException("Texture locale indisponible.");
-        return new Result(mesh,texture,method+(shape==2?" • objet de révolution, symétrie supposée":" • volume approximatif, dos déduit"));
+        return new Result(mesh,texture,method+(field!=null&&shape!=2?" + profondeur IA locale":"")+(shape==2?" • objet de révolution, symétrie supposée":" • volume approximatif, dos déduit"));
     }
     private static boolean similar(int p,int r,int g,int b,int tolerance){int dr=Color.red(p)-r,dg=Color.green(p)-g,db=Color.blue(p)-b;return dr*dr+dg*dg+db*db<=tolerance*tolerance;}
 }

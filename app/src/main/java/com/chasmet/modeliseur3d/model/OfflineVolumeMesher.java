@@ -6,6 +6,9 @@ import java.util.Arrays;
 public final class OfflineVolumeMesher {
     private OfflineVolumeMesher() {}
     public static MeshData build(boolean[] mask, int width, int height, float aspect, float thickness, boolean rounded) {
+        return build(mask,width,height,aspect,thickness,rounded,null);
+    }
+    public static MeshData build(boolean[] mask,int width,int height,float aspect,float thickness,boolean rounded,OfflineDepthField depth) {
         if(width<3||height<3||width>160||height>160||mask.length!=width*height
                 ||!Float.isFinite(aspect)||aspect<=0||aspect>8||!Float.isFinite(thickness)||thickness<0.01f||thickness>0.6f)
             throw new IllegalArgumentException("Dimensions de volume mobile invalides.");
@@ -44,7 +47,8 @@ public final class OfflineVolumeMesher {
             float u=x/(float)width,v=y/(float)height;
             for(int side=0;side<2;side++){
                 int p=(id+side*vertices)*3,t=(id+side*vertices)*2;
-                positions[p]=(u-.5f)*2*aspect;positions[p+1]=1-v*2;positions[p+2]=side==0?z:-z;
+                float front=depth==null?z:(rounded?z*(.45f+.55f*depth.sample(u,v)):thickness*(.12f+.88f*depth.sample(u,v)));
+                positions[p]=(u-.5f)*2*aspect;positions[p+1]=1-v*2;positions[p+2]=side==0?front:(depth!=null&&!rounded?-.015f:-z);
                 uv[t]=u;uv[t+1]=v;
             }
         }
