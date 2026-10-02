@@ -6,19 +6,27 @@ const status = document.querySelector('#status'), select = document.querySelecto
 try {
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0x101725);
   const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 1000);
-  const renderer = new THREE.WebGLRenderer({antialias: false, powerPreference: 'low-power'});
+  const renderer = new THREE.WebGLRenderer({antialias: true, powerPreference: 'low-power'});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight);
   document.body.appendChild(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x657189, 2));
   const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(3,5,4); scene.add(light);
   const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
   let mixer, action, clips = [], running = true, last = 0, dirty = true;
+  const meshes=[], clay=new THREE.MeshStandardMaterial({color:0xbac7d8,roughness:0.95,metalness:0});
+  const wire=clay.clone(); wire.wireframe=true;
+  const appearance=document.querySelector('#appearance');
+  appearance.onchange=()=>{for(const mesh of meshes)mesh.material=appearance.value==='texture'?mesh.userData.originalMaterial:appearance.value==='wire'?wire:clay;dirty=true;};
+  const quality=document.querySelector('#quality'); let sharp=false;
+  quality.onclick=()=>{sharp=!sharp;renderer.setPixelRatio(Math.min(devicePixelRatio,sharp?2:1.5));renderer.setSize(innerWidth,innerHeight);quality.textContent=sharp?'Qualité : précise':'Qualité : économique';dirty=true;};
   controls.addEventListener('change', () => { dirty = true; });
   window.viewerActive = active => { running = active; dirty = true; };
   const id = new URLSearchParams(location.search).get('id');
   if (!/^[a-f0-9]{32}$/.test(id)) throw new Error('Identifiant GLB invalide.');
   new GLTFLoader().load('/model/' + id + '.glb', gltf => {
     scene.add(gltf.scene);
+    gltf.scene.traverse(object=>{if(object.isMesh){object.userData.originalMaterial=object.material;meshes.push(object);}});
+    appearance.disabled=false;
     const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3()), span = Math.max(size.x,size.y,size.z,0.1);
     controls.target.copy(center); camera.position.copy(center).add(new THREE.Vector3(span*1.2,span*0.7,span*2));
@@ -36,6 +44,8 @@ try {
     dirty = true;
     for (const clip of clips) { const option = document.createElement('option'); option.textContent = clip.name; select.appendChild(option); }
     status.textContent = clips.length ? 'Rotation : un doigt • zoom : deux doigts' : 'Sans animation • rotation et zoom tactiles';
+    const metadata=gltf.userData;
+    if(metadata?.projectName || metadata?.engine){const detail=document.querySelector('#provenance');detail.textContent=[metadata.projectName,metadata.engine,metadata.appVersion?'v'+metadata.appVersion:''].filter(Boolean).join(' · ');}
     document.querySelector('#pause').disabled = !clips.length;
   }, undefined, () => { status.textContent = 'Ce GLB ne peut pas être chargé. Tu peux toujours l’exporter.'; });
   select.onchange = () => {

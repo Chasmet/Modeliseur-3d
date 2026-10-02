@@ -15,12 +15,13 @@ public final class HomeActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+        ((TextView)findViewById(R.id.homeVersion)).setText("Modéliseur 3D V"+UpdateManager.currentVersion(this));
 
         TabHost tabs = findViewById(android.R.id.tabhost);
         tabs.setup();
         tabs.addTab(tabs.newTabSpec("25d").setIndicator(tabTitle("2.5D")).setContent(R.id.tab25d));
         tabs.addTab(tabs.newTabSpec("3d").setIndicator(tabTitle("3D · 4 images")).setContent(R.id.tab3d));
-        tabs.addTab(tabs.newTabSpec("trellis").setIndicator(tabTitle("TRELLIS")).setContent(R.id.tabTrellis));
+        tabs.addTab(tabs.newTabSpec("trellis").setIndicator(tabTitle("IA locale")).setContent(R.id.tabTrellis));
         tabs.setCurrentTab(savedInstanceState != null ? savedInstanceState.getInt("homeTab", 1)
                 : getPreferences(MODE_PRIVATE).getInt("homeTab", 1));
         tabs.setOnTabChangedListener(tag -> getPreferences(MODE_PRIVATE).edit().putInt("homeTab", tabs.getCurrentTab()).apply());

@@ -23,7 +23,7 @@ public final class OfflineFourViewVolume {
         return mask;
     }
     // Extend photograph colours into the transparent border to avoid dark seams.
-    private static int[] extend(Bitmap image) {
+    static int[] extend(Bitmap image) {
         int w=image.getWidth(),h=image.getHeight();int[] p=new int[w*h],queue=new int[w*h];
         boolean[] seen=new boolean[p.length];image.getPixels(p,0,w,0,0,w,h);int end=0;
         for(int i=0;i<p.length;i++)if((p[i]>>>24)>40){seen[i]=true;p[i]|=0xff000000;queue[end++]=i;}

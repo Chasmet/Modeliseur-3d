@@ -107,6 +107,7 @@ public final class TripoSREngine {
                 catch(IOException e){fieldFile.delete();}
             }
             if(fields[i]==null){
+                needsDecoder=true;
                 try{scenes[i]=readScene(caches[i]);needsDecoder=true;}
                 catch(IOException e){caches[i].delete();marker.delete();deleteDerived(caches[i]);needsEncoder=true;}
             }

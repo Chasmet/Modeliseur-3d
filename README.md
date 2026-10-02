@@ -53,3 +53,18 @@ Le troisième onglet estime séparément la profondeur relative de chacune des q
 La face cachée reste une approximation : ces deux IA ne constituent pas une génération TRELLIS complète. Le moteur de profondeur historique garde ses paramètres par défaut ; seul l’atelier utilise le nouveau constructeur avec budget CPU explicite. Les performances sur l’appareil physique restent à mesurer.
 
 Le lecteur limite les rafraîchissements à 30 FPS pendant les mouvements et animations ; une scène au repos est redessinée uniquement lorsqu’elle change.
+
+
+### Atelier IA local 6.3.0
+
+VersionCode 46, package `com.chasmet.modeliseur3d`. Les deux moteurs d’origine restent conservés. Le troisième atelier utilise les quatre photos avec TripoSR embarqué sur CPU, puis une fusion propre à l’application. TripoSR reste entraîné sur une image ; ce moteur ne remplace pas une acquisition photogrammétrique complète et n’est pas TRELLIS.
+
+- Import avec les huit orientations EXIF via AndroidX ExifInterface (Apache-2.0), rotation et miroir indépendants par vue. Les PNG détourés gardent leurs bords semi-transparents.
+- Recalage **2D limité** des silhouettes opposées : décalage maximal quatre pixels sur une grille 96², échelle ±4 %. Les champs appris sont placés suivant les contours mesurés. Ce recalage ne récupère pas les caméras en perspective. Une tolérance d’environ un pixel limite les coupures dues aux petits écarts de contours ; les poses différentes restent une limite.
+- Projection des quatre photos avec cartes de profondeur de visibilité 256², interpolation et raccords pondérés. Atlas 2048². Le contrôle Géométrie sans texture permet d’examiner la forme ; Maillage expose sa triangulation.
+- Projets nommés, version et moteur dans les métadonnées `extras` des nouveaux GLB. Les exports historiques des deux autres modes restent identiques.
+- Cache neuronal partiellement corrompu reconstruit par vue, nettoyage optionnel des calculs sans supprimer photos/GLB/poids, CPU maintenu éveillé pendant le travail. Une rotation d’écran conserve l’atelier. Après une fermeture par Android, relancer Générer réutilise les étapes déjà mises en cache ; le calcul ne reprend pas automatiquement en arrière-plan.
+
+Vérifications ajoutées : recalage avec écart connu et espace entre les jambes, distance signée avec trou, rejet d’une surface masquée, proportions et fermeture d’un ellipsoïde, huit orientations EXIF, alpha PNG, métadonnées GLB et réparation réelle du cache neuronal. Les connexions sortantes sont interdites pendant les inférences du test TripoSR. Ces références synthétiques ne mesurent pas la fidélité sur les photos d’un utilisateur, ni la vitesse et la chauffe sur son téléphone.
+
+Pour lancer toutes les vérifications Android de bureau : `./gradlew --no-daemon -PofflineSmoke testDebugUnitTest`. Les dépendances de test et les fixtures ne sont pas intégrées à l’APK.

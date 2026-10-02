@@ -25,7 +25,7 @@ public final class OfflineImageVolume {
         int w=source.getWidth(),h=source.getHeight();
         if(w>1024||h>1024||w<3||h<3)throw new IllegalArgumentException("Image locale limitée à 1 024 pixels par côté.");
         int[] pixels=new int[w*h];source.getPixels(pixels,0,w,0,0,w,h);
-        boolean transparent=false;for(int p:pixels)if(Color.alpha(p)<40){transparent=true;break;}
+        boolean transparent=hasUsefulTransparency(source);
         boolean[] mask=new boolean[pixels.length];String method;
         if(ai!=null){method="Détourage IA local IS-Net";
             for(int y=0;y<h;y++)for(int x=0;x<w;x++)mask[y*w+x]=Color.alpha(pixels[y*w+x])>40&&ai.sampleNormalized(x/(float)(w-1),y/(float)(h-1))>=.5f;
@@ -52,7 +52,7 @@ public final class OfflineImageVolume {
         left=Math.max(0,left-2);top=Math.max(0,top-2);right=Math.min(w-1,right+2);bottom=Math.min(h-1,bottom+2);
         int cw=right-left+1,ch=bottom-top+1;
         int[] crop=new int[cw*ch];for(int y=0;y<ch;y++)for(int x=0;x<cw;x++){
-            int i=(top+y)*w+left+x;crop[y*cw+x]=mask[i]?pixels[i]|0xFF000000:Color.TRANSPARENT;}
+            int i=(top+y)*w+left+x;crop[y*cw+x]=mask[i]?pixels[i]:Color.TRANSPARENT;}
         Bitmap texture=Bitmap.createBitmap(cw,ch,Bitmap.Config.ARGB_8888);texture.setPixels(crop,0,cw,0,0,cw,ch);
         return new Prepared(texture,method);
     }
@@ -81,4 +81,17 @@ public final class OfflineImageVolume {
         return new Result(mesh,texture,method+(field!=null&&shape!=2?" + profondeur IA locale":"")+(shape==2?" • objet de révolution, symétrie supposée":" • volume approximatif, dos déduit"));
     }
     private static boolean similar(int p,int r,int g,int b,int tolerance){int dr=Color.red(p)-r,dg=Color.green(p)-g,db=Color.blue(p)-b;return dr*dr+dg*dg+db*db<=tolerance*tolerance;}
+    /** Ignore isolated transparent pixels; require a meaningful transparent background. */
+    public static boolean hasUsefulTransparency(Bitmap bitmap){
+        int w=bitmap.getWidth(),h=bitmap.getHeight(),clear=0,border=0,borderClear=0;
+        int[] row=new int[w];
+        for(int y=0;y<h;y++){
+            bitmap.getPixels(row,0,w,0,y,w,1);
+            for(int x=0;x<w;x++){
+                boolean empty=(row[x]>>>24)<40;if(empty)clear++;
+                if(x==0||y==0||x==w-1||y==h-1){border++;if(empty)borderClear++;}
+            }
+        }
+        return clear>=Math.max(8,w*h/200)&&borderClear>=border*.1f;
+    }
 }

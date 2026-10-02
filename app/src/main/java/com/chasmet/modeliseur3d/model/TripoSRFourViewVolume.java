@@ -26,6 +26,16 @@ public final class TripoSRFourViewVolume {
         float value=.40f*best+.40f*second+.20f*(weighted/weight);
         return Math.max(0,Math.min(1,value));
     }
+    public static float combineCalibrated(TripoSRField[] fields,FourViewCalibration calibration,float x,float y,float z){
+        float best=0,second=0,sum=0,weight=0;
+        for(int view=0;view<4;view++){
+            float probability=calibration.probability(fields[view],view,x,y,z);
+            float agreement=view<2?calibration.frontAgreement:calibration.profileAgreement;
+            float ww=.35f+.65f*agreement;sum+=ww*probability;weight+=ww;
+            if(probability>=best){second=best;best=probability;}else if(probability>second)second=probability;
+        }
+        return .40f*best+.40f*second+.20f*sum/weight;
+    }
 
     private static int find(int[] parent,int value){
         int root=value;while(parent[root]!=root)root=parent[root];
@@ -73,23 +83,33 @@ public final class TripoSRFourViewVolume {
         float fa=Math.max(images[0].getWidth()/(float)images[0].getHeight(),images[1].getWidth()/(float)images[1].getHeight())*1.08f;
         float sa=Math.max(images[2].getWidth()/(float)images[2].getHeight(),images[3].getWidth()/(float)images[3].getHeight())*1.08f;
         float scale=Math.max(.65f,Math.min(1.35f,profileScale));int h=Math.max(48,Math.min(112,requested));
+        boolean[][] measured=new boolean[4][];
+        for(int view=0;view<4;view++)measured[view]=OfflineFourViewVolume.silhouette(images[view],96,96,view<2?fa:sa);
+        FourViewCalibration calibration=new FourViewCalibration(measured,96);
         if(Runtime.getRuntime().maxMemory()<192L*1024*1024)h=Math.min(h,64);
         MeshData mesh=null;int w=0,d=0;
         for(int attempt=0;attempt<3;attempt++){
             if(Thread.currentThread().isInterrupted())throw new CancellationException();
             w=Math.max(16,Math.min(128,Math.round(h*fa)));d=Math.max(16,Math.min(128,Math.round(h*sa)));
-            boolean[][] masks={
-                OfflineFourViewVolume.silhouette(images[0],w,h,fa),
-                OfflineFourViewVolume.silhouette(images[1],w,h,fa),
-                OfflineFourViewVolume.silhouette(images[2],d,h,sa),
-                OfflineFourViewVolume.silhouette(images[3],d,h,sa)
-            };
-            boolean[] hull=OfflineFourViewHull.intersect(masks,w,h,d);float[] values=new float[hull.length];
+            boolean[][] masks=new boolean[4][];float[][] distances=new float[4][];
+            for(int view=0;view<4;view++){
+                int span=view<2?w:d;masks[view]=calibration.alignedMask(view,span,h);
+                distances[view]=FourViewCalibration.distances(masks[view],span,h);
+            }
+            float[] values=new float[w*h*d];
             for(int y=1;y<h-1;y++){
                 if(Thread.currentThread().isInterrupted())throw new CancellationException();
                 for(int x=1;x<w-1;x++)for(int z=1;z<d-1;z++){
                     int i=(y*w+x)*d+z;
-                    if(hull[i])values[i]=combine(fields,(2f*x/(w-1)-1)/.92f,(1-2f*y/(h-1))/.92f,(2f*z/(d-1)-1)/.92f);
+                    // One-pixel signed contour tolerance avoids amputating a thin limb
+                    // solely because opposite masks disagree by a subpixel amount.
+                    float contour=Math.min(Math.min(distances[0][y*w+x],distances[1][y*w+w-1-x]),
+                        Math.min(distances[2][y*d+d-1-z],distances[3][y*d+z]));
+                    if(contour<=-1)continue;
+                    float xx=2f*x/(w-1)-1,yy=1-2f*y/(h-1),zz=2f*z/(d-1)-1;
+                    float neural=combineCalibrated(fields,calibration,xx,yy,zz);
+                    float support=Math.max(0,Math.min(1,.76f+.5f*contour));
+                    values[i]=Math.min(neural,support);
                 }
             }
             try{mesh=OfflineHullMesher.buildField(values,w,h,d);break;}
@@ -105,7 +125,7 @@ public final class TripoSRFourViewVolume {
             float nx=n[i]/sx,ny=n[i+1],nz=n[i+2]/sz,len=(float)Math.sqrt(nx*nx+ny*ny+nz*nz);
             if(len>1e-8f){n[i]=nx/len;n[i+1]=ny/len;n[i+2]=nz/len;}
         }
-        return OfflineFourViewVolume.texture(mesh,images,fa,sa,scale,
-            "TripoSR IA 3D V6.2 · 4 triplanes appris + fusion multivue robuste + silhouettes + texture HD · "+fields[0].side+"³ neuronal · CPU local, sans serveur");
+        return VisibilityPhotoTexture.bake(mesh,images,fa,sa,scale,calibration,
+            "TripoSR IA 3D · 4 vues recalées · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · CPU local");
     }
 }

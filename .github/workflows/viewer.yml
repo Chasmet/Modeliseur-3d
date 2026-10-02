@@ -32,6 +32,12 @@ jobs:
           npx --yes agent-browser@0.38.1 wait --load networkidle
           npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || document.querySelector("#clips").options.length !== 17 || !document.querySelector("#status").textContent.startsWith("Rotation")) throw new Error("GLB non chargé ou animations absentes"); return "GLB + 16 animations chargés"; })()'
           npx --yes agent-browser@0.38.1 select '#clips' Walk
+          npx --yes agent-browser@0.38.1 select '#appearance' clay
+          npx --yes agent-browser@0.38.1 eval '(() => { if (document.querySelector("#appearance").disabled || document.querySelector("#appearance").value !== "clay") throw new Error("Affichage géométrie indisponible"); return "Géométrie sans texture sélectionnée"; })()'
+          npx --yes agent-browser@0.38.1 select '#appearance' wire
+          npx --yes agent-browser@0.38.1 click '#quality'
+          npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("#quality").textContent.includes("précise")) throw new Error("Qualité indisponible"); return "Maillage et qualité précise sélectionnés"; })()'
+          npx --yes agent-browser@0.38.1 select '#appearance' texture
           npx --yes agent-browser@0.38.1 screenshot viewer.png
           npx --yes agent-browser@0.38.1 snapshot -i
           npx --yes agent-browser@0.38.1 errors
