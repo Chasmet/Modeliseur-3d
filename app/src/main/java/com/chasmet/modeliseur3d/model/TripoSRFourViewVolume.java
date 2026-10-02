@@ -77,15 +77,25 @@ public final class TripoSRFourViewVolume {
         return new MeshData(p,n,uv,out);
     }
 
+    public static FourViewCalibration calibrate(Bitmap[] images){
+        if(images==null||images.length!=4)throw new IllegalArgumentException("Quatre vues requises.");
+        for(Bitmap image:images)if(image==null||image.isRecycled())throw new IllegalArgumentException("Vue illisible.");
+        float fa=Math.max(images[0].getWidth()/(float)images[0].getHeight(),images[1].getWidth()/(float)images[1].getHeight())*1.08f;
+        float sa=Math.max(images[2].getWidth()/(float)images[2].getHeight(),images[3].getWidth()/(float)images[3].getHeight())*1.08f;
+        boolean[][] measured=new boolean[4][];
+        for(int view=0;view<4;view++)measured[view]=OfflineFourViewVolume.silhouette(images[view],96,96,view<2?fa:sa);
+        return new FourViewCalibration(measured,96);
+    }
     public static OfflineImageVolume.Result build(Bitmap[] images,TripoSRField[] fields,int requested,float profileScale)throws Exception{
+        return build(images,fields,requested,profileScale,true);
+    }
+    public static OfflineImageVolume.Result build(Bitmap[] images,TripoSRField[] fields,int requested,float profileScale,boolean smoothing)throws Exception{
         if(images==null||images.length!=4||fields==null||fields.length!=4)throw new IllegalArgumentException("Ajoute les quatre vues du même objet.");
         for(int i=0;i<4;i++)if(images[i]==null||images[i].isRecycled()||fields[i]==null)throw new IllegalArgumentException("Une forme IA est absente.");
         float fa=Math.max(images[0].getWidth()/(float)images[0].getHeight(),images[1].getWidth()/(float)images[1].getHeight())*1.08f;
         float sa=Math.max(images[2].getWidth()/(float)images[2].getHeight(),images[3].getWidth()/(float)images[3].getHeight())*1.08f;
         float scale=Math.max(.65f,Math.min(1.35f,profileScale));int h=Math.max(48,Math.min(112,requested));
-        boolean[][] measured=new boolean[4][];
-        for(int view=0;view<4;view++)measured[view]=OfflineFourViewVolume.silhouette(images[view],96,96,view<2?fa:sa);
-        FourViewCalibration calibration=new FourViewCalibration(measured,96);
+        FourViewCalibration calibration=calibrate(images);
         if(Runtime.getRuntime().maxMemory()<192L*1024*1024)h=Math.min(h,64);
         MeshData mesh=null;int w=0,d=0;
         for(int attempt=0;attempt<3;attempt++){
@@ -125,7 +135,9 @@ public final class TripoSRFourViewVolume {
             float nx=n[i]/sx,ny=n[i+1],nz=n[i+2]/sz,len=(float)Math.sqrt(nx*nx+ny*ny+nz*nz);
             if(len>1e-8f){n[i]=nx/len;n[i+1]=ny/len;n[i+2]=nz/len;}
         }
+        OfflineMeshFinisher.Result finished=OfflineMeshFinisher.finish(mesh,smoothing,.8f/(h-1));
+        mesh=finished.mesh;
         return VisibilityPhotoTexture.bake(mesh,images,fa,sa,scale,calibration,
-            "TripoSR IA 3D · 4 vues recalées · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · CPU local");
+            "TripoSR IA 3D · 4 vues recalées · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s)");
     }
 }

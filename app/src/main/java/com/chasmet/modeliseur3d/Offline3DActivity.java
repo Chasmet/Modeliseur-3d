@@ -21,7 +21,7 @@ import java.util.concurrent.*;
 public final class Offline3DActivity extends AppCompatActivity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private TextView status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
-    private Spinner quality,shape,engine;private Button inspect,cancel;private CheckBox ai,depthAi;private Button generate,open,export,choose,rotate,gallery;
+    private Spinner quality,shape,engine;private Button inspect,compare,cancel;private CheckBox ai,depthAi,smoothing;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
     private final Button[] choices=new Button[4],rotations=new Button[4];
     private final Button[] mirrors=new Button[4];
@@ -100,6 +100,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         text(p,"TripoSR, IS-Net et Depth Anything sont embarqués dans l’APK. TripoSR calcule les quatre vues successivement sur CPU ; le premier calcul peut prendre plusieurs minutes. Garde l’application ouverte. Les formes apprises sont conservées pour les réglages suivants.",14);
         text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
         text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
+        smoothing=new CheckBox(this);smoothing.setText("Lissage léger du maillage IA");smoothing.setChecked(prefs().getBoolean("smoothing",true));p.addView(smoothing);
+        text(p,"Le lissage réduit les bosses de la grille sans assembler des morceaux séparés. Il réutilise les formes IA en cache. Désactive-le pour garder toute la rugosité du champ appris.",14);
+        compare=button(p,"Comparer les silhouettes des quatre vues",this::compareSilhouettes);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
         generate=button(p,"Générer sur ce téléphone",this::generate);
         cancel=button(p,"Arrêter après l’étape en cours",()->{cancelled=true;Thread thread=runningThread;if(thread!=null)thread.interrupt();status.setText("Arrêt demandé… Les modèles enregistrés sont conservés.");cancel.setEnabled(false);});
@@ -137,7 +140,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         depth.setEnabled(!busy&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
         tolerance.setEnabled(!busy);quality.setEnabled(!busy);shape.setEnabled(!busy&&!multiple);shape.setVisibility(multiple?View.GONE:View.VISIBLE);
         ai.setEnabled(!busy);engine.setEnabled(!busy);fourViews.setEnabled(!busy&&!learned);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
-        projectName.setEnabled(!busy);
+        projectName.setEnabled(!busy);compare.setEnabled(!busy);smoothing.setEnabled(!busy&&learned);smoothing.setVisibility(learned?View.VISIBLE:View.GONE);
     }
     private void saveBitmap(Bitmap bitmap,File target)throws IOException{
         File part=new File(target.getPath()+".part");try{
@@ -169,6 +172,35 @@ public final class Offline3DActivity extends AppCompatActivity {
     }
     private static boolean hasTransparency(Bitmap bitmap){
         return OfflineImageVolume.hasUsefulTransparency(bitmap);
+    }
+    private void compareSilhouettes(){
+        if(busy)return;
+        for(int slot=0;slot<4;slot++)if(!source(slot).isFile()){message("Ajoute la vue "+VIEWS[slot]+" pour comparer les silhouettes.");return;}
+        int t=tolerance.getProgress()+8;boolean useAi=ai.isChecked();
+        message("Comparaison locale des quatre silhouettes…");
+        work(()->{
+            Bitmap[] images=new Bitmap[4];
+            try{
+                for(int slot=0;slot<4;slot++){checkpoint();File ready=prepareCutout(slot,t,useAi);images[slot]=BitmapFactory.decodeFile(ready.getAbsolutePath());}
+                FourViewCalibration calibration=TripoSRFourViewVolume.calibrate(images);checkpoint();
+                int size=96;boolean[][] masks=new boolean[4][];for(int v=0;v<4;v++)masks[v]=calibration.alignedMask(v,size,size);
+                int[] colours=new int[size*size*2];
+                for(int pair=0;pair<2;pair++)for(int y=0;y<size;y++)for(int x=0;x<size;x++){
+                    boolean a=masks[pair*2][y*size+x],b=masks[pair*2+1][y*size+size-1-x];
+                    colours[y*size*2+pair*size+x]=a&&b?0xff2db780:a?0xfff46ca0:b?0xff64a7ff:0xff18202e;
+                }
+                Bitmap overlay=Bitmap.createBitmap(colours,size*2,size,Bitmap.Config.ARGB_8888);
+                String agreement="Face / dos : "+Math.round(calibration.frontAgreement*100)+" % · profils : "+Math.round(calibration.profileAgreement*100)+" %";
+                runOnUiThread(()->{
+                    if(isDestroyed()||isFinishing()){overlay.recycle();return;}
+                    LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);int pad=(int)(16*getResources().getDisplayMetrics().density);content.setPadding(pad,pad,pad,pad);
+                    text(content,agreement,16);text(content,"À gauche : face/dos. À droite : profils. Vert : contours communs ; rose et bleu : écarts. Vérifie la même pose, l’objet entier et le sens des profils. Cet accord de silhouettes ne mesure pas la fidélité 3D.",14);
+                    ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setImageBitmap(overlay);content.addView(image,new LinearLayout.LayoutParams(-1,pad*12));
+                    var dialog=new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Comparaison avant calcul IA").setView(content).setPositiveButton("Fermer",null).create();dialog.setOnDismissListener(d->overlay.recycle());dialog.show();
+                });
+                message(agreement+(Math.min(calibration.frontAgreement,calibration.profileAgreement)<.65f?" · Écarts importants : vérifie les photos avant de lancer l’IA.":" · Comparaison disponible sans lancer TripoSR."));
+            }finally{for(Bitmap image:images)if(image!=null)image.recycle();}
+        });
     }
     private void inspectCutout(){
         int t=tolerance.getProgress()+8,limit=fourViews.isChecked()?4:1;boolean useAi=ai.isChecked();
@@ -222,6 +254,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     }
     private void generate(){
         int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean learned=engine.getSelectedItemPosition()==0,multiple=fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
+        boolean smooth=smoothing.isChecked();prefs().edit().putBoolean("smoothing",smooth).apply();
         String project=projectName.getText().toString().trim();if(project.length()>80)project=project.substring(0,80);final String savedProject=project;
         prefs().edit().putString("projectName",savedProject).apply();
         prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind).putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
@@ -245,7 +278,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                     TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,bitmaps,caches,keys,neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
                     });checkpoint();message("Fusion multivue "+neuralDetail+"³ et construction du maillage texturé HD…");
-                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale);
+                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale,smooth);
                 }else{
                 message("Construction locale du maillage et des textures…");
                 result=multiple?OfflineFourViewVolume.build(bitmaps,new int[]{64,88,112}[selected],profileScale,fields)
@@ -255,7 +288,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                 org.json.JSONObject provenance=new org.json.JSONObject().put("appVersion",UpdateManager.currentVersion(this))
                     .put("engine",learned?"TripoSR":multiple?"Silhouettes":"Volume local").put("method",result.method)
                     .put("projectName",savedProject).put("localOnly",true).put("inputViews",bitmaps.length)
-                    .put("detail",selected).put("profileScale",profileScale).put("generatedAt",System.currentTimeMillis());
+                    .put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",profileScale).put("generatedAt",System.currentTimeMillis());
                 ExternalViewerGlbExporter.write(part,result.mesh,result.texture,provenance);
                 if(part.length()>64L*1024*1024)throw new IOException("Le modèle dépasse la limite mobile de 64 Mo.");
                 checkpoint();if(!part.renameTo(output))throw new IOException("Modèle non enregistré.");
@@ -283,7 +316,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     @Override protected void onPause(){
         prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
                 .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",fourViews.isChecked()).apply();
-        prefs().edit().putString("projectName",projectName.getText().toString()).apply();
+        prefs().edit().putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
         super.onPause();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putInt("selectedSlot",selectedSlot);super.onSaveInstanceState(state);}

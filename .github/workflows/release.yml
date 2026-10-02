@@ -97,14 +97,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.3.0
+      - name: Vérifier l'architecture V6.3.1
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.3.0" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.3.0'" app/build.gradle
-          grep -q "versionCode 46" app/build.gradle
+          grep -q "Modéliseur 3D V6.3.1" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.3.1'" app/build.gradle
+          grep -q "versionCode 47" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -147,7 +147,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.3.0",
+                  "User-Agent": "Modeliseur3D-CI/6.3.1",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -231,10 +231,10 @@ jobs:
           }
           JS
 
-      - name: Publier l'APK V6.3.0
+      - name: Publier l'APK V6.3.1
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.3.0-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.3.1-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -263,7 +263,8 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          Nouveau dans 6.3.0 : orientation EXIF corrigée, miroir par vue, recalage limité des silhouettes opposées, contours adoucis et projection des photos avec contrôle de visibilité et raccords pondérés.
+          Nouveau dans 6.3.1 : lissage léger optionnel et borné, orientation cohérente des triangles et normales recalculées avant projection des textures. Comparaison visuelle des silhouettes avant le calcul TripoSR et nombre de parties séparées dans les informations du modèle. Les formes IA en cache sont réutilisées.
+          Fonctions conservées de 6.3.0 : orientation EXIF corrigée, miroir par vue, recalage limité des silhouettes opposées, contours adoucis et projection des photos avec contrôle de visibilité et raccords pondérés.
           Aperçu : Texture, Géométrie et Maillage, avec qualité réglable. Projets nommés, informations du moteur dans les GLB, récupération des caches corrompus, rotation de l’écran sans interruption et nettoyage des calculs sans supprimer les photos ni les modèles.
           Troisième onglet : vraie IA TripoSR embarquée, sans serveur ni téléchargement de poids sur Android. Encodeur ONNX 4 bits et décodeur NeRF float32, inférés sur CPU.
           Quatre photos obligatoires en mode TripoSR : face, dos, profil droit et profil gauche. Chaque photo produit une forme apprise. Les formes alignées sont combinées avec les quatre silhouettes et textures réelles.

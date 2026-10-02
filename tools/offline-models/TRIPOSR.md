@@ -1,6 +1,6 @@
 # Reconstruction apprise dans le troisième onglet
 
-L’APK 6.1.1 embarque réellement l’encodeur TripoSR (419 millions de paramètres),
+L’APK 6.3.1 embarque réellement l’encodeur TripoSR (419 millions de paramètres),
 quantifié à 4 bits pour les MatMul à poids constants, et le décodeur NeRF float32.
 Aucune URL ni connexion réseau n’est utilisée par `TripoSREngine` sur Android.
 Les poids sont téléchargés et vérifiés uniquement pendant la compilation.
@@ -26,14 +26,30 @@ accuracy_level=4. Le float32 de référence de 1,67 Go n’est pas livré dans l
 4. Les trois plans XY, XZ et YZ de 40 canaux chacun sont échantillonnés comme
    `grid_sample(align_corners=False, padding_mode=zeros)`. Le décodeur produit
    la densité brute ; exp(densité−1) est extraite au seuil 25 du modèle officiel.
-5. Les quatre champs 64³ sont alignés sur leurs limites et pivotés dans un repère
-   commun (face, dos, droite, gauche). La fusion conserve 75 % du meilleur support
-   appris et 25 % de la moyenne pondérée des quatre vues, sous leurs silhouettes.
-   Cela conserve une surface soutenue par une vue si une autre l’estime mal.
-6. Une isosurface continue est maillée avec des sommets communs et des normales.
-   L’atlas existant applique les quatre véritables photographies, puis exporte un GLB.
-7. Chaque champ est conservé séparément avec une clé de modèle et de détourage.
-   Les changements de détail ou de profondeur des profils réutilisent les champs.
+5. Les quatre champs 64³, 88³ ou 112³ sont pivotés dans un repère commun
+   (face, dos, droite, gauche). Les silhouettes opposées sont légèrement recalées,
+   puis la fusion combine 40 % du meilleur support, 40 % du deuxième et 20 %
+   de la moyenne pondérée par leur accord. Un contour signé tolère environ un pixel
+   d’écart ; les ouvertures des silhouettes sont conservées.
+6. L’isosurface continue utilise des sommets communs. Les minuscules composants
+   sont filtrés ; les morceaux significatifs restent séparés. L’orientation des
+   triangles est rendue cohérente et orientée vers l’extérieur des composants fermés.
+7. Depuis 6.3.1, un lissage Taubin léger est facultatif : deux cycles 0,25/−0,26,
+   déplacement maximal de 0,8/(hauteur de grille−1), extrémités et frontières
+   ouvertes figées, bornes conservées. Les passes qui inverseraient un triangle
+   sont corrigées localement ou abandonnées. Les normales sont recalculées avec
+   les angles des sommets, moins sensibles aux petits triangles. Aucun membre
+   ni raccord anatomique n’est inventé. Cette finition s’exécute avant les UV.
+8. Quatre cartes de profondeur CPU limitent les projections aux surfaces visibles.
+   Les photos se raccordent par pondération angulaire dans un atlas 2048², puis
+   l’application exporte le GLB avec la version, la méthode et le réglage de lissage.
+9. Les triplans et chaque grille sont conservés séparément avec une clé de modèle
+   et de détourage. Le réglage de lissage, la profondeur des profils et un détail
+   déjà calculé réutilisent les champs sans relancer l’encodeur.
+
+Le bouton « Comparer les silhouettes des quatre vues » prépare les détourages et
+montre l’accord des paires opposées sans inférence TripoSR. Le détourage IS-Net
+reste optionnel. L’accord des silhouettes n’est pas une mesure de fidélité 3D.
 
 TripoSR est entraîné sur une image à la fois. L’assemblage des quatre estimations
 est une méthode de cette application, pas un modèle multivue natif TripoSR ni

@@ -170,6 +170,26 @@ public class OfflineWorkshopTest {
             for(ImageView preview:(ImageView[])ReflectionHelpers.getField(controller.get(),"previews"))assertNotNull(preview.getDrawable());
         }
     }
+    @Test public void fourSilhouetteComparisonWorksOfflineWithoutReconstructingAndSmoothingSettingSurvivesRestart()throws Exception{
+        android.app.Application app=RuntimeEnvironment.getApplication();var prefs=app.getSharedPreferences("offline_workshop",0);
+        prefs.edit().clear().putInt("engine",0).putBoolean("ai",false).commit();
+        File weights=new File(app.getFilesDir(),"triposr-int4-v1");assertFalse(weights.exists());
+        try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            Offline3DActivity activity=controller.get();View root=activity.getWindow().getDecorView();
+            for(int slot=0;slot<4;slot++){
+                Bitmap image=fourPhoto(slot);ReflectionHelpers.callInstanceMethod(activity,"saveImage",ReflectionHelpers.ClassParameter.from(Bitmap.class,image),ReflectionHelpers.ClassParameter.from(int.class,slot));image.recycle();
+            }
+            assertTrue(((CheckBox)ReflectionHelpers.getField(activity,"smoothing")).isChecked());
+            button(root,"Comparer les silhouettes").performClick();finishWork(activity);
+            assertTrue(((TextView)ReflectionHelpers.getField(activity,"status")).getText().toString().contains("Comparaison disponible sans lancer TripoSR"));
+            assertNotNull(org.robolectric.shadows.ShadowDialog.getLatestDialog());org.robolectric.shadows.ShadowDialog.getLatestDialog().dismiss();
+            assertFalse(weights.exists());assertEquals("",prefs.getString("last",""));
+            ((CheckBox)ReflectionHelpers.getField(activity,"smoothing")).setChecked(false);controller.pause();
+        }
+        try(var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            assertFalse(((CheckBox)ReflectionHelpers.getField(controller.get(),"smoothing")).isChecked());
+        }
+    }
     @Test @Config(qualifiers="night") public void offlineTextRemainsReadableInAndroidNightMode(){
         try(var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
             TextView label=ReflectionHelpers.getField(controller.get(),"countLabel");assertEquals(0xFF121722,label.getCurrentTextColor());
