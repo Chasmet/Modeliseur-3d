@@ -69,10 +69,13 @@ public class NavigationUpdateTest {
             int selected=indicator.getTextColors().getColorForState(new int[]{android.R.attr.state_selected},0);
             assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(unselected,0xFFDEE5EF)>=4.5);
             assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(selected,0xFFA83D00)>=4.5);
-            int[] ids={R.id.mode25dButton,R.id.mode3dButton,R.id.cloud3dButton,R.id.assets3dButton,R.id.settingsButton,R.id.offline3dButton};
-            Class<?>[] targets={MainActivityV52.class,Manual3DActivity.class,Cloud3DActivity.class,Asset3DActivity.class,SettingsActivity.class,Offline3DActivity.class};
+            tabs.setCurrentTab(2);
+            assertNull(text(home.findViewById(R.id.tabTrellis),"GPU distant"));
+            assertNull(text(home.findViewById(R.id.tabTrellis),"MCP"));
+            int[] ids={R.id.mode25dButton,R.id.mode3dButton,R.id.assets3dButton,R.id.settingsButton,R.id.offline3dButton};
+            Class<?>[] targets={MainActivityV52.class,Manual3DActivity.class,Asset3DActivity.class,SettingsActivity.class,Offline3DActivity.class};
             for(int i=0;i<ids.length;i++){
-                if(i<3)tabs.setCurrentTab(i);
+                if(i<2)tabs.setCurrentTab(i);else if(i==4)tabs.setCurrentTab(2);
                 home.findViewById(ids[i]).performClick();
                 assertEquals(targets[i].getName(),shadowOf(home).getNextStartedActivity().getComponent().getClassName());
             }

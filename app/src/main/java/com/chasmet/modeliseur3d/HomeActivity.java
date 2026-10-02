@@ -31,9 +31,6 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.mode3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Manual3DActivity.class))
         );
-        findViewById(R.id.cloud3dButton).setOnClickListener(view ->
-                startActivity(new Intent(this, Cloud3DActivity.class))
-        );
         findViewById(R.id.offline3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class)));
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
@@ -62,7 +59,7 @@ public final class HomeActivity extends AppCompatActivity {
     @Override protected void onResume() {
         super.onResume();
         UpdateManager.schedule(this);
-        if (UpdateManager.automatic(this)) {
+        if (((TabHost) findViewById(android.R.id.tabhost)).getCurrentTab() != 2 && UpdateManager.automatic(this)) {
             UpdateManager.executor.execute(() -> {
                 try { UpdateManager.check(this); } catch (Exception ignored) { }
                 runOnUiThread(() -> {

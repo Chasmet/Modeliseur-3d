@@ -9,8 +9,19 @@ public final class OfflineImageVolume {
         public final MeshData mesh;public final Bitmap texture;public final String method;
         Result(MeshData mesh,Bitmap texture,String method){this.mesh=mesh;this.texture=texture;this.method=method;}
     }
+    public static final class Prepared implements AutoCloseable {
+        public final Bitmap bitmap;public final String method;
+        Prepared(Bitmap bitmap,String method){this.bitmap=bitmap;this.method=method;}
+        @Override public void close(){bitmap.recycle();}
+    }
     private OfflineImageVolume() {}
     public static Result generate(Bitmap source,int detail,int tolerance,float depth,boolean rounded,AnimeSegmentationEngine.Mask ai) {
+        try(Prepared prepared=prepare(source,tolerance,ai)){
+            return buildPrepared(prepared.bitmap,detail,depth,rounded?0:1,prepared.method);
+        }
+    }
+    /** The reusable cutout is independent of detail, thickness and shape. */
+    public static Prepared prepare(Bitmap source,int tolerance,AnimeSegmentationEngine.Mask ai) {
         int w=source.getWidth(),h=source.getHeight();
         if(w>1024||h>1024||w<3||h<3)throw new IllegalArgumentException("Image locale limitée à 1 024 pixels par côté.");
         int[] pixels=new int[w*h];source.getPixels(pixels,0,w,0,0,w,h);
@@ -40,21 +51,31 @@ public final class OfflineImageVolume {
         if(ai==null&&!transparent&&count>pixels.length*.98f)throw new IllegalArgumentException("Le fond est trop complexe. Active le détourage IA local ou utilise un PNG transparent.");
         left=Math.max(0,left-2);top=Math.max(0,top-2);right=Math.min(w-1,right+2);bottom=Math.min(h-1,bottom+2);
         int cw=right-left+1,ch=bottom-top+1;
+        int[] crop=new int[cw*ch];for(int y=0;y<ch;y++)for(int x=0;x<cw;x++){
+            int i=(top+y)*w+left+x;crop[y*cw+x]=mask[i]?pixels[i]|0xFF000000:Color.TRANSPARENT;}
+        Bitmap texture=Bitmap.createBitmap(cw,ch,Bitmap.Config.ARGB_8888);texture.setPixels(crop,0,cw,0,0,cw,ch);
+        return new Prepared(texture,method);
+    }
+    /** Uses a checked, cached local PNG cutout; no inference is repeated for adjustments. */
+    public static Result buildPrepared(Bitmap source,int detail,float depth,int shape,String method){
+        int cw=source.getWidth(),ch=source.getHeight();
+        if(cw<3||ch<3||cw>1024||ch>1024||shape<0||shape>2)throw new IllegalArgumentException("Détourage local invalide.");
+        int[] pixels=new int[cw*ch];source.getPixels(pixels,0,cw,0,0,cw,ch);
         int cap=Runtime.getRuntime().maxMemory()<192L*1024*1024?80:144;
         int longest=Math.max(48,Math.min(cap,detail));
         int gw=Math.max(6,Math.round(longest*cw/(float)Math.max(cw,ch))),gh=Math.max(6,Math.round(longest*ch/(float)Math.max(cw,ch)));
         boolean[] grid=new boolean[gw*gh];
         for(int y=0;y<gh;y++)for(int x=0;x<gw;x++){
             int hits=0;for(int dy=0;dy<3;dy++)for(int dx=0;dx<3;dx++){
-                int sx=Math.min(right,left+(int)((x+(dx+.5f)/3)*cw/gw));
-                int sy=Math.min(bottom,top+(int)((y+(dy+.5f)/3)*ch/gh));if(mask[sy*w+sx])hits++;}
+                int sx=Math.min(cw-1,(int)((x+(dx+.5f)/3)*cw/gw));
+                int sy=Math.min(ch-1,(int)((y+(dy+.5f)/3)*ch/gh));if(Color.alpha(pixels[sy*cw+sx])>40)hits++;}
             grid[y*gw+x]=hits>=3;
         }
-        MeshData mesh=OfflineVolumeMesher.build(grid,gw,gh,cw/(float)ch,depth,rounded);
-        int[] crop=new int[cw*ch];for(int y=0;y<ch;y++)for(int x=0;x<cw;x++){
-            int i=(top+y)*w+left+x;crop[y*cw+x]=mask[i]?pixels[i]|0xFF000000:Color.TRANSPARENT;}
-        Bitmap texture=Bitmap.createBitmap(cw,ch,Bitmap.Config.ARGB_8888);texture.setPixels(crop,0,cw,0,0,cw,ch);
-        return new Result(mesh,texture,method+" • volume approximatif, dos déduit");
+        MeshData mesh=shape==2?OfflineRevolutionMesher.build(grid,gw,gh,cw/(float)ch,Math.min(64,longest/2))
+                :OfflineVolumeMesher.build(grid,gw,gh,cw/(float)ch,depth,shape==0);
+        Bitmap texture=source.copy(Bitmap.Config.ARGB_8888,false);
+        if(texture==null)throw new IllegalStateException("Texture locale indisponible.");
+        return new Result(mesh,texture,method+(shape==2?" • objet de révolution, symétrie supposée":" • volume approximatif, dos déduit"));
     }
     private static boolean similar(int p,int r,int g,int b,int tolerance){int dr=Color.red(p)-r,dg=Color.green(p)-g,db=Color.blue(p)-b;return dr*dr+dg*dg+db*db<=tolerance*tolerance;}
 }

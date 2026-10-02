@@ -27,7 +27,7 @@ jobs:
           cp tools/android-smoke/OfflineWorkshopTest.java app/src/test/java/com/chasmet/modeliseur3d/OfflineWorkshopTest.java
           cat >> app/build.gradle <<'GRADLE'
           android { testOptions { unitTests.includeAndroidResources = true } }
-          dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }
+          dependencies { testImplementation 'org.robolectric:robolectric:4.14.1'; testRuntimeOnly 'com.microsoft.onnxruntime:onnxruntime:1.20.0' }
           GRADLE
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
@@ -64,9 +64,12 @@ jobs:
           node --input-type=module <<'JS'
           import fs from 'node:fs';
           import validator from './tools/trellis/node_modules/gltf-validator/index.js';
-          const report=await validator.validateBytes(new Uint8Array(fs.readFileSync('app/src/main/assets/model/00000000000000000000000000000001.glb')));
-          console.log(JSON.stringify(report.issues));
-          if(report.issues.numErrors)process.exit(1);
+          for (const name of fs.readdirSync('app/src/main/assets/model')) {
+            if (!name.endsWith('.glb')) continue;
+            const report=await validator.validateBytes(new Uint8Array(fs.readFileSync('app/src/main/assets/model/'+name)));
+            console.log(name,JSON.stringify(report.issues));
+            if(report.issues.numErrors)process.exit(1);
+          }
           JS
       - run: npx --yes agent-browser@0.38.1 install --with-deps
       - name: Installer le lecteur PNG pour le contrôle des couleurs
