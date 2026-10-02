@@ -257,9 +257,17 @@ jobs:
           APK="Modeliseur-3D-$VERSION.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$APK"
           sha256sum "$APK" > "$APK.sha256"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Cette version est déjà publiée : augmenter versionCode et versionName."
-            exit 1
+          RESUME_DRAFT=false
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/modeliseur-release-draft.txt" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "refs/tags/$TAG"
+            RELEASE_SOURCE=$(git rev-parse 'FETCH_HEAD^{commit}')
+            # Never replace published bytes. Only CI changes may reuse an existing version.
+            git diff --exit-code "$RELEASE_SOURCE" "$GITHUB_SHA" -- . ':(exclude).github/workflows/**' ':(exclude)signing/publish_source_snapshot.sh'
+            if grep -qx 'false' "$RUNNER_TEMP/modeliseur-release-draft.txt"; then
+              echo "Version $VERSION déjà publiée avec les mêmes sources d’application : fichier public conservé."
+              exit 0
+            fi
+            RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
           Troisième onglet : vraie IA TripoSR embarquée, sans serveur ni téléchargement de poids sur Android. Encodeur ONNX 4 bits et décodeur NeRF float32, inférés sur CPU.
@@ -275,5 +283,9 @@ jobs:
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")
           printf '\nSources APK : %s. Application compilée et testée depuis %s, avec les workflows de la branche principale conservés dans la branche de sources de publication.\n' "$SOURCE_COMMIT" "$GITHUB_SHA" >> /tmp/modeliseur-release.md
-          gh release create "$TAG" "$APK" "$APK.sha256" --target "$SOURCE_COMMIT" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --draft
+          if [ "$RESUME_DRAFT" = true ]; then
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          else
+            gh release create "$TAG" "$APK" "$APK.sha256" --target "$SOURCE_COMMIT" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --draft
+          fi
           gh release edit "$TAG" --draft=false --latest
