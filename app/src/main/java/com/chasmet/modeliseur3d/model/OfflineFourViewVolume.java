@@ -11,7 +11,7 @@ public final class OfflineFourViewVolume {
     private static float clamp(float v){return Math.max(0,Math.min(1,v));}
     private static float sourceU(float u,float canvasAspect,Bitmap image){return .5f+(u-.5f)*canvasAspect/(image.getWidth()/(float)image.getHeight());}
     private static float sourceV(float v){return (v-.04f)/.92f;}
-    private static boolean[] silhouette(Bitmap image,int width,int height,float aspect) {
+    static boolean[] silhouette(Bitmap image,int width,int height,float aspect) {
         boolean[] mask=new boolean[width*height];int iw=image.getWidth(),ih=image.getHeight();
         int[] pixels=new int[iw*ih];image.getPixels(pixels,0,iw,0,0,iw,ih);
         for(int y=1;y<height-1;y++)for(int x=1;x<width-1;x++) {
@@ -94,6 +94,11 @@ public final class OfflineFourViewVolume {
             float nx=n[i]/sx,ny=n[i+1],nz=n[i+2]/sz;float length=(float)Math.sqrt(nx*nx+ny*ny+nz*nz);
             n[i]=nx/length;n[i+1]=ny/length;n[i+2]=nz/length;
         }
+        return texture(mesh,images,fa,sa,scale,"4 silhouettes et 4 textures réelles • enveloppe approximative"+(fields!=null?" + profondeur IA locale sur les 4 vues":"")+" • CPU local, sans serveur");
+    }
+    /** Reuses the four-photo atlas for either silhouettes or actual learned geometry. */
+    static OfflineImageVolume.Result texture(MeshData mesh,Bitmap[] images,float fa,float sa,float scale,String method){
+        float[] p=mesh.getPositions(),n=mesh.getNormals();
         // A triangle uses one photograph, with separate UV seams and GLTF top-origin V.
         int[] original=mesh.getIndices();float[] outP=new float[original.length*3],outN=new float[outP.length],uv=new float[original.length*2];int[] indices=new int[original.length];
         for(int t=0;t<original.length;t+=3) {
@@ -110,6 +115,6 @@ public final class OfflineFourViewVolume {
         }
         check();Bitmap texture=atlas(images,fa,sa);
         return new OfflineImageVolume.Result(new MeshData(outP,outN,uv,indices),texture,
-            "4 silhouettes et 4 textures réelles • enveloppe approximative"+(fields!=null?" + profondeur IA locale sur les 4 vues":"")+" • CPU local, sans serveur");
+            method);
     }
 }

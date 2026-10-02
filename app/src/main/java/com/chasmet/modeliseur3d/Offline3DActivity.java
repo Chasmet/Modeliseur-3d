@@ -19,7 +19,7 @@ import java.util.concurrent.*;
 public final class Offline3DActivity extends AppCompatActivity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private TextView status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
-    private Spinner quality,shape;private Button inspect,cancel;private CheckBox ai,depthAi;private Button generate,open,export,choose,rotate,gallery;
+    private Spinner quality,shape,engine;private Button inspect,cancel;private CheckBox ai,depthAi;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
     private final Button[] choices=new Button[4],rotations=new Button[4];
     private final LinearLayout[] cards=new LinearLayout[4];
@@ -34,6 +34,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     private File depthCache(){return depthCache(0);}
     private File depthCache(int slot){return new File(getFilesDir(),"offline-workshop-depth"+(slot==0?"":"-"+slot)+".bin");}
     private String key(String name,int slot){return name+(slot==0?"":"_"+slot);}
+    private File learnedCache(int slot){return new File(getFilesDir(),"offline-workshop-triposr-"+slot+".bin");}
     private File model(String id){return new File(getFilesDir(),"cloud_models/"+id+".glb");}
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(new ActivityResultContracts.OpenDocument(),this::importImage);
     private final ActivityResultLauncher<String> exporter=registerForActivityResult(new ActivityResultContracts.CreateDocument("model/gltf-binary"),uri->{
@@ -46,10 +47,10 @@ public final class Offline3DActivity extends AppCompatActivity {
     private void message(String value){ui(()->status.setText(value));}
     private interface Task{void run()throws Exception;}
     private void work(Task action){
-        if(busy||isDestroyed())return;busy=true;cancelled=false;buttons();worker.execute(()->{
-            try{action.run();}catch(CancellationException e){message("Opération arrêtée. Les modèles précédents sont conservés.");}catch(OutOfMemoryError e){message("Mémoire de l'application insuffisante. Choisis Rapide et désactive les options IA locales.");}
+        if(busy||isDestroyed())return;busy=true;cancelled=false;getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);buttons();worker.execute(()->{
+            try{action.run();}catch(CancellationException e){message("Opération arrêtée. Les modèles précédents sont conservés.");}catch(OutOfMemoryError e){message("Mémoire de l’application insuffisante. Choisis le moteur Silhouettes et le détail Rapide pour un calcul plus léger.");}
             catch(Exception e){message(e.getMessage()==null?"Opération locale impossible.":e.getMessage());}
-            finally{ui(()->{busy=false;buttons();});}
+            finally{ui(()->{busy=false;getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);buttons();});}
         });
     }
     private void checkpoint(){if(cancelled||Thread.currentThread().isInterrupted())throw new CancellationException();}
@@ -63,8 +64,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(android.os.Build.VERSION.SDK_INT>=29)scroll.setForceDarkAllowed(false);LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(20*getResources().getDisplayMetrics().density);p.setPadding(pad,pad,pad,pad);scroll.addView(p);setContentView(scroll);
         text(p,"Atelier 3D hors connexion",26);
-        text(p,"Quatre vues du même objet entier, dans la même pose : face, dos, profil droit et profil gauche. Les silhouettes et les textures sont combinées sur ce téléphone, sans serveur.",16);
-        fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");fourViews.setChecked(prefs().getBoolean("fourViews",true));p.addView(fourViews);
+        text(p,"Quatre vues du même objet entier, dans la même pose : face, dos, profil droit et profil gauche. Une forme 3D apprise est calculée pour chaque photo, puis les quatre formes sont alignées et combinées avec les silhouettes et textures réelles. Tout se calcule sur ce téléphone, sans serveur.",16);
+        text(p,"Moteur de reconstruction",18);engine=spinner(p,"IA TripoSR · forme 3D apprise","Silhouettes · rapide");engine.setSelection(prefs().getInt("engine",0));
+        fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");fourViews.setChecked(engine.getSelectedItemPosition()==0||prefs().getBoolean("fourViews",true));p.addView(fourViews);
         countLabel=text(p,"",16);
         for(int row=0;row<2;row++) {
             LinearLayout line=new LinearLayout(this);line.setOrientation(LinearLayout.HORIZONTAL);p.addView(line);
@@ -86,11 +88,11 @@ public final class Offline3DActivity extends AppCompatActivity {
         depth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int value,boolean user){updateDepthLabel();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         depthLabel.setText("Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
         text(p,"Tolérance du fond uni",18);tolerance=new SeekBar(this);tolerance.setMax(100);tolerance.setProgress(prefs().getInt("tolerance",35));p.addView(tolerance);
-        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(prefs().getBoolean("ai",false));p.addView(ai);
+        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(prefs().getBoolean("ai",true));p.addView(ai);
         depthAi=new CheckBox(this);depthAi.setText("Profondeur IA locale · Depth Anything V2 Small");depthAi.setChecked(prefs().getBoolean("depthAi",true));p.addView(depthAi);
-        text(p,"Les deux IA sont embarquées. Le premier calcul peut être lent ; le détourage et la profondeur sont conservés pour les réglages suivants. En mode quatre vues, chaque image possède son propre détourage et sa profondeur.",14);
-        text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Le décor et la face cachée ne sont pas inventés par TRELLIS.",14);
-        text(p,"Les quatre vues sont alignées à la même hauteur, en gardant leurs proportions. Une enveloppe de silhouettes reste approximative et ne reconstitue pas tous les creux cachés. PNG transparent recommandé. Sur un fond complexe, essaie le détourage IA. La grille est limitée selon la mémoire disponible pour l'application.",14);
+        text(p,"TripoSR, IS-Net et Depth Anything sont embarqués dans l’APK. TripoSR calcule les quatre vues successivement sur CPU ; le premier calcul peut prendre plusieurs minutes. Garde l’application ouverte. Les formes apprises sont conservées pour les réglages suivants.",14);
+        text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
+        text(p,"Les quatre vues sont alignées à la même hauteur, en gardant leurs proportions. TripoSR estime la forme : les détails peuvent différer de l’objet réel. Le moteur Silhouettes conserve une enveloppe approximative plus rapide. PNG transparent recommandé. Sur un fond complexe, essaie le détourage IA. La grille est limitée selon la mémoire disponible pour l'application.",14);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
         generate=button(p,"Générer sur ce téléphone",this::generate);
         cancel=button(p,"Arrêter après l’étape en cours",()->{cancelled=true;status.setText("Arrêt demandé… Les modèles enregistrés sont conservés.");cancel.setEnabled(false);});
@@ -99,6 +101,10 @@ public final class Offline3DActivity extends AppCompatActivity {
         gallery=button(p,"Mes modèles conservés hors connexion",this::gallery);
         lastId=prefs().getString("last","");buttons();
         fourViews.setOnCheckedChangeListener((b,checked)->{prefs().edit().putBoolean("fourViews",checked).apply();buttons();});
+        engine.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){if(position==0)fourViews.setChecked(true);buttons();}
+            public void onNothingSelected(AdapterView<?> parent){}
+        });
         shape.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
             public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
                 buttons();
@@ -109,7 +115,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         depthLabel.setText(fourViews.isChecked()?"Profondeur des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":shape.getSelectedItemPosition()==2?"Épaisseur déduite de la silhouette pour l’objet rond à 360°":"Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
     }
     private void buttons(){
-        boolean multiple=fourViews.isChecked(),saved=lastId.matches("[a-f0-9]{32}")&&model(lastId).isFile();int count=0;
+        boolean learned=engine.getSelectedItemPosition()==0,multiple=fourViews.isChecked(),saved=lastId.matches("[a-f0-9]{32}")&&model(lastId).isFile();int count=0;
         for(int slot=0;slot<4;slot++) {
             boolean exists=source(slot).isFile();if(exists)count++;
             choices[slot].setEnabled(!busy);rotations[slot].setEnabled(!busy&&exists);cards[slot].setVisibility(multiple||slot==0?View.VISIBLE:View.GONE);
@@ -118,9 +124,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         generate.setEnabled(!busy&&(multiple?count==4:source().isFile()));inspect.setEnabled(!busy&&(multiple?count>0:source().isFile()));
         cancel.setVisibility(busy?View.VISIBLE:View.GONE);cancel.setEnabled(busy&&!cancelled);
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
-        depth.setEnabled(!busy&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&(multiple||shape.getSelectedItemPosition()!=2));
+        depth.setEnabled(!busy&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
         tolerance.setEnabled(!busy);quality.setEnabled(!busy);shape.setEnabled(!busy&&!multiple);shape.setVisibility(multiple?View.GONE:View.VISIBLE);
-        ai.setEnabled(!busy);fourViews.setEnabled(!busy);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
+        ai.setEnabled(!busy);engine.setEnabled(!busy);fourViews.setEnabled(!busy&&!learned);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
     }
     private void saveBitmap(Bitmap bitmap,File target)throws IOException{
         File part=new File(target.getPath()+".part");try{
@@ -129,7 +135,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }finally{part.delete();}
     }
     private void saveImage(Bitmap bitmap,int slot)throws IOException{
-        saveBitmap(bitmap,source(slot));cutout(slot).delete();depthCache(slot).delete();prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
+        saveBitmap(bitmap,source(slot));cutout(slot).delete();depthCache(slot).delete();learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
         ui(()->{previews[slot].setImageURI(null);previews[slot].setImageURI(Uri.fromFile(source(slot)));});
     }
     private File prepareCutout(int tolerance,boolean useAi)throws Exception{return prepareCutout(0,tolerance,useAi);}
@@ -140,7 +146,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(bitmap==null)throw new IOException("Photo "+VIEWS[slot]+" illisible.");
         try{
             AnimeSegmentationEngine.Mask mask=null;
-            if(useAi){message(VIEWS[slot]+" : détourage IA embarqué, calcul CPU local…");
+            if(useAi&&!hasTransparency(bitmap)){message(VIEWS[slot]+" : détourage IA embarqué, calcul CPU local…");
                 try(AnimeSegmentationEngine segment=new AnimeSegmentationEngine(this,2)){checkpoint();mask=segment.segment(bitmap);}}
             checkpoint();
             try(OfflineImageVolume.Prepared prepared=OfflineImageVolume.prepare(bitmap,tolerance,mask)){
@@ -149,6 +155,9 @@ public final class Offline3DActivity extends AppCompatActivity {
             }
         }finally{bitmap.recycle();}
         return cutout(slot);
+    }
+    private static boolean hasTransparency(Bitmap bitmap){
+        int[] row=new int[bitmap.getWidth()];for(int y=0;y<bitmap.getHeight();y++){bitmap.getPixels(row,0,row.length,0,y,row.length,1);for(int pixel:row)if((pixel>>>24)<40)return true;}return false;
     }
     private void inspectCutout(){
         int t=tolerance.getProgress()+8,limit=fourViews.isChecked()?4:1;boolean useAi=ai.isChecked();
@@ -185,8 +194,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         try{Matrix matrix=new Matrix();matrix.postRotate(90);turned=Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getHeight(),matrix,true);saveImage(turned,slot);}finally{if(turned!=null&&turned!=bitmap)turned.recycle();bitmap.recycle();}
     });}
     private void generate(){
-        int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean multiple=fourViews.isChecked(),useAi=ai.isChecked(),useDepth=depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
-        prefs().edit().putInt("quality",selected).putInt("shape",kind).putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
+        int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean learned=engine.getSelectedItemPosition()==0,multiple=fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
+        prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind).putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
+        if(learned&&!multiple){status.setText("TripoSR utilise les quatre vues. Ajoute face, dos et les deux profils.");return;}
         if(multiple)for(int slot=0;slot<4;slot++)if(!source(slot).isFile()){status.setText("Ajoute la vue "+VIEWS[slot]+" avant de générer.");return;}
         message("Création du volume local…");work(()->{
             long started=android.os.SystemClock.elapsedRealtime();
@@ -200,9 +210,17 @@ public final class Offline3DActivity extends AppCompatActivity {
                     if(bitmaps[slot]==null)throw new IOException("Détourage "+VIEWS[slot]+" illisible.");
                     if(useDepth)fields[slot]=prepareDepth(bitmaps[slot],slot);checkpoint();
                 }
+                if(learned){
+                    File[] caches=new File[4];String[] keys=new String[4];for(int slot=0;slot<4;slot++){caches[slot]=learnedCache(slot);keys[slot]=TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",slot),"");}
+                    TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,bitmaps,caches,keys,new TripoSREngine.Progress(){
+                        public void update(String value){message(value);}public void check(){checkpoint();}
+                    });checkpoint();message("Alignement des quatre formes IA et construction du maillage texturé…");
+                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,new int[]{64,88,112}[selected],profileScale);
+                }else{
                 message("Construction locale du maillage et des textures…");
                 result=multiple?OfflineFourViewVolume.build(bitmaps,new int[]{64,88,112}[selected],profileScale,fields)
-                    :OfflineImageVolume.buildPrepared(bitmaps[0],new int[]{80,112,144}[selected],thickness,kind,prefs().getString("cutoutMethod","Détourage local"),useDepth?fields[0]:null);checkpoint();
+                    :OfflineImageVolume.buildPrepared(bitmaps[0],new int[]{80,112,144}[selected],thickness,kind,prefs().getString("cutoutMethod","Détourage local"),useDepth?fields[0]:null);
+                }checkpoint();
                 if(!output.getParentFile().isDirectory()&&!output.getParentFile().mkdirs())throw new IOException("Stockage du modèle indisponible.");
                 ExternalViewerGlbExporter.write(part,result.mesh,result.texture);
                 if(part.length()>64L*1024*1024)throw new IOException("Le modèle dépasse la limite mobile de 64 Mo.");
@@ -223,7 +241,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }).setNegativeButton("Fermer",null).show();
     }
     @Override protected void onPause(){
-        prefs().edit().putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
+        prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
                 .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",fourViews.isChecked()).apply();
         super.onPause();
     }

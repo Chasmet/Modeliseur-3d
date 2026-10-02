@@ -133,7 +133,7 @@ public class OfflineWorkshopTest {
     }
     @Test public void fourPhotoActivityRequiresAllViewsKeepsCachesAndRestoresPicturesOffline()throws Exception{
         android.app.Application app=RuntimeEnvironment.getApplication();var prefs=app.getSharedPreferences("offline_workshop",0);
-        prefs.edit().clear().putBoolean("fourViews",true).putBoolean("depthAi",false).commit();
+        prefs.edit().clear().putInt("engine",1).putBoolean("fourViews",true).putBoolean("depthAi",false).commit();
         for(int slot=0;slot<4;slot++)for(String kind:new String[]{"image","cutout"})new File(app.getFilesDir(),"offline-workshop-"+kind+(slot==0?"":"-"+slot)+".png").delete();
         String id;
         try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
@@ -194,7 +194,7 @@ public class OfflineWorkshopTest {
         String id;
         try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
             Offline3DActivity activity=controller.get();View root=activity.getWindow().getDecorView();
-            ((CheckBox)ReflectionHelpers.getField(activity,"fourViews")).setChecked(false);
+            ((Spinner)ReflectionHelpers.getField(activity,"engine")).setSelection(1);((CheckBox)ReflectionHelpers.getField(activity,"fourViews")).setChecked(false);
             button(root,"Vérifier le détourage").performClick();finishWork(activity);
             File cutout=new File(app.getFilesDir(),"offline-workshop-cutout.png");assertTrue(cutout.length()>0);long modified=cutout.lastModified();
             button(root,"Générer sur ce téléphone").performClick();finishWork(activity);

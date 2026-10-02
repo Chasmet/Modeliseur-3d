@@ -28,20 +28,37 @@ jobs:
           key: modeliseur-depth-small-fp32-afb6a5c2
       - name: Vérifier les poids de profondeur avant compilation
         run: python3 tools/offline-models/fetch_depth.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mettre en cache TripoSR 4 bits embarqué
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-128-fd5be249-v1
+      - name: Préparer et vérifier TripoSR embarqué
+        run: |
+          python3 -m pip install -r tools/offline-models/requirements.txt
+          python3 tools/offline-models/fetch_triposr.py
 
       - name: Préparer les tests Android sans modifier l'APK publiée
         run: |
           cp tools/android-smoke/NavigationUpdateTest.java app/src/test/java/com/chasmet/modeliseur3d/NavigationUpdateTest.java
           cp tools/android-smoke/OfflineWorkshopTest.java app/src/test/java/com/chasmet/modeliseur3d/OfflineWorkshopTest.java
+          cp tools/android-smoke/TripoSROfflineTest.java app/src/test/java/com/chasmet/modeliseur3d/TripoSROfflineTest.java
           cat >> app/build.gradle <<'GRADLE'
-          android { testOptions { unitTests.includeAndroidResources = true } }
+          android { testOptions { unitTests.includeAndroidResources = true; unitTests.all { maxHeapSize = '3g'; maxParallelForks = 1 } } }
           dependencies { testImplementation 'org.robolectric:robolectric:4.14.1'; testRuntimeOnly 'com.microsoft.onnxruntime:onnxruntime:1.20.0' }
           GRADLE
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
       - name: Tester la navigation, le téléchargement réel et l'installateur Android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest' --tests 'com.chasmet.modeliseur3d.OfflineWorkshopTest' --tests 'com.chasmet.modeliseur3d.model.OfflineVolumeMesherTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest' --tests 'com.chasmet.modeliseur3d.OfflineWorkshopTest' --tests 'com.chasmet.modeliseur3d.model.OfflineVolumeMesherTest' --tests 'com.chasmet.modeliseur3d.TripoSROfflineTest'
       - uses: actions/upload-artifact@v4
         with:
           name: offline-generated-glb

@@ -24,3 +24,6 @@ app/src/main/assets/viewer/viewer.js
 *.keystore
 *.jks
 signing-encrypted.json
+
+/app/src/main/assets/models/*.data
+/app/src/main/assets/models/*.part

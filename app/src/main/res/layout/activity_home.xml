@@ -5,7 +5,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:padding="20dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:gravity="center" android:text="Modéliseur 3D V6.0.6"
+            android:gravity="center" android:text="Modéliseur 3D V6.1.0"
             android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
         <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />

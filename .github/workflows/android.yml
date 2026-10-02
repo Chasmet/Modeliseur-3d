@@ -80,6 +80,22 @@ jobs:
           key: modeliseur-depth-small-fp32-afb6a5c2
       - name: Vérifier les poids de profondeur avant compilation
         run: python3 tools/offline-models/fetch_depth.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mettre en cache TripoSR 4 bits embarqué
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-128-fd5be249-v1
+      - name: Préparer et vérifier TripoSR embarqué
+        run: |
+          python3 -m pip install -r tools/offline-models/requirements.txt
+          python3 tools/offline-models/fetch_triposr.py
 
       - name: Préparer le SDK Android
         shell: bash
@@ -92,14 +108,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0.6
+      - name: Vérifier l'architecture V6.1.0
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0.6" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.6'" app/build.gradle
-          grep -q "versionCode 42" app/build.gradle
+          grep -q "Modéliseur 3D V6.1.0" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.1.0'" app/build.gradle
+          grep -q "versionCode 43" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -142,7 +158,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.0.6",
+                  "User-Agent": "Modeliseur3D-CI/6.1.0",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -203,6 +219,7 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
           ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          python3 tools/offline-models/check_apk.py "$APK"
           ls -lh "$APK"
           sha256sum "$APK"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
@@ -210,10 +227,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
-      - name: Publier l'APK V6.0.6
+      - name: Publier l'APK V6.1.0
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0.6-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.1.0-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

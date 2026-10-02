@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 42
-        versionName '6.0.6'
+        versionCode 43
+        versionName '6.1.0'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -155,7 +155,14 @@ tasks.register('downloadOfflineDepthModel', Exec) {
     // Also verify cached bytes each build; no model URL is referenced by Android code.
     outputs.upToDateWhen { false }
 }
+tasks.register('downloadOfflineTripoSRModels', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'python3', 'tools/offline-models/fetch_triposr.py'
+    outputs.files(file('src/main/assets/models/triposr_encoder_int4.onnx'),file('src/main/assets/models/triposr_encoder_int4.onnx.data'),file('src/main/assets/models/triposr_decoder.onnx'),file('src/main/assets/models/triposr_decoder.onnx.data'))
+    outputs.upToDateWhen { false }
+}
 tasks.named('preBuild').configure {
+    dependsOn tasks.named('downloadOfflineTripoSRModels')
     dependsOn tasks.named('buildMobileViewer')
     dependsOn tasks.named('downloadAnimeSegmentationModel')
     dependsOn tasks.named('downloadOfflineDepthModel')
