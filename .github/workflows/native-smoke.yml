@@ -69,6 +69,8 @@ jobs:
           if(report.issues.numErrors)process.exit(1);
           JS
       - run: npx --yes agent-browser@0.38.1 install --with-deps
+      - name: Installer le lecteur PNG pour le contrôle des couleurs
+        run: python3 -m pip install Pillow
       - name: Vérifier le rendu du volume hors connexion
         run: |
           set -euo pipefail
