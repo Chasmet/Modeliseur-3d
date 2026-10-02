@@ -1,0 +1,27 @@
+{
+  "version": "synthetic-multiview-decoder-v1",
+  "seed": 74123,
+  "families": [
+    "bottle",
+    "chair",
+    "figure"
+  ],
+  "splits": {
+    "train": [
+      101,
+      102
+    ],
+    "validation": [
+      201
+    ],
+    "test": [
+      301
+    ]
+  },
+  "source_assets": {
+    "triposr_encoder_int4.onnx": "76dab077ff2768898ace523c72e0a017134bfd3628c4b15fd6f65cf304439089",
+    "triposr_encoder_int4.onnx.data": "fd5be249ab455b368812ba25095a2720e561ab0dcdeb42c81d922f7f67669a00",
+    "triposr_decoder.onnx": "90b322cae570324f1d699f7307d4f056275b3bc8564db8568a5aebe403691424",
+    "triposr_decoder.onnx.data": "9c3b1412ecbc803983003091939e449f9be3078c1c9a1880d5c5196a40a31d6c"
+  }
+}

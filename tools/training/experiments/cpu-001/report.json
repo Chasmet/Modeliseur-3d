@@ -1,0 +1,196 @@
+{
+  "scope": "actual TripoSR NeRF decoder fine-tuning, frozen INT4 image encoder",
+  "trained_parameters": 41089,
+  "frozen_rgb_output_parameters": 195,
+  "training_steps": 600,
+  "selected_step": 600,
+  "encoder_cpu_threads": 6,
+  "objects": {
+    "train": 6,
+    "validation": 3,
+    "test": 3
+  },
+  "views_per_object": 4,
+  "skipped": [],
+  "validation_before": {
+    "mean_iou": 0.4886258686102365,
+    "objects": [
+      {
+        "id": "bottle-201",
+        "family": "bottle",
+        "iou": 0.7248201438848921,
+        "precision": 1.0,
+        "recall": 0.7248201438848921
+      },
+      {
+        "id": "chair-201",
+        "family": "chair",
+        "iou": 0.3016635225518779,
+        "precision": 0.34036377708978327,
+        "recall": 0.7262592898431048
+      },
+      {
+        "id": "figure-201",
+        "family": "figure",
+        "iou": 0.4393939393939394,
+        "precision": 0.8285714285714286,
+        "recall": 0.48333333333333334
+      }
+    ]
+  },
+  "validation_after": {
+    "mean_iou": 0.6720479550006403,
+    "objects": [
+      {
+        "id": "bottle-201",
+        "family": "bottle",
+        "iou": 0.8469984062333983,
+        "precision": 0.9821355236139631,
+        "recall": 0.8602517985611511
+      },
+      {
+        "id": "chair-201",
+        "family": "chair",
+        "iou": 0.6004618937644342,
+        "precision": 0.7492795389048992,
+        "recall": 0.7514450867052023
+      },
+      {
+        "id": "figure-201",
+        "family": "figure",
+        "iou": 0.5686835650040883,
+        "precision": 0.7035912999494183,
+        "recall": 0.7478494623655914
+      }
+    ]
+  },
+  "test_before": {
+    "mean_iou": 0.4389126552285627,
+    "objects": [
+      {
+        "id": "bottle-301",
+        "family": "bottle",
+        "iou": 0.6825539568345323,
+        "precision": 1.0,
+        "recall": 0.6825539568345323
+      },
+      {
+        "id": "chair-301",
+        "family": "chair",
+        "iou": 0.34491763760546407,
+        "precision": 0.4326026706979088,
+        "recall": 0.6298606016140865
+      },
+      {
+        "id": "figure-301",
+        "family": "figure",
+        "iou": 0.28926637124569177,
+        "precision": 0.7035928143712575,
+        "recall": 0.32940846649845806
+      }
+    ]
+  },
+  "test_after": {
+    "mean_iou": 0.5987501773178815,
+    "objects": [
+      {
+        "id": "bottle-301",
+        "family": "bottle",
+        "iou": 0.822107695041763,
+        "precision": 0.9857234178563818,
+        "recall": 0.8320143884892086
+      },
+      {
+        "id": "chair-301",
+        "family": "chair",
+        "iou": 0.5591891891891891,
+        "precision": 0.6799211304633586,
+        "recall": 0.7589875275128394
+      },
+      {
+        "id": "figure-301",
+        "family": "figure",
+        "iou": 0.41495364772269244,
+        "precision": 0.5961204400694846,
+        "recall": 0.5772357723577236
+      }
+    ]
+  },
+  "heldout_regressions": [],
+  "synthetic_benchmark_passed": true,
+  "production_approved": false,
+  "candidate_sha256": "edcb8d1634dfeec03b26f91c10c80d85fb523c44b1abd372398670506268f977",
+  "candidate_bytes": 221114,
+  "onnx_numpy_max_difference": 1.1920928955078125e-06,
+  "duration_seconds": 549.358552009,
+  "history": [
+    {
+      "step": 50,
+      "loss": 0.6167457237684127,
+      "validation_iou": 0.5135932729971778
+    },
+    {
+      "step": 100,
+      "loss": 0.39658265410798227,
+      "validation_iou": 0.5386315577317204
+    },
+    {
+      "step": 150,
+      "loss": 0.25400546154482545,
+      "validation_iou": 0.5636888137083105
+    },
+    {
+      "step": 200,
+      "loss": 0.2754105295737004,
+      "validation_iou": 0.5766128099576657
+    },
+    {
+      "step": 250,
+      "loss": 0.30344969562895946,
+      "validation_iou": 0.5690004312070335
+    },
+    {
+      "step": 300,
+      "loss": 0.26859352928424485,
+      "validation_iou": 0.6022660552114817
+    },
+    {
+      "step": 350,
+      "loss": 0.264928228194158,
+      "validation_iou": 0.6234294188907109
+    },
+    {
+      "step": 400,
+      "loss": 0.14437983277464392,
+      "validation_iou": 0.6375715573419075
+    },
+    {
+      "step": 450,
+      "loss": 0.21127077743247485,
+      "validation_iou": 0.6359275877981759
+    },
+    {
+      "step": 500,
+      "loss": 0.1358659361417101,
+      "validation_iou": 0.6250228884562702
+    },
+    {
+      "step": 550,
+      "loss": 0.21960814191722292,
+      "validation_iou": 0.6637635488029517
+    },
+    {
+      "step": 600,
+      "loss": 0.1580525075555932,
+      "validation_iou": 0.6720479550006403
+    }
+  ],
+  "limitations": [
+    "Twelve authored synthetic shapes; no real scan or photoreal human supervision.",
+    "Fixed alignment from the base decoder; not the complete Android pipeline.",
+    "No silhouette clipping or texture training; no evidence for user-photo fidelity.",
+    "A small held-out set cannot certify generalisation or production quality.",
+    "RGB output rows frozen, but hidden layer changes can alter predicted RGB.",
+    "Android application and its released weights have not been changed."
+  ]
+}
