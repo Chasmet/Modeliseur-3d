@@ -3,7 +3,7 @@ name: Publier APK signé avec mise à jour automatique
 on:
   push:
     branches: [agent/trellis-third-tab-auto-update]
-    paths: ['tools/offline-models/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', 'signing/publish_source_snapshot.sh', '.github/workflows/release.yml']
+    paths: ['tools/offline-models/**', 'tools/android-smoke/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', 'signing/publish_source_snapshot.sh', '.github/workflows/release.yml']
   workflow_dispatch:
 permissions:
   contents: write
