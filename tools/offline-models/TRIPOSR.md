@@ -1,6 +1,6 @@
 # Reconstruction apprise dans le troisième onglet
 
-L’APK 6.1.0 embarque réellement l’encodeur TripoSR (419 millions de paramètres),
+L’APK 6.1.1 embarque réellement l’encodeur TripoSR (419 millions de paramètres),
 quantifié à 4 bits pour les MatMul à poids constants, et le décodeur NeRF float32.
 Aucune URL ni connexion réseau n’est utilisée par `TripoSREngine` sur Android.
 Les poids sont téléchargés et vérifiés uniquement pendant la compilation.

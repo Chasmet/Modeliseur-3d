@@ -5,7 +5,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:padding="20dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:gravity="center" android:text="Modéliseur 3D V6.1.0"
+            android:gravity="center" android:text="Modéliseur 3D V6.1.1"
             android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
         <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />
@@ -27,10 +27,10 @@
                             android:backgroundTint="@color/viewer_background" android:text="Ouvrir le mode 3D original\nFace · Dos · Droite · Gauche" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                     </LinearLayout>
                     <LinearLayout android:id="@+id/tabTrellis" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Atelier entièrement hors connexion : détourage et profondeur IA embarqués, volume arrondi, relief et objet rond à 360°. Aperçu, sauvegarde et export sur ce téléphone. Aucun serveur ni compte. Moteur local distinct du modèle TRELLIS complet."
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="TripoSR embarqué : ajoute face, dos, profil droit et profil gauche. Les quatre formes IA sont combinées avec tes silhouettes et textures, entièrement sur ce téléphone. Aperçu, sauvegarde et export GLB hors connexion. Le moteur Silhouettes reste disponible pour un calcul plus léger."
                             android:textColor="@color/text_secondary" android:textSize="16sp" />
                         <Button android:id="@+id/offline3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
-                            android:backgroundTint="@color/viewer_background" android:text="Atelier hors connexion\nImage → volume · aperçu · GLB" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                            android:backgroundTint="@color/viewer_background" android:text="IA 3D hors connexion\n4 images → modèle texturé · GLB" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                     </LinearLayout>
                 </FrameLayout>
             </LinearLayout>

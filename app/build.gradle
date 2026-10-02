@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 43
-        versionName '6.1.0'
+        versionCode 44
+        versionName '6.1.1'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
