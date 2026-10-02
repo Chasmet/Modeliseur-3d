@@ -73,14 +73,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0.1
+      - name: Vérifier l'architecture V6.0.2
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0.1" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.1'" app/build.gradle
-          grep -q "versionCode 37" app/build.gradle
+          grep -q "Modéliseur 3D V6.0.2" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.0.2'" app/build.gradle
+          grep -q "versionCode 38" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -186,10 +186,28 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V6.0.1
+      - name: Vérifier l'atelier hors connexion et les onglets avant publication
+        run: |
+          cp tools/android-smoke/NavigationUpdateTest.java app/src/test/java/com/chasmet/modeliseur3d/NavigationUpdateTest.java
+          cp tools/android-smoke/OfflineWorkshopTest.java app/src/test/java/com/chasmet/modeliseur3d/OfflineWorkshopTest.java
+          cat >> app/build.gradle <<'GRADLE'
+          android { testOptions { unitTests.includeAndroidResources = true } }
+          dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }
+          GRADLE
+          ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest' --tests 'com.chasmet.modeliseur3d.OfflineWorkshopTest' --tests 'com.chasmet.modeliseur3d.model.OfflineVolumeMesherTest'
+          npm ci --prefix tools/trellis
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import validator from './tools/trellis/node_modules/gltf-validator/index.js';
+          const report=await validator.validateBytes(new Uint8Array(fs.readFileSync('app/build/offline-fixture/00000000000000000000000000000001.glb')));
+          console.log(JSON.stringify(report.issues));
+          if(report.issues.numErrors)process.exit(1);
+          JS
+
+      - name: Publier l'APK V6.0.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0.1-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.0.2-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -210,7 +228,10 @@ jobs:
             exit 1
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          Trois onglets : 2.5D, 3D et TRELLIS.2. Le catalogue de 259 assets reste accessible.
+          Trois onglets contrastés : 2.5D, 3D original à quatre images et TRELLIS. Le catalogue de 259 assets reste accessible.
+          Atelier local hors connexion : image vers volume approximatif, réglages de détail/épaisseur, détourage IS-Net optionnel, aperçu et export GLB.
+          Les modèles locaux et téléchargés sont conservés pour être ouverts sans connexion.
+          TRELLIS.2 complet utilise toujours un GPU distant ; le moteur local est une reconstruction géométrique distincte.
           Relais Render gratuit préconfiguré, génération distante et lecteur GLB intégré.
           Réglages > Mise à jour automatique : GitHub Releases publiques, progression et installateur Android.
           Même package et même signature que l'APK 6.0.0 fournie le 1 octobre 2026.

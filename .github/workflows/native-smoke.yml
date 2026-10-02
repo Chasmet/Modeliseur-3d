@@ -2,7 +2,7 @@ name: Vérifier les onglets et la mise à jour Android
 on:
   pull_request:
     branches: [main]
-    paths: ['tools/android-smoke/**', '.github/workflows/native-smoke.yml']
+    paths: ['tools/android-smoke/**', 'app/src/main/**', '.github/workflows/native-smoke.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +24,7 @@ jobs:
       - name: Préparer les tests Android sans modifier l'APK publiée
         run: |
           cp tools/android-smoke/NavigationUpdateTest.java app/src/test/java/com/chasmet/modeliseur3d/NavigationUpdateTest.java
+          cp tools/android-smoke/OfflineWorkshopTest.java app/src/test/java/com/chasmet/modeliseur3d/OfflineWorkshopTest.java
           cat >> app/build.gradle <<'GRADLE'
           android { testOptions { unitTests.includeAndroidResources = true } }
           dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }
@@ -32,9 +33,55 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
       - name: Tester la navigation, le téléchargement réel et l'installateur Android
-        run: ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest' --tests 'com.chasmet.modeliseur3d.OfflineWorkshopTest' --tests 'com.chasmet.modeliseur3d.model.OfflineVolumeMesherTest'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-generated-glb
+          path: app/build/offline-fixture/*.glb
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-navigation-update-test-reports
           path: app/build/reports/tests/testDebugUnitTest
+  offline-viewer:
+    needs: android-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: offline-generated-glb
+          path: app/src/main/assets/model
+      - run: npm ci --prefix tools/viewer && npm run build --prefix tools/viewer
+      - run: npm ci --prefix tools/trellis
+      - name: Valider le GLB produit par le moteur Android
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import validator from './tools/trellis/node_modules/gltf-validator/index.js';
+          const report=await validator.validateBytes(new Uint8Array(fs.readFileSync('app/src/main/assets/model/00000000000000000000000000000001.glb')));
+          console.log(JSON.stringify(report.issues));
+          if(report.issues.numErrors)process.exit(1);
+          JS
+      - run: npx --yes agent-browser@0.38.1 install --with-deps
+      - name: Vérifier le rendu du volume hors connexion
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/offline-viewer.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000001'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || !document.querySelector("#status").textContent.startsWith("Sans animation")) throw new Error("Volume local non chargé"); return "Volume Android chargé"; })()'
+          npx --yes agent-browser@0.38.1 screenshot offline-volume.png
+          npx --yes agent-browser@0.38.1 errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-volume-render
+          path: offline-volume.png

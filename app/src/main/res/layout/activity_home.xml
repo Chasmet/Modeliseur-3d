@@ -5,7 +5,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:padding="20dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:gravity="center" android:text="Modéliseur 3D V6.0.1"
+            android:gravity="center" android:text="Modéliseur 3D V6.0.2"
             android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
         <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />
@@ -21,16 +21,18 @@
                             android:backgroundTint="@color/launcher_background" android:text="2.5D\nFace + Dos" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="23sp" />
                     </LinearLayout>
                     <LinearLayout android:id="@+id/tab3d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reconstruction anatomique locale et export GLB."
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ton mode 3D original : importe les quatre images — face, dos, profil droit et profil gauche. Reconstruction locale et export GLB."
                             android:textColor="@color/text_secondary" android:textSize="16sp" />
                         <Button android:id="@+id/mode3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
-                            android:backgroundTint="@color/viewer_background" android:text="3D anatomique\nMembres affinés + GLB propre" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                            android:backgroundTint="@color/viewer_background" android:text="Ouvrir le mode 3D original\nFace · Dos · Droite · Gauche" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                     </LinearLayout>
                     <LinearLayout android:id="@+id/tabTrellis" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
-                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="TRELLIS.2 : génération sur GPU distant, lecteur 3D et connexion MCP. Le relais Render gratuit peut se mettre en veille."
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nouvelles fonctions : atelier local sans connexion et TRELLIS.2 en ligne. Tes deux modes originaux restent dans les deux premiers onglets."
                             android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/offline3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/viewer_background" android:text="Atelier hors connexion\nImage → volume · aperçu · GLB" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                         <Button android:id="@+id/cloud3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
-                            android:backgroundTint="@color/launcher_background" android:text="Ouvrir TRELLIS.2\nImage vers 3D + MCP" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                            android:backgroundTint="@color/launcher_background" android:text="TRELLIS.2 en ligne\nGPU distant + MCP" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                     </LinearLayout>
                 </FrameLayout>
             </LinearLayout>

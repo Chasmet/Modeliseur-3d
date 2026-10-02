@@ -84,14 +84,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.0.1
+      - name: Vérifier l'architecture V6.0.2
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.0.1" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.0.1'" app/build.gradle
-          grep -q "versionCode 37" app/build.gradle
+          grep -q "Modéliseur 3D V6.0.2" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.0.2'" app/build.gradle
+          grep -q "versionCode 38" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -197,10 +197,10 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V6.0.1
+      - name: Publier l'APK V6.0.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.0.1-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.0.2-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

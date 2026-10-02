@@ -19,9 +19,11 @@ public final class HomeActivity extends AppCompatActivity {
         TabHost tabs = findViewById(android.R.id.tabhost);
         tabs.setup();
         tabs.addTab(tabs.newTabSpec("25d").setIndicator(tabTitle("2.5D")).setContent(R.id.tab25d));
-        tabs.addTab(tabs.newTabSpec("3d").setIndicator(tabTitle("3D")).setContent(R.id.tab3d));
+        tabs.addTab(tabs.newTabSpec("3d").setIndicator(tabTitle("3D · 4 images")).setContent(R.id.tab3d));
         tabs.addTab(tabs.newTabSpec("trellis").setIndicator(tabTitle("TRELLIS")).setContent(R.id.tabTrellis));
-        if (savedInstanceState != null) tabs.setCurrentTab(savedInstanceState.getInt("homeTab", 0));
+        tabs.setCurrentTab(savedInstanceState != null ? savedInstanceState.getInt("homeTab", 1)
+                : getPreferences(MODE_PRIVATE).getInt("homeTab", 1));
+        tabs.setOnTabChangedListener(tag -> getPreferences(MODE_PRIVATE).edit().putInt("homeTab", tabs.getCurrentTab()).apply());
         findViewById(R.id.settingsButton).setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.mode25dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, MainActivityV52.class))
@@ -32,15 +34,25 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.cloud3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Cloud3DActivity.class))
         );
+        findViewById(R.id.offline3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class)));
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
     }
     private TextView tabTitle(String text) {
         TextView title = new TextView(this);
-        title.setText(text); title.setTextSize(16); title.setTextColor(android.graphics.Color.WHITE);
+        title.setText(text); title.setTextSize(13); title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextColor(new android.content.res.ColorStateList(new int[][]{{android.R.attr.state_selected},{}},
+                new int[]{android.graphics.Color.WHITE,0xFF121722}));
         title.setGravity(android.view.Gravity.CENTER);
-        title.setBackgroundResource(android.R.drawable.list_selector_background);
+        android.graphics.drawable.StateListDrawable background = new android.graphics.drawable.StateListDrawable();
+        for (boolean selected : new boolean[]{true,false}) {
+            android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+            shape.setColor(selected ? 0xFFA83D00 : 0xFFDEE5EF); shape.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+            background.addState(selected ? new int[]{android.R.attr.state_selected} : new int[]{},shape);
+        }
+        title.setBackground(background);
+        title.setContentDescription(text);
         return title;
     }
     @Override protected void onSaveInstanceState(Bundle state) {
