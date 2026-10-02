@@ -135,7 +135,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }finally{part.delete();}
     }
     private void saveImage(Bitmap bitmap,int slot)throws IOException{
-        saveBitmap(bitmap,source(slot));cutout(slot).delete();depthCache(slot).delete();learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
+        saveBitmap(bitmap,source(slot));cutout(slot).delete();depthCache(slot).delete();learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();for(int side:new int[]{64,88,112})new File(learnedCache(slot).getPath()+".field-"+side).delete();prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
         ui(()->{previews[slot].setImageURI(null);previews[slot].setImageURI(Uri.fromFile(source(slot)));});
     }
     private File prepareCutout(int tolerance,boolean useAi)throws Exception{return prepareCutout(0,tolerance,useAi);}
@@ -212,10 +212,11 @@ public final class Offline3DActivity extends AppCompatActivity {
                 }
                 if(learned){
                     File[] caches=new File[4];String[] keys=new String[4];for(int slot=0;slot<4;slot++){caches[slot]=learnedCache(slot);keys[slot]=TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",slot),"");}
-                    TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,bitmaps,caches,keys,new TripoSREngine.Progress(){
+                    int neuralDetail=new int[]{64,88,112}[selected];
+                    TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,bitmaps,caches,keys,neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
-                    });checkpoint();message("Alignement des quatre formes IA et construction du maillage texturé…");
-                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,new int[]{64,88,112}[selected],profileScale);
+                    });checkpoint();message("Fusion multivue "+neuralDetail+"³ et construction du maillage texturé HD…");
+                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale);
                 }else{
                 message("Construction locale du maillage et des textures…");
                 result=multiple?OfflineFourViewVolume.build(bitmaps,new int[]{64,88,112}[selected],profileScale,fields)
