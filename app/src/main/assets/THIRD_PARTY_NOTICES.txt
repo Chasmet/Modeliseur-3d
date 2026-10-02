@@ -29,3 +29,9 @@ Projets : Android Open Source Project et AndroidX
 Licences : Apache License 2.0 selon chaque composant
 
 Aucune image utilisateur n'est envoyée vers un serveur. Les textes de licence et les avis des bibliothèques empaquetées restent également présents dans leurs distributions originales.
+
+
+AndroidX ExifInterface 1.4.2 — Android Open Source Project / Google et contributeurs.
+Licence Apache-2.0. Correction locale des huit orientations EXIF dans le troisième atelier.
+Source : https://android.googlesource.com/platform/frameworks/support/+/androidx-main/exifinterface/
+Licence embarquée : assets/licenses/androidx-exifinterface-Apache-2.0.txt
