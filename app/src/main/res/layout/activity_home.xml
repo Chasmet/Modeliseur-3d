@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="Modéliseur 3D V5.9.10"
+            android:text="Modéliseur 3D V7.2"
             android:textColor="@color/text_primary"
             android:textSize="30sp"
             android:textStyle="bold" />
@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Choisis une reconstruction ou ouvre le catalogue de 259 assets exportables."
+            android:text="Depth Anything 3 multivue local, vidéo 360° et 259 assets exportables."
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
 
@@ -37,7 +37,7 @@
             android:layout_marginTop="26dp"
             android:backgroundTint="@color/launcher_background"
             android:gravity="center"
-            android:text="2.5D\nFace + Dos"
+            android:text="FACE + DOS 2.5D\nou VIDÉO 360° EN VRAIE 3D"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="23sp"
@@ -50,7 +50,7 @@
             android:layout_marginTop="14dp"
             android:backgroundTint="@color/viewer_background"
             android:gravity="center"
-            android:text="3D anatomique\nMembres affinés + GLB propre"
+            android:text="3D V7.2 MULTI-FORMES\nAnimaux + personnages + véhicules + bâtiments + plantes"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="20sp"

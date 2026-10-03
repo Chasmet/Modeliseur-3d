@@ -3,7 +3,7 @@ package com.chasmet.modeliseur3d.model;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 
-/** Prépare une planche propre à partir du masque neuronal IS-Net Anime. */
+/** Prépare une vue détourée en conservant la confiance sous-pixel d'IS-Net. */
 final class NeuralSheetIsolator {
     private static final int BACKGROUND = Color.TRANSPARENT;
     private static final float FOREGROUND_THRESHOLD = 0.30f;
@@ -18,6 +18,7 @@ final class NeuralSheetIsolator {
         source.getPixels(pixels, 0, width, 0, 0, width, height);
 
         boolean[] foreground = new boolean[pixels.length];
+        float[] confidence = new float[pixels.length];
         float widthDenominator = Math.max(1.0f, width - 1.0f);
         float heightDenominator = Math.max(1.0f, height - 1.0f);
         for (int y = 0; y < height; y++) {
@@ -25,10 +26,12 @@ final class NeuralSheetIsolator {
             int row = y * width;
             for (int x = 0; x < width; x++) {
                 float normalizedX = x / widthDenominator;
-                foreground[row + x] = mask.sampleNormalized(
+                float probability = mask.sampleNormalized(
                         normalizedX,
                         normalizedY
-                ) >= FOREGROUND_THRESHOLD;
+                );
+                confidence[row + x] = probability;
+                foreground[row + x] = probability >= FOREGROUND_THRESHOLD;
             }
         }
 
@@ -41,9 +44,16 @@ final class NeuralSheetIsolator {
         );
 
         for (int i = 0; i < pixels.length; i++) {
-            pixels[i] = foreground[i]
-                    ? 0xFF000000 | (pixels[i] & 0x00FFFFFF)
-                    : BACKGROUND;
+            if (!foreground[i]) {
+                pixels[i] = BACKGROUND;
+                continue;
+            }
+            // Les anciennes versions forçaient tout le sujet à alpha 255. La
+            // V6 conserve la transition du réseau : elle sert ensuite à placer
+            // la surface entre deux voxels au lieu de couper le contour net.
+            float softened = smoothStep(0.18f, 0.72f, confidence[i]);
+            int alpha = Math.round(Math.max(0.38f, softened) * 255.0f);
+            pixels[i] = (alpha << 24) | (pixels[i] & 0x00FFFFFF);
         }
         Bitmap result = Bitmap.createBitmap(
                 width,
@@ -168,5 +178,13 @@ final class NeuralSheetIsolator {
             queue[tail++] = index;
         }
         return tail;
+    }
+
+    private static float smoothStep(float edge0, float edge1, float value) {
+        float amount = Math.max(
+                0.0f,
+                Math.min(1.0f, (value - edge0) / Math.max(0.0001f, edge1 - edge0))
+        );
+        return amount * amount * (3.0f - 2.0f * amount);
     }
 }

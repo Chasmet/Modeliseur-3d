@@ -9,7 +9,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="3D locale V5.9.8 — Profils manuels"
+        android:text="3D locale V7.3.1 — composants suivis + DA3"
         android:textColor="@color/text_primary"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Le volume anatomique et l’export GLB propre sont conservés. Les profils droit et gauche peuvent maintenant être tournés ou mis en miroir manuellement, avec l’état affiché directement."
+        android:text="Les quatre vues sont croisées par composants 3D. Les pattes, jambes et bras sont suivis verticalement avant la fusion DA3 pour éviter les murs de matière entre membres."
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_manual_help"
                 android:padding="10dp"
-                android:text="Même personnage et corps entier sur les quatre images. Utilise les boutons sous les profils jusqu’à voir le personnage debout et orienté dans le bon sens."
+                android:text="Même sujet entier et même pose sur les quatre images. Utilise les boutons sous les profils jusqu’à voir le sujet orienté dans le bon sens."
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
@@ -264,6 +264,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
                     android:layout_weight="1"
+                    android:enabled="true"
                     android:text="Miroir"
                     android:textAllCaps="false" />
             </LinearLayout>
@@ -292,7 +293,33 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Épaisseur générale du personnage"
+                android:text="Famille de forme à modéliser"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/subjectCategorySpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:contentDescription="Famille de forme 3D"
+                android:minHeight="48dp"
+                android:spinnerMode="dialog" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:background="@drawable/bg_manual_help"
+                android:padding="8dp"
+                android:text="Auto convient aux sujets simples. Pour un cheval, choisis Animal. Pour un conducteur sur moto, kart ou siège, choisis Personnage + véhicule afin de séparer le haut articulé de la base large."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Épaisseur générale du modèle"
                 android:textColor="@color/text_primary"
                 android:textStyle="bold" />
 
@@ -341,7 +368,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="2"
                     android:enabled="false"
-                    android:text="Créer la 3D anatomique"
+                    android:text="Créer la 3D composants suivis"
                     android:textAllCaps="false"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -430,7 +457,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Sélectionne les quatre vues du personnage."
+            android:text="Sélectionne les quatre vues du même sujet."
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>

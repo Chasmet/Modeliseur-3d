@@ -21,6 +21,7 @@ public final class FourViewBitmapOrientationNormalizer {
         validate(images, bounds);
         int quarterTurns = 0;
         int halfTurns = 0;
+        int wideProfilesPreserved = 0;
 
         // Le dos doit avoir le même haut et le même bas que la face.
         double[] frontRows = rowProfile(
@@ -50,10 +51,14 @@ public final class FourViewBitmapOrientationNormalizer {
             Rect currentBounds = bounds[index];
             double aspect = currentBounds.width()
                     / Math.max(1.0, currentBounds.height());
-            boolean horizontalPose = aspect > 1.10
-                    && (referenceAspect < 0.98 || aspect > referenceAspect * 1.30);
+            double[] direct = rowProfile(images[index], currentBounds);
+            double directScore = similarity(reference, direct);
+            boolean quarterTurned = false;
 
-            if (horizontalPose) {
+            if (ProfileOrientationPolicy.isQuarterTurnCandidate(
+                    aspect,
+                    referenceAspect
+            )) {
                 Candidate clockwise = candidate(images[index], 90.0f, reference);
                 Candidate counterClockwise = candidate(images[index], -90.0f, reference);
                 Candidate selected = clockwise.score >= counterClockwise.score
@@ -62,13 +67,25 @@ public final class FourViewBitmapOrientationNormalizer {
                 Candidate rejected = selected == clockwise
                         ? counterClockwise
                         : clockwise;
-                replace(images, bounds, index, selected.bitmap, selected.bounds);
-                recycle(rejected.bitmap);
-                quarterTurns++;
-            } else {
-                double[] direct = rowProfile(images[index], currentBounds);
+                if (ProfileOrientationPolicy.shouldQuarterTurn(
+                        aspect,
+                        referenceAspect,
+                        directScore,
+                        selected.score
+                )) {
+                    replace(images, bounds, index, selected.bitmap, selected.bounds);
+                    recycle(rejected.bitmap);
+                    quarterTurns++;
+                    quarterTurned = true;
+                } else {
+                    recycle(selected.bitmap);
+                    recycle(rejected.bitmap);
+                    wideProfilesPreserved++;
+                }
+            }
+            if (!quarterTurned) {
                 if (similarity(reference, reversed(direct))
-                        > similarity(reference, direct) + 0.09) {
+                        > directScore + 0.09) {
                     replaceRotated(images, bounds, index, 180.0f);
                     halfTurns++;
                 }
@@ -77,7 +94,10 @@ public final class FourViewBitmapOrientationNormalizer {
 
         String summary;
         if (quarterTurns == 0 && halfTurns == 0) {
-            summary = "orientation verticale vérifiée";
+            summary = wideProfilesPreserved > 0
+                    ? wideProfilesPreserved
+                    + " profil(s) naturellement large(s) conservé(s)"
+                    : "orientation verticale vérifiée";
         } else if (quarterTurns > 0 && halfTurns > 0) {
             summary = quarterTurns + " profil(s) redressé(s) à 90° et "
                     + halfTurns + " vue(s) retournée(s) à 180°";
@@ -86,7 +106,16 @@ public final class FourViewBitmapOrientationNormalizer {
         } else {
             summary = halfTurns + " vue(s) retournée(s) automatiquement à 180°";
         }
-        return new Result(quarterTurns, halfTurns, summary);
+        if (wideProfilesPreserved > 0 && (quarterTurns > 0 || halfTurns > 0)) {
+            summary += " • " + wideProfilesPreserved
+                    + " profil(s) large(s) conservé(s)";
+        }
+        return new Result(
+                quarterTurns,
+                halfTurns,
+                wideProfilesPreserved,
+                summary
+        );
     }
 
     private static Candidate candidate(
@@ -277,11 +306,18 @@ public final class FourViewBitmapOrientationNormalizer {
     public static final class Result {
         private final int quarterTurns;
         private final int halfTurns;
+        private final int wideProfilesPreserved;
         private final String summary;
 
-        Result(int quarterTurns, int halfTurns, String summary) {
+        Result(
+                int quarterTurns,
+                int halfTurns,
+                int wideProfilesPreserved,
+                String summary
+        ) {
             this.quarterTurns = quarterTurns;
             this.halfTurns = halfTurns;
+            this.wideProfilesPreserved = wideProfilesPreserved;
             this.summary = summary;
         }
 
@@ -291,6 +327,10 @@ public final class FourViewBitmapOrientationNormalizer {
 
         public int getHalfTurns() {
             return halfTurns;
+        }
+
+        public int getWideProfilesPreserved() {
+            return wideProfilesPreserved;
         }
 
         public boolean hasCorrection() {

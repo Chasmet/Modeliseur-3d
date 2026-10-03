@@ -1,16 +1,31 @@
-# Validation V4.4 locale
+# Validation V7.2
 
 La validation automatique doit confirmer les points suivants :
 
-- aucune permission `android.permission.INTERNET` ;
-- aucune classe Tripo, clé API ou adresse de service cloud ;
-- version Android `4.4.0` / versionCode `10` ;
-- extraction locale de huit vues vidéo ;
-- regroupement des silhouettes testé en Java ;
-- simplification du maillage mobile testée en Java ;
-- export HD conservé séparément ;
-- copie mobile refusée si elle dépasse 200 000 octets ;
-- IS-Net Anime FP32 et Depth Anything V2 vérifiés par SHA-256 dans l’APK ;
+- version Android `7.2.0` / versionCode `40` ;
+- reconstruction des photos exécutée localement ;
+- IS-Net Anime FP32 vérifié par SHA-256 dans l'APK ;
+- DA3-SMALL quatre vues vérifié par SHA-256 dans l'APK ;
+- sortie ONNX comparée numériquement à PyTorch avant la compilation ;
+- fusion de profondeur incapable de créer un voxel hors de la coque ;
+- garde-fou anti-écrasement testé en Java pur ;
+- profil de cheval naturellement large conservé sans rotation à 90° ;
+- vraie photo horizontale toujours redressée lorsque le score le confirme ;
+- texture opaque sans propager un détail local sur toute la cellule ;
+- familles animal, composé, objet rigide et végétal testées en Java pur ;
+- sélection manuelle prioritaire sur la détection Auto ;
+- sortie NNAPI vide ou plate rejouée automatiquement sur CPU ;
+- motif de la coque de secours affiché dans le résumé final ;
+- enveloppe continue testée en Java pur ;
+- coins artificiels arrondis sans perdre les projections ;
+- profondeur locale des membres inférieure à celle du torse ;
+- espace entre les jambes conservé ;
+- détail adaptatif accepté seulement avec deux axes de support ;
+- profil à 9 % détecté face à un profil valide à 45 % ;
+- vue de secours appliquée à la géométrie et à la texture ;
+- profondeur d'un kart large conservée sans aplatir ni extruder les bras du conducteur ;
+- vidéo routée vers la surface continue huit vues et non vers le 2.5D ;
+- export GLB complet sans simplification ;
 - signature APK v1/v2 vérifiée ;
 - `lintDebug` et `assembleDebug` réussis.
 
@@ -23,5 +38,5 @@ Commande de compilation :
 Artefact attendu :
 
 ```text
-Modeliseur3D-V4.4-Local-Video8-debug
+Modeliseur-V7-2-DA3-Multi-Formes-debug
 ```

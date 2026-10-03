@@ -1,105 +1,129 @@
-# Modéliseur 3D V4.4 — Android local, image et vidéo
+# Modéliseur 3D V7.2 DA3 multi-formes — Android Java
 
-Application Android Java qui transforme localement :
+Application Android qui transforme quatre vues réelles d'un même sujet
+(face, profil droit, dos et profil gauche) en un modèle 3D texturé exportable en
+GLB. Le dépôt contient aussi une vraie reconstruction vidéo 360° à huit angles,
+le moteur 2.5D Face/Dos et un catalogue de 259 assets 3D.
 
-- une image unique ;
-- une planche contenant plusieurs vues ;
-- une courte vidéo de rotation ;
+## Reconstruction V7.2 « modeleur multi-formes »
 
-en un modèle 3D texturé exportable en GLB.
+La V7.2 conserve DA3-SMALL et ajoute des priors structurels vérifiables pour les
+animaux, personnages, sujets composés, objets rigides et végétaux :
 
-## Confidentialité et fonctionnement
+1. détourage local de chaque vue avec IS-Net Anime FP32 ;
+2. conservation de la confiance alpha du réseau au bord du sujet ;
+3. correction automatique d'un profil à 90° seulement si la silhouette tournée
+   correspond nettement mieux aux vues face/dos ;
+4. conservation explicite des profils naturellement larges (cheval, quadrupède,
+   kart), même s'ils sont plus larges que hauts ;
+5. mesure de la surface et de la largeur utile de chaque profil ;
+6. remplacement d'un profil effondré par la vue opposée en miroir ;
+7. normalisation indépendante des axes largeur, hauteur et profondeur ;
+8. analyse simultanée des quatre images par Depth Anything 3 Small ;
+9. repli automatique NNAPI vers CPU si l'accélérateur échoue ou renvoie une
+   profondeur vide/plate ;
+10. projection des profondeurs selon les quatre poses canoniques connues ;
+11. fusion robuste des surfaces face/dos et droite/gauche ;
+12. sculpture DA3 renforcée, limitée à l'intérieur de la coque vérifiée ;
+13. diagnostic visible lorsqu'une coque de secours doit encore être utilisée ;
+14. garde-fou automatique si les cartes neuronales écrasent trop le volume ;
+15. récupération adaptative d'un détail seulement s'il est confirmé sur deux
+   axes différents ;
+16. arrondi local des sections du torse, des membres et des accessoires afin de
+   supprimer les coins artificiels de l'intersection orthographique ;
+17. choix Auto ou manuel entre Personnage, Animal, Personnage + véhicule,
+   Habitation/objet rigide et Arbre/fleur/plante ;
+18. traitement du conducteur articulé séparé de la zone basse large du véhicule ;
+19. fusion DA3 plus prudente sur les chevauchements main/guidon/siège/châssis ;
+20. profondeur maximale accrue pour les animaux et objets réellement allongés ;
+21. mode de profondeur séparé pour les formes larges comme un kart ou un siège ;
+22. champ de densité sous-pixel transmis directement au mailleur ;
+23. sélection UV contrôlée par les quatre silhouettes ;
+24. dilatation locale des bords de texture, puis couleur moyenne neutre dans les
+   zones lointaines afin d'éviter les visages ou détails répétés ;
+25. surface lisse, normales recalculées et atlas multivue jusqu'à 2K ;
+26. export du maillage complet sans simplification destructive.
 
-La V4.4 n’utilise :
+Le mode haute précision utilise une grille allant jusqu'à 128 × 256 × 304 sur
+les appareils disposant de suffisamment de mémoire. Un profil compatible réduit
+automatiquement la grille et l'atlas pour éviter une saturation mémoire.
 
-- aucune API distante ;
-- aucune clé ;
-- aucun compte ;
-- aucun crédit ni abonnement ;
-- aucune permission Internet.
+## Ce qui améliore réellement la qualité
 
-Les images, les trames vidéo, les modèles neuronaux et les GLB restent sur le téléphone. Internet est seulement utilisé par GitHub Actions pendant la compilation pour télécharger les modèles open source avant de les intégrer à l’APK.
+- les contours ne sont plus coupés en « vrai/faux » avant la création du
+  maillage ;
+- ajouter des triangles sert désormais à représenter une surface fractionnaire,
+  et non à lisser une forme déjà appauvrie ;
+- les bras et les jambes séparés reçoivent une profondeur locale plus faible que
+  le torse ;
+- les espaces visibles, notamment entre les jambes, restent ouverts ;
+- un accessoire caché dans une vue peut être conservé s'il est visible depuis
+  deux directions perpendiculaires ;
+- le score de conservation des silhouettes est calculé après reconstruction et
+  affiché avec le résultat ;
+- un profil presque vide ne peut plus aplatir l'ensemble du sujet ;
+- la géométrie et la texture utilisent exactement le même profil de secours ;
+- un kart ou un objet large n'est plus aminci comme un membre humain ;
+- dans un sujet composé, les membres du conducteur ne sont plus extrudés sur
+  toute la longueur du véhicule ;
+- la profondeur du visage, du vêtement, du siège et des pièces mécaniques peut
+  désormais modifier la surface au lieu de rester uniquement dans la texture ;
+- le profil d'un cheval n'est plus redressé à tort à 90° ;
+- les zones extérieures au détourage reçoivent une couleur extrapolée du sujet
+  au lieu du fond sombre de l'atlas ;
+- une sortie NNAPI invalide est recalculée sur CPU avant tout retour à la coque ;
+- une vidéo de rotation utilise huit angles pour créer une vraie surface 3D et
+  une texture cylindrique, au lieu d'être réduite à quatre faces 2.5D.
 
-## Vidéo locale en huit vues
+## Prise de vues recommandée
 
-Pour une vidéo, l’application :
+Pour exploiter la précision du moteur :
 
-1. vérifie que sa durée est comprise entre 1,2 seconde et 2 minutes ;
-2. répartit huit zones sur la rotation ;
-3. compare plusieurs trames dans chaque zone ;
-4. conserve la trame la plus nette et la mieux exposée ;
-5. corrige l’orientation de la vidéo ;
-6. compose localement une planche 4 × 2 ;
-7. transmet cette planche au moteur multivue embarqué.
+- photographier exactement le même personnage et la même pose ;
+- garder le corps entier visible, sans couper les pieds ni les accessoires ;
+- utiliser une lumière uniforme et un fond contrasté ;
+- conserver la même hauteur de caméra et une distance proche ;
+- fournir les vues dans l'ordre Face, Droite, Dos, Gauche ;
+- corriger la rotation ou le miroir des profils dans l'écran prévu à cet effet.
 
-Le MP4 n’est jamais envoyé ni copié sur un serveur.
+## Export GLB
 
-## Reconstruction locale
-
-Pipeline principal :
-
-1. décodage de l’entrée jusqu’à 2048 px ;
-2. détourage par **IS-Net Anime FP32** ;
-3. regroupement des morceaux appartenant au même sujet ;
-4. détection des vues réellement exploitables ;
-5. enveloppe volumique multivue ou volume monoculaire arrondi ;
-6. maillage lissé préservant les membres et accessoires ;
-7. relief par **Depth Anything V2 Small FP32** ;
-8. calcul NNAPI quand il est compatible, avec repli CPU multi-cœurs ;
-9. affichage OpenGL ES 3 ;
-10. export GLB, OBJ, MTL et texture.
-
-## Deux GLB à chaque export
-
-### GLB haute définition
+Le mode 3D crée un fichier autonome :
 
 ```text
-personnage_v44_local_hd.glb
+modele_3d_v7_2_da3_multiformes.glb
 ```
 
-Il conserve le maillage complet et la texture PNG intégrée.
+L'export conserve le nombre complet de triangles, les normales, les UV et la
+texture PNG. Le matériau externe utilise `KHR_materials_unlit`, masque les faces
+arrière et désactive les mipmaps afin d'éviter le mélange entre les quatre zones
+de l'atlas.
 
-### GLB mobile limité à 200 Ko
+## Catalogue
 
-```text
-personnage_v44_mobile_200ko.glb
-```
+- 259 assets classés ;
+- 247 modèles procéduraux générés hors ligne sous licence CC0 ;
+- 12 modèles officiels Khronos sous licences permissives ;
+- 112 assets animés ;
+- ouverture et export via le sélecteur de documents Android ;
+- limite de sécurité de 8 Mo par asset téléchargé.
 
-L’application réduit progressivement :
-
-- le nombre de triangles ;
-- la taille de la texture ;
-- la qualité JPEG ;
-
-puis mesure le fichier réellement écrit. Le GLB mobile n’est accepté que si sa taille est comprise entre 1 et **200 000 octets**.
-
-Une limite de 200 Ko impose nécessairement une perte de détails. Le GLB HD reste disponible pour conserver la meilleure qualité produite par le téléphone.
-
-## Modèles embarqués
-
-### IS-Net Anime FP32
-
-```text
-SHA-256 : 6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba
-```
-
-### Depth Anything V2 Small FP32
-
-```text
-SHA-256 : afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
-```
-
-Runtime : ONNX Runtime Android 1.20.0.
+Le catalogue utilise Internet pour récupérer les modèles distants. La
+reconstruction des photos reste exécutée sur le téléphone et n'envoie pas les
+images à un serveur.
 
 ## Configuration Android
 
-- langage : Java ;
+- Java uniquement ;
 - `minSdkVersion 21` ;
 - `compileSdkVersion 34` ;
 - `targetSdkVersion 34` ;
-- ABI : `arm64-v8a` ;
-- version : `4.4.0` ;
-- versionCode : `10`.
+- Java 17 ;
+- ABI `arm64-v8a` ;
+- ONNX Runtime Android 1.20.0 (compatible minSdk 21) ;
+- IS-Net Anime FP32 pour le détourage ;
+- DA3-SMALL quatre vues 224 px pour la profondeur ;
+- version `7.2.0` (`versionCode 40`).
 
 ## Compilation
 
@@ -114,35 +138,23 @@ APK produit :
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Le workflow `.github/workflows/android.yml` exécute les tests Java, vérifie l’absence de permission Internet, compile l’APK, contrôle sa signature et les SHA-256 des deux modèles, puis publie l’artefact :
+Le workflow `.github/workflows/android.yml` :
 
-```text
-Modeliseur3D-V4.4-Local-Video8-debug
-```
+- télécharge et vérifie IS-Net Anime FP32 par SHA-256 ;
+- exporte le checkpoint DA3-SMALL épinglé vers ONNX quatre vues et compare ses
+  sorties à PyTorch ;
+- exécute les tests Java du catalogue, des orientations, de la géométrie
+  historique, de l'enveloppe continue, de la fiabilité des profils et de la
+  fusion de profondeur ;
+- lance `lintDebug` et `assembleDebug` ;
+- vérifie la signature et les deux modèles ONNX inclus ;
+- publie l'artefact `Modeliseur-V7-2-DA3-Multi-Formes-debug`.
 
-## Principaux fichiers V4.4
+## Limite physique
 
-```text
-app/src/main/java/com/chasmet/modeliseur3d/
-├── MainActivity.java
-├── media/
-│   ├── VideoFrameExtractor.java
-│   └── VideoSheetComposer.java
-├── model/
-│   ├── AnimeSegmentationEngine.java
-│   ├── NeuralDepthEngine.java
-│   ├── NeuralReconstructionEngine.java
-│   ├── MobileMeshOptimizer.java
-│   ├── MobileGlbExporter.java
-│   ├── GlbExporter.java
-│   └── ObjExporter.java
-└── gl/
-    ├── ModelGLSurfaceView.java
-    └── ModelRenderer.java
-```
-
-## Limites réelles
-
-Cette application n’exécute pas un grand générateur 3D distant. Elle combine segmentation, profondeur neuronale et reconstruction géométrique sur Android. La précision dépend directement de la qualité de l’image ou de la rotation vidéo : pose stable, sujet entier visible, fond propre, éclairage régulier et angles suffisamment différents.
-
-Les zones constamment cachées, l’intérieur des vêtements et les détails très fins ne peuvent pas être reconstruits exactement. Aucun squelette d’animation n’est généré dans cette version.
+Quatre images ne contiennent aucune information sur une zone cachée dans les
+quatre vues. La V7.2 améliore l'enveloppe, les profils, les contours et la surface,
+mais elle ne peut pas inventer avec certitude l'intérieur d'un vêtement, un
+dessous invisible ou une micro-géométrie absente des photos. Une reconstruction
+photogrammétrique complète nécessiterait davantage d'angles et des
+correspondances de points fiables.

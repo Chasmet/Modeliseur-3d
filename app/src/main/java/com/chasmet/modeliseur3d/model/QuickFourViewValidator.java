@@ -46,6 +46,13 @@ public final class QuickFourViewValidator {
                         GRID_WIDTH,
                         GRID_HEIGHT
                 );
+        FourViewReliabilityAnalyzer.PairAssessment profileReliability =
+                FourViewReliabilityAnalyzer.assessPair(
+                        masks[StylizedFourViewProjector.RIGHT],
+                        masks[StylizedFourViewProjector.LEFT],
+                        GRID_WIDTH,
+                        GRID_HEIGHT
+                );
         double coherence = FourViewAutoCorrector.computeCoherence(
                 masks[StylizedFourViewProjector.FRONT],
                 masks[StylizedFourViewProjector.BACK],
@@ -57,9 +64,18 @@ public final class QuickFourViewValidator {
         );
 
         boolean faceBackWarning = faceBack < 0.18;
-        boolean profileWarning = profiles.getSelectedScore() < 0.18;
+        boolean rightProfileFallback = profileReliability.getReplacement()
+                == FourViewReliabilityAnalyzer.Replacement.FIRST_FROM_SECOND;
+        boolean leftProfileFallback = profileReliability.getReplacement()
+                == FourViewReliabilityAnalyzer.Replacement.SECOND_FROM_FIRST;
+        boolean profileWarning = profiles.getSelectedScore() < 0.18
+                || profileReliability.requiresReplacement();
         String message;
-        if (profiles.shouldFlipLeft()) {
+        if (rightProfileFallback) {
+            message = "Profil droit incomplet — récupération automatique depuis le profil gauche.";
+        } else if (leftProfileFallback) {
+            message = "Profil gauche incomplet — récupération automatique depuis le profil droit.";
+        } else if (profiles.shouldFlipLeft()) {
             message = "Profil détecté en miroir — correction automatique appliquée.";
         } else if (faceBackWarning || profileWarning || coherence < 0.42) {
             message = "Vues différentes — le mode adaptatif corrigera l'échelle et la profondeur.";
@@ -70,6 +86,8 @@ public final class QuickFourViewValidator {
                 profiles.shouldFlipLeft(),
                 faceBackWarning,
                 profileWarning,
+                rightProfileFallback,
+                leftProfileFallback,
                 coherence,
                 message
         );
@@ -203,6 +221,8 @@ public final class QuickFourViewValidator {
         private final boolean mirrorCorrection;
         private final boolean faceBackWarning;
         private final boolean profileWarning;
+        private final boolean rightProfileFallback;
+        private final boolean leftProfileFallback;
         private final double coherence;
         private final String message;
 
@@ -210,12 +230,16 @@ public final class QuickFourViewValidator {
                 boolean mirrorCorrection,
                 boolean faceBackWarning,
                 boolean profileWarning,
+                boolean rightProfileFallback,
+                boolean leftProfileFallback,
                 double coherence,
                 String message
         ) {
             this.mirrorCorrection = mirrorCorrection;
             this.faceBackWarning = faceBackWarning;
             this.profileWarning = profileWarning;
+            this.rightProfileFallback = rightProfileFallback;
+            this.leftProfileFallback = leftProfileFallback;
             this.coherence = coherence;
             this.message = message;
         }
@@ -230,6 +254,14 @@ public final class QuickFourViewValidator {
 
         public boolean hasProfileWarning() {
             return profileWarning;
+        }
+
+        public boolean hasRightProfileFallback() {
+            return rightProfileFallback;
+        }
+
+        public boolean hasLeftProfileFallback() {
+            return leftProfileFallback;
         }
 
         public double getCoherence() {
