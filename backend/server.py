@@ -507,78 +507,103 @@ mcp = FastMCP('Modéliseur 3D', stateless_http=True, json_response=True, streama
 
 @mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': False})
 def application_status() -> dict:
-    """Read the current phone connection. The open /mcp endpoint requires no authentication."""
+    """Read whether the Android Modéliseur 3D application is currently connected."""
     owner = owner_context.get()
     with db() as c:
         row = c.execute('SELECT seen FROM devices WHERE id=?', (owner,)).fetchone()
-    seen = row['seen'] if row else 0
-    return {'phone_online': bool(row) and time.time() - seen < 20, 'last_seen': seen,
-            'workspace': 'android' if row else 'public', 'authentication': 'none',
-            'generation_runs_on': 'remote GPU',
-            'profile': '512 generation / 100000 triangles / 1024 texture', 'local_trellis_supported': False}
+    seen = float(row['seen'] or 0) if row else 0
+    online = bool(row) and time.time() - seen < 25
+    return {
+        'phone_online': online,
+        'last_seen': seen,
+        'workspace': 'android' if row else 'public',
+        'authentication': 'none',
+        'generation_runs_on': 'Android phone / local engines',
+        'engines': ['TripoSR local', 'Silhouettes local', 'IS-Net local', 'Depth Anything V2 local'],
+        'remote_gpu_generation': False
+    }
+
+@mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': False})
+def application_capabilities() -> dict:
+    """List the 3D tools available inside the Android application."""
+    return {
+        'reconstruction': {
+            'triposr_single': '1 image -> TripoSR local -> GLB',
+            'triposr_four': '4 views -> TripoSR local + app fusion -> textured GLB',
+            'silhouettes_single': '1 image -> lightweight local silhouette volume',
+            'silhouettes_four': '4 views -> lightweight local silhouette reconstruction'
+        },
+        'image_tools': ['IS-Net local cutout', 'Depth Anything V2 local depth', 'rotation', 'horizontal mirror'],
+        'output': ['GLB local storage', 'built-in viewer', 'export'],
+        'network_role': 'The MCP only transfers commands/images/results. 3D inference runs inside the Android app.'
+    }
 
 @mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': False})
 def list_models_and_images() -> dict:
-    """List generation jobs and images already uploaded from this paired phone only."""
+    """List local Android MCP creation commands and their uploaded reference images."""
     owner = owner_context.get()
-    return {'jobs': rows('jobs', owner), 'images': rows('refs', owner)}
+    return {'commands': local_rows(owner), 'images': rows('refs', owner)}
 
 @mcp.tool(annotations={'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': True})
-async def create_model_from_images(images: list[str], humanoid: bool = False) -> dict:
-    """Create 3D model candidates directly from one to four user images.
-    Each item may be an HTTPS image URL, a base64 data URL, "base64:<data>", or raw base64.
-    TRELLIS.2 is single-view, so multiple images intentionally create one candidate per view
-    instead of pretending to fuse cameras. Put the best front/three-quarter view first.
+async def create_model_from_images(images: list[str], engine: str = 'auto',
+                                   quality: str = 'balanced', smoothing: bool = True) -> dict:
+    """Send one to four user images to the Android app and create GLB models with its built-in local engines.
+    With four images, auto/TripoSR uses the app's four-view TripoSR fusion.
+    With one image, it uses local single-image TripoSR.
+    With two or three images, one independent single-image model is queued per image.
+    Set engine to 'silhouettes' to use the lighter local silhouette engine instead.
     """
     if not isinstance(images, list) or not 1 <= len(images) <= 4:
         raise ValueError('Fournis entre 1 et 4 images.')
     owner = owner_context.get()
-    references, jobs = [], []
+    if not phone_online(owner):
+        raise ValueError("Le téléphone Modéliseur 3D n'est pas en ligne. Ouvre l'application puis réessaie.")
+    engine = (engine or 'auto').lower()
+    if engine not in ('auto', 'triposr', 'silhouettes'):
+        raise ValueError("Moteur invalide : auto, triposr ou silhouettes.")
+    quality = (quality or 'balanced').lower()
+    if quality not in ('fast', 'balanced', 'precise'):
+        raise ValueError("Qualité invalide : fast, balanced ou precise.")
+
+    references = []
     for source in images:
         raw = await read_image_source(source)
-        reference_id = store_reference_bytes(owner, raw)
-        references.append(reference_id)
-        jobs.append(start_job(owner, reference_id, humanoid))
-    return {'primary_job_id': jobs[0]['id'], 'jobs': jobs, 'reference_ids': references,
-            'mode': 'single-view-candidates', 'count': len(jobs)}
+        references.append(store_reference_bytes(owner, raw))
+
+    options = {'quality': quality, 'smoothing': bool(smoothing)}
+    commands = []
+    if len(references) == 4:
+        selected = 'silhouettes_four' if engine == 'silhouettes' else 'triposr_four'
+        commands.append(create_local_command(owner, references, selected, options))
+    else:
+        selected = 'silhouettes_single' if engine == 'silhouettes' else 'triposr_single'
+        for reference_id in references:
+            commands.append(create_local_command(owner, [reference_id], selected, options))
+
+    return {
+        'primary_model_id': commands[0]['id'],
+        'models': commands,
+        'count': len(commands),
+        'execution': 'Android local',
+        'engine': engine,
+        'quality': quality
+    }
 
 @mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': False})
-def model_status(job_id: str) -> dict:
-    """Read one generation job status."""
-    return job_for(owner_context.get(), job_id)
+def model_status(model_id: str) -> dict:
+    """Read the status of a model being generated by the Android app."""
+    return local_command_for(owner_context.get(), model_id)
 
 @mcp.tool(annotations={'readOnlyHint': True, 'openWorldHint': True})
-def model_download(job_id: str) -> dict:
-    """Return the public GLB download URL when a model is ready."""
-    job = job_for(owner_context.get(), job_id)
-    if job['status'] != 'ready':
-        return {'status': job['status'], 'message': job.get('message', '')}
+def model_download(model_id: str) -> dict:
+    """Return the GLB download URL after the Android app has finished local generation."""
+    command = local_command_for(owner_context.get(), model_id)
+    if command['status'] != 'ready':
+        return {'status': command['status'], 'message': command.get('message', '')}
     host = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '')
-    path = '/public/jobs/' + job_id + '/file'
-    return {'status': 'ready', 'url': ('https://' + host + path) if host else path}
-
-@mcp.tool(annotations={'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': True})
-async def generate_model(reference_id: str, humanoid: bool = False) -> dict:
-    """Generate a mobile GLB from an image already uploaded by the paired phone. Uses remote GPU quota.
-    Optional humanoid animations are approximate. Do not retry GPU quota errors automatically.
-    """
-    return start_job(owner_context.get(), reference_id, humanoid)
-
-@mcp.tool(annotations={'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': False})
-def open_model_on_phone(job_id: str) -> dict:
-    """Ask the paired phone to download/open its ready GLB in its built-in 3D viewer.
-    Requires the app's TRELLIS/MCP screen to be open. Does not control other applications.
-    """
-    owner = owner_context.get()
-    if job_for(owner, job_id)['status'] != 'ready': raise ValueError('GLB pas encore prêt.')
-    if owner == PUBLIC_OWNER:
-        raise ValueError('Aucun téléphone Modéliseur 3D n’est actuellement associé à ce MCP.')
-    with db() as c:
-        if c.execute('SELECT COUNT(*) FROM commands WHERE device=? AND acknowledged=0', (owner,)).fetchone()[0] >= 8:
-            raise ValueError('Trop de commandes en attente.')
-        command_id = secrets.token_hex(16)
-        c.execute('INSERT INTO commands(id,device,job,created) VALUES(?,?,?,?)', (command_id, owner, job_id, time.time()))
-    return {'command_id': command_id, 'status': 'pending_phone_acknowledgement'}
+    path = '/public/local/' + model_id + '/file'
+    return {'status': 'ready', 'url': ('https://' + host + path) if host else path,
+            'generated_on': 'Android phone'}
 
 @asynccontextmanager
 async def lifespan(app):
