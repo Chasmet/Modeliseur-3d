@@ -102,7 +102,8 @@ public final class TripoSRPhotoTexture {
             if((t&3071)==0)check();float nx=0,ny=0,nz=0,x=0,y=0,z=0;for(int k=0;k<3;k++){int at=original[t+k]*3;nx+=n[at];ny+=n[at+1];nz+=n[at+2];x+=p[at]/3;y+=p[at+1]/3;z+=p[at+2]/3;}int v=view(nx,ny,nz);
             // A continuous front chart avoids alternating top/side UV seams around eyes,
             // lips and cloth folds. Occluded triangles still choose a visible neural chart.
-            if(maps.visibleFront(x,y,z))v=0;
+            float length=(float)Math.sqrt(nx*nx+ny*ny+nz*nz);
+            if(nz>length*.12f&&maps.visibleFront(x,y,z))v=0;
             else{
                 float best=-Float.MAX_VALUE;float[] normal={nx,ny,nz};
                 for(int chart=1;chart<6;chart++)if(maps.visible(chart,x,y,z)){float score=normal[depthAxis(chart)]*sign(chart);if(score>best){best=score;v=chart;}}
@@ -129,7 +130,7 @@ public final class TripoSRPhotoTexture {
                     int au=axisU(v),av=axisV(v);point[au]=bounds[au]+(flipU(v)?1-uu:uu)*(bounds[au+3]-bounds[au]);point[av]=bounds[av]+(flipV(v)?1-vv:vv)*(bounds[av+3]-bounds[av]);point[depthAxis(v)]=dd*sign(v);
                     int neural=field.color(point[0],point[1],point[2]);float facing=maps.normalZ[v][index];
                     if(v==0||maps.visibleFront(point[0],point[1],point[2])){
-                        int colour=source.projected(point[0],point[1],maps);if((colour>>>24)>128){float weight=v==0?1:clamp((facing+.05f)/.6f);weight=weight*weight*(3-2*weight);neural=blend(neural,colour,weight);}
+                        int colour=source.projected(point[0],point[1],maps);if((colour>>>24)>128){float weight=clamp((facing-.08f)/.47f);weight=weight*weight*(3-2*weight);neural=blend(neural,colour,weight);}
                     }
                     row[x]=neural;
                 }

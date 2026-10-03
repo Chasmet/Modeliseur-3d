@@ -95,7 +95,7 @@ Accès : accueil → IA locale → TripoSR — 1 seule image, ou atelier → tro
 choix du moteur. Tests : véritable encodeur/décodeur à une image sans sockets,
 cache réutilisé, profondeur non plate, couleurs et export GLB avec inputViews=1.
 
-## Qualité une image — 6.3.3
+## Qualité une image — 6.3.5
 
 Le chemin de l’atelier utilise maintenant `reconstructSingleDetailed` : une grille
 64³ localise le sujet, puis le vrai décodeur est interrogé à une nouvelle résolution
@@ -113,7 +113,9 @@ Face est recalée par les silhouettes de lignes et projetée seulement sur les
 surfaces orientées vers elle et visibles dans une carte de profondeur CPU.
 Le dos, les parties occultées et les zones transparentes utilisent les couleurs
 neuronales. L’alpha de la photo n’enlève aucun triangle. Les raccords photo/IA sont
-pondérés par l’angle de la surface. Le calcul des faces supérieure et inférieure
+pondérés par l’angle de la surface. Les projections rasantes utilisent progressivement les couleurs neuronales et
+une carte UV latérale afin d’éviter les bandes étirées sur les profils.
+Le calcul des faces supérieure et inférieure
 évite les UV dégénérés d’un atlas ne comportant que des vues latérales.
 
 Ce traitement conserve mieux les motifs visibles, mais ne récupère pas les détails
