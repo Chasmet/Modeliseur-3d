@@ -261,7 +261,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
         CloudApi current = api;
         heartbeatWorker.execute(() -> {
             try {
-                current.json("/api/heartbeat", null);
+                current.json("/api/poll", null);
                 ui(() -> connectionStatus.setText("MCP : téléphone en ligne."));
             } catch (CloudApi.HttpFailure e) {
                 if (e.code == 401) {
