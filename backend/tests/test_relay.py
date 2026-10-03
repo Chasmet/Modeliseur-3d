@@ -183,3 +183,16 @@ def test_three_images_queue_three_independent_models_and_reject_invalid_glb(clie
     assert all(c['mode'] == 'triposr_single' for c in commands)
     bad_glb = b'glTF' + (1).to_bytes(4, 'little') + (12).to_bytes(4, 'little')
     assert client.post('/api/local/' + commands[0]['id'] + '/result', headers=a, content=bad_glb).status_code == 400
+
+def test_disconnect_immediately_marks_only_this_phone_offline_and_poll_reconnects(client):
+    a, b = enroll(client), enroll(client)
+    client.get('/api/poll', headers=a)
+    client.get('/api/poll', headers=b)
+    assert client.post('/api/disconnect').status_code == 401
+    assert client.post('/api/disconnect', headers=a).json() == {'ok': True, 'connected': False}
+    with server.db() as c:
+        values = [r[0] for r in c.execute('SELECT seen FROM devices ORDER BY seen')]
+    assert values[0] == 0 and values[1] > 0
+    assert client.get('/api/poll', headers=a).status_code == 200
+    with server.db() as c:
+        assert all(r[0] > 0 for r in c.execute('SELECT seen FROM devices'))

@@ -269,7 +269,7 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.3.7-mcp.local2',
+    return JSONResponse({'ok': True, 'version': '6.3.8-mcp.background',
                          'generation': 'android_local_triposr',
                          'mcp': 'streamable_http', 'mcp_auth': 'none',
                          'mcp_path': '/mcp', 'direct_images': True})
@@ -397,6 +397,12 @@ async def public_local_download(request):
         raise HTTPException(409, 'GLB local pas encore disponible.')
     return FileResponse(output, media_type='model/gltf-binary',
                         filename='Modeliseur_Local_' + command_id[:8] + '.glb')
+
+async def disconnect(request):
+    owner = device(request)
+    with db() as c:
+        c.execute('UPDATE devices SET seen=0 WHERE id=?', (owner,))
+    return JSONResponse({'ok': True, 'connected': False})
 
 async def heartbeat(request):
     owner = device(request)
@@ -562,7 +568,7 @@ api = Starlette(routes=[Route('/health', health), Route('/ci/signing', signing_k
     Route('/api/local/{command_id}/result', local_result, methods=['POST']),
     Route('/api/mcp', mcp_toggle, methods=['POST']), Route('/api/images', upload, methods=['POST']),
     Route('/api/jobs', jobs_api, methods=['GET', 'POST']), Route('/api/jobs/{job_id}/file', download),
-    Route('/api/heartbeat', heartbeat), Route('/api/poll', poll), Route('/api/commands/{command_id}/ack', ack, methods=['POST']),
+    Route('/api/disconnect', disconnect, methods=['POST']), Route('/api/heartbeat', heartbeat), Route('/api/poll', poll), Route('/api/commands/{command_id}/ack', ack, methods=['POST']),
     Route('/api/clear', clear, methods=['POST'])], exception_handlers={HTTPException: error_response}, lifespan=lifespan)
 mcp_app = mcp.streamable_http_app()
 

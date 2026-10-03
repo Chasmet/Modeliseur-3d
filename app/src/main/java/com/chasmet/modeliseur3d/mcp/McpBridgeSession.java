@@ -159,7 +159,7 @@ public final class McpBridgeSession implements AutoCloseable {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static synchronized CloudApi ensureApi(Context context) throws Exception {
+    static synchronized CloudApi ensureApi(Context context) throws Exception {
         SharedPreferences p = prefs(context);
         String server = p.getString(KEY_SERVER, DEFAULT_SERVER);
         String token = p.getString(KEY_TOKEN, "");

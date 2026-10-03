@@ -1,4 +1,4 @@
-# MCP Modéliseur 3D — moteurs locaux Android (6.3.7)
+# MCP Modéliseur 3D — moteurs locaux Android (6.3.8)
 
 Le MCP pilote les moteurs déjà embarqués dans l’APK : TripoSR, Silhouettes,
 IS-Net et Depth Anything V2. Le serveur transporte les commandes, les images
@@ -13,12 +13,15 @@ Authentification ChatGPT : aucune. Aucun PAT GitHub ou compte IA n’est demand�
 L’application crée et conserve automatiquement son jeton de liaison local.
 Le MCP utilise le téléphone le plus récemment actif.
 
-Installer la dernière APK et garder l’accueil ou l’atelier IA locale ouvert.
-L’accueil affiche l’état de connexion. Le pont vérifie la file toutes les quatre
-secondes et lance le calcul dans l’atelier sans remplacer les photos personnelles.
-Pendant un calcul, le téléphone reste présent et conserve les commandes suivantes.
-Après chaque GLB, la commande suivante peut démarrer. Quitter l’écran pendant la
-préparation rend la commande à la file ; une erreur d’image est signalée.
+Installer la dernière APK et activer **Connecté** sur l’accueil. La notification
+Android garde le service actif : aucun écran partagé ni écran visible n’est requis.
+Le service vérifie la file toutes les quatre secondes, indépendamment de son
+worker de calcul. Les commandes sont traitées successivement dans le stockage
+privé MCP, sans remplacer les photos personnelles. Retirer l’écran des applications
+récentes conserve la liaison. **Déconnecté** ou l’action de la notification suspend
+le travail aux points d’arrêt et appelle `/api/disconnect` pour mettre le téléphone
+hors ligne immédiatement. Les commandes et caches sauvegardés reprennent à la
+reconnexion ; un GLB fini est retransmis sans recalculer l’inférence.
 
 `create_model_from_images(images, engine, quality, smoothing)` accepte :
 
@@ -40,9 +43,9 @@ exécution Android locale. Le GLB est enregistré sur le téléphone avant sa
 synchronisation : une panne réseau ne supprime pas le fichier local.
 
 La génération manuelle reste possible hors connexion. Le pilotage ChatGPT et la
-synchronisation des entrées/résultats demandent une connexion Internet. Le pont
-fonctionne sur l’accueil et dans l’atelier ; il n’est pas un service permanent
-quand Android ferme l’application.
+synchronisation des entrées/résultats demandent une connexion Internet. Le service est indépendant de l’accueil et de l’atelier. Un arrêt forcé Android,
+l’arrêt via le gestionnaire des tâches, l’extinction ou certaines restrictions
+du constructeur nécessitent de rouvrir l’application pour reprendre.
 
 ## Déploiement du relais existant
 
@@ -71,8 +74,9 @@ python -m pytest backend/tests -q
 
 Les tests du relais passent par le vrai transport MCP et vérifient l’isolation,
 les images, l’alpha, l’ordre des quatre vues, la file, le retour GLB et l’absence
-de génération GPU. Les tests Android vérifient les intents, l’attente pendant
-un calcul et la restitution d’une commande quand l’écran quitte le premier plan.
+de génération GPU. Les tests Android vérifient la connexion pendant un calcul sans écran visible,
+le retrait de la tâche, la déconnexion explicite, la conservation d’une commande
+interrompue et la reprise du transfert GLB après coupure réseau.
 Les tests TripoSR réalisent une inférence avec les connexions réseau interdites.
 Le téléphone physique n’est pas simulé par un statut de présence en production.
 

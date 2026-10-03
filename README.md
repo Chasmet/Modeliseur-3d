@@ -3,7 +3,7 @@
 Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.
 Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troisième onglet ouvre uniquement l’atelier local et le lecteur GLB embarqué. Aucun compte, serveur ou téléchargement à la première utilisation.
 
-L’infrastructure Render/MCP historique est conservée pour un travail ultérieur. Elle n’est utilisée par aucune opération du troisième onglet local. Son adresse reste `https://modeliseur-trellis-mcp.onrender.com`.
+Le relais Render/MCP pilote les moteurs Android quand tu actives la connexion ChatGPT. Les opérations manuelles du troisième onglet restent locales. Son adresse reste `https://modeliseur-trellis-mcp.onrender.com`.
 Voir [le relais Android/MCP](backend/README.md) pour les quotas et l’appairage privé. Render peut se mettre en veille ; les fichiers distants sont éphémères. Les GLB téléchargés restent sur le téléphone.
 
 ## Mise à jour automatique
@@ -18,7 +18,7 @@ La publication utilise le GITHUB_TOKEN natif et une identité GitHub Actions OID
 
 ## Vérification
 
-CI : `testDebugUnitTest lintDebug assembleDebug`, catalogue/reconstruction historiques, tests d’isolation/révocation MCP, arrêt sur quota GPU et test navigateur du lecteur/animations. Les tests ne remplacent pas un essai d’installation sur le téléphone.
+CI : `testDebugUnitTest lintDebug assembleDebug`, catalogue/reconstruction historiques, tests d’isolation/révocation MCP, absence de génération GPU distante et test navigateur du lecteur/animations. Les tests ne remplacent pas un essai d’installation sur le téléphone.
 La branche `main` et les services Render préexistants restent séparés de cette branche.
 
 ## Atelier hors connexion V6.0.6
@@ -31,7 +31,7 @@ Grilles quatre vues 64/88/112, extraction séquentielle et deux threads pour les
 
 L'option une image conserve le volume, relief et objet de révolution antérieurs, ainsi que la photo importée et tous les anciens GLB. Les moteurs et écrans des deux premiers onglets restent inchangés.
 
-Les GLB sont enregistrés dans le stockage privé du téléphone, disponibles dans la galerie locale, affichés avec le lecteur embarqué et exportables via le sélecteur de documents Android. Le parcours serveur a été retiré du troisième onglet. Le code distant existant est conservé pour un éventuel travail MCP ultérieur, sans être appelé par cet atelier.
+Les GLB sont enregistrés dans le stockage privé du téléphone, disponibles dans la galerie locale, affichés avec le lecteur embarqué et exportables via le sélecteur de documents Android. Le parcours serveur a été retiré du troisième onglet. Les commandes MCP passent par le service Android, sans dépendre de cet atelier.
 
 V6.0.6 : versionCode 42, même applicationId et certificat V6.0.0/V6.0.1. Les projets existants restent conservés.
 
@@ -68,3 +68,9 @@ VersionCode 46, package `com.chasmet.modeliseur3d`. Les deux moteurs d’origine
 Vérifications ajoutées : recalage avec écart connu et espace entre les jambes, distance signée avec trou, rejet d’une surface masquée, proportions et fermeture d’un ellipsoïde, huit orientations EXIF, alpha PNG, métadonnées GLB et réparation réelle du cache neuronal. Les connexions sortantes sont interdites pendant les inférences du test TripoSR. Ces références synthétiques ne mesurent pas la fidélité sur les photos d’un utilisateur, ni la vitesse et la chauffe sur son téléphone.
 
 Pour lancer toutes les vérifications Android de bureau : `./gradlew --no-daemon -PofflineSmoke testDebugUnitTest`. Les dépendances de test et les fixtures ne sont pas intégrées à l’APK.
+
+### Connexion ChatGPT en arrière-plan (6.3.8)
+
+Sur l’accueil, le bouton **Connecté / Déconnecté** active le service Android persistant. Une notification permet de suivre le calcul et de déconnecter le relais. La connexion et les commandes locales continuent pendant YouTube, Netflix, ChatGPT et après fermeture de l’écran ou retrait des applications récentes. Aucun écran partagé n’est nécessaire. La première activation demande l’autorisation des notifications sous Android 13+.
+
+Déconnecter arrête la réception et suspend le travail aux points d’arrêt du moteur. Commande, images, caches IA et GLB déjà sauvegardés sont conservés ; reconnecter reprend automatiquement. Le GLB est enregistré sur le téléphone avant son transfert au relais. Le service redémarre après une interruption de processus quand Android le permet. Un arrêt forcé, l’arrêt via le gestionnaire Android, l’extinction du téléphone ou certaines restrictions du constructeur peuvent arrêter le service : rouvrir l’application pour reprendre.

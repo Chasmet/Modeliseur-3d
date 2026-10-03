@@ -5,20 +5,40 @@ import android.os.Bundle;
 import android.widget.TabHost;
 import android.widget.TextView;
 import com.chasmet.modeliseur3d.update.UpdateManager;
-import com.chasmet.modeliseur3d.mcp.McpBridgeSession;
+import com.chasmet.modeliseur3d.mcp.McpConnectionService;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 /** Accueil des moteurs locaux, du catalogue et du pont MCP ChatGPT. */
 public final class HomeActivity extends AppCompatActivity {
-    private McpBridgeSession mcpBridge;
+    private final android.os.Handler connectionUi = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable refreshConnection = new Runnable() {
+        @Override public void run() {
+            boolean enabled = McpConnectionService.enabled(HomeActivity.this);
+            ((android.widget.Button)findViewById(R.id.mcpConnectionButton)).setText(enabled ? "Connecté" : "Déconnecté");
+            ((TextView)findViewById(R.id.mcpHomeStatus)).setText(McpConnectionService.status(HomeActivity.this));
+            connectionUi.postDelayed(this, 1000);
+        }
+    };
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
         ((TextView)findViewById(R.id.homeVersion)).setText("Modéliseur 3D V"+UpdateManager.currentVersion(this));
 
+        findViewById(R.id.mcpConnectionButton).setOnClickListener(view -> {
+            boolean connect = !McpConnectionService.enabled(this);
+            McpConnectionService.setEnabled(this, connect);
+            if (connect && android.os.Build.VERSION.SDK_INT >= 33
+                    && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 803);
+            }
+            connectionUi.removeCallbacks(refreshConnection);
+            refreshConnection.run();
+        });
         TabHost tabs = findViewById(android.R.id.tabhost);
         tabs.setup();
         tabs.addTab(tabs.newTabSpec("25d").setIndicator(tabTitle("2.5D")).setContent(R.id.tab25d));
@@ -58,15 +78,12 @@ public final class HomeActivity extends AppCompatActivity {
     }
     @Override protected void onStart() {
         super.onStart();
-        if (mcpBridge != null) mcpBridge.close();
-        mcpBridge = new McpBridgeSession(this, findViewById(R.id.mcpHomeStatus), true);
-        mcpBridge.start();
+        if (McpConnectionService.enabled(this)) McpConnectionService.start(this);
+        connectionUi.removeCallbacks(refreshConnection);
+        refreshConnection.run();
     }
     @Override protected void onStop() {
-        if (mcpBridge != null) {
-            mcpBridge.close();
-            mcpBridge = null;
-        }
+        connectionUi.removeCallbacks(refreshConnection);
         super.onStop();
     }
 

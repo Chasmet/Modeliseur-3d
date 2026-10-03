@@ -9,10 +9,18 @@
             android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
         <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />
-        <TextView android:id="@+id/mcpHomeStatus" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:paddingTop="8dp" android:paddingBottom="4dp"
-            android:text="ChatGPT MCP : connexion automatique…" android:textColor="@color/text_secondary"
-            android:textSize="14sp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/mcpHomeStatus" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:paddingTop="8dp" android:paddingBottom="4dp"
+                android:text="ChatGPT MCP : déconnecté" android:textColor="@color/text_secondary" android:textSize="14sp" />
+            <Button android:id="@+id/mcpConnectionButton" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Déconnecté" android:textAllCaps="false"
+                android:contentDescription="Activer ou désactiver le serveur ChatGPT en arrière-plan" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Connecté : ChatGPT travaille même quand tu quittes cet écran. Déconnecté : liaison arrêtée, travail conservé."
+            android:textColor="@color/text_secondary" android:textSize="12sp" />
         <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="16dp">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">

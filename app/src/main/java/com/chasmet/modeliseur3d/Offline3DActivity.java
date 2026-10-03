@@ -37,7 +37,6 @@ public final class Offline3DActivity extends AppCompatActivity {
     private CheckBox fourViews;private TextView countLabel;private int selectedSlot;
     private ProgressBar progress;private volatile boolean busy;private volatile boolean cancelled;private String lastId="";
     private String mcpCommandId="",mcpMode="",mcpQuality="balanced";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
-    private McpBridgeSession mcpBridge;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("offline_workshop",MODE_PRIVATE);}
     private boolean isMcp(){return mcpCommandId.matches("[a-f0-9]{32}");}
     private File mcpFolder(){return new File(getFilesDir(),"mcp_inputs/"+mcpCommandId);}
@@ -388,16 +387,6 @@ public final class Offline3DActivity extends AppCompatActivity {
             lastId=files[index].getName().substring(0,32);prefs().edit().putString("last",lastId).apply();buttons();openModel(lastId);
         }).setNegativeButton("Fermer",null).show();
     }
-    @Override protected void onStart(){
-        super.onStart();
-        if(mcpBridge!=null)mcpBridge.close();
-        mcpBridge=new McpBridgeSession(this,null,()->!busy&&!mcpGenerating);
-        mcpBridge.start();
-    }
-    @Override protected void onStop(){
-        if(mcpBridge!=null){mcpBridge.close();mcpBridge=null;}
-        super.onStop();
-    }
     @Override protected void onPause(){
         if(!isMcp()){
             prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
@@ -409,7 +398,6 @@ public final class Offline3DActivity extends AppCompatActivity {
     @Override protected void onSaveInstanceState(Bundle state){state.putInt("selectedSlot",selectedSlot);super.onSaveInstanceState(state);}
     @Override protected void onDestroy(){
         cancelled=true;
-        if(mcpBridge!=null){mcpBridge.close();mcpBridge=null;}
         worker.shutdownNow();
         super.onDestroy();
     }
