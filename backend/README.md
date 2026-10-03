@@ -1,4 +1,4 @@
-# MCP Modéliseur 3D — moteurs locaux Android (6.3.8)
+# MCP Modéliseur 3D — moteurs locaux Android (6.3.9)
 
 Le MCP pilote les moteurs déjà embarqués dans l’APK : TripoSR, Silhouettes,
 IS-Net et Depth Anything V2. Le serveur transporte les commandes, les images
@@ -16,7 +16,14 @@ Le MCP utilise le téléphone le plus récemment actif.
 Installer la dernière APK et activer **Connecté** sur l’accueil. La notification
 Android garde le service actif : aucun écran partagé ni écran visible n’est requis.
 Le service vérifie la file toutes les quatre secondes, indépendamment de son
-worker de calcul. Les commandes sont traitées successivement dans le stockage
+worker de calcul.
+
+La V6.3.9 renforce le mode « téléphone serveur » : verrou CPU léger tant que
+**Connecté** est activé, relance automatique si Android/OEM récupère le service,
+redémarrage après reboot ou mise à jour de l’APK, et demande d’exemption de
+l’optimisation batterie avec confirmation Android. Le relais tolère 90 secondes
+sans heartbeat afin d’absorber les retards ponctuels d’Android. Un **Arrêt forcé**
+reste volontairement non contournable : il faut alors rouvrir l’application. Les commandes sont traitées successivement dans le stockage
 privé MCP, sans remplacer les photos personnelles. Retirer l’écran des applications
 récentes conserve la liaison. **Déconnecté** ou l’action de la notification suspend
 le travail aux points d’arrêt et appelle `/api/disconnect` pour mettre le téléphone

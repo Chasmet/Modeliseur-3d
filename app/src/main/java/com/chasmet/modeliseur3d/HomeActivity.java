@@ -30,6 +30,7 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.mcpConnectionButton).setOnClickListener(view -> {
             boolean connect = !McpConnectionService.enabled(this);
             McpConnectionService.setEnabled(this, connect);
+            if (connect) requestBackgroundExemption();
             if (connect && android.os.Build.VERSION.SDK_INT >= 33
                     && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -60,6 +61,19 @@ public final class HomeActivity extends AppCompatActivity {
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
     }
+    private void requestBackgroundExemption() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return;
+        android.os.PowerManager power=(android.os.PowerManager)getSystemService(POWER_SERVICE);
+        if (power==null || power.isIgnoringBatteryOptimizations(getPackageName())) return;
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:"+getPackageName())));
+        } catch (RuntimeException unavailable) {
+            try { startActivity(new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
+            catch (RuntimeException ignored) { }
+        }
+    }
+
     private TextView tabTitle(String text) {
         TextView title = new TextView(this);
         title.setText(text); title.setTextSize(13); title.setTypeface(null, android.graphics.Typeface.BOLD);

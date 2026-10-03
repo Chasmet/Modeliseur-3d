@@ -39,6 +39,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 Image.MAX_IMAGE_PIXELS = 16_000_000
 owner_context = ContextVar('device')
 MAX_IMAGE = 8 * 1024 * 1024
+PHONE_ONLINE_TTL = 90
 PUBLIC_OWNER = '__public__'
 
 @contextmanager
@@ -123,7 +124,7 @@ def phone_online(owner):
         return False
     with db() as c:
         row = c.execute('SELECT seen FROM devices WHERE id=?', (owner,)).fetchone()
-    return bool(row) and time.time() - float(row['seen'] or 0) < 25
+    return bool(row) and time.time() - float(row['seen'] or 0) < PHONE_ONLINE_TTL
 
 def create_local_command(owner, references, mode, options=None):
     if not phone_online(owner):
@@ -459,10 +460,11 @@ def application_status() -> dict:
     with db() as c:
         row = c.execute('SELECT seen FROM devices WHERE id=?', (owner,)).fetchone()
     seen = float(row['seen'] or 0) if row else 0
-    online = bool(row) and time.time() - seen < 25
+    online = bool(row) and time.time() - seen < PHONE_ONLINE_TTL
     return {
         'phone_online': online,
         'last_seen': seen,
+        'presence_ttl_seconds': PHONE_ONLINE_TTL,
         'workspace': 'android' if row else 'public',
         'authentication': 'none',
         'generation_runs_on': 'Android phone / local engines',

@@ -30,6 +30,7 @@ public class McpConnectionService extends Service {
     private volatile String commandId="";
     private ScheduledFuture<?> polling;
     private PowerManager.WakeLock power;
+    private PowerManager.WakeLock connectionPower;
     private long lastNotification;
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS,MODE_PRIVATE); }
@@ -38,7 +39,7 @@ public class McpConnectionService extends Service {
         SharedPreferences p=prefs(c);
         if (!enabled(c)) return "ChatGPT MCP : déconnecté";
         long last=p.getLong("heartbeat",0);
-        if (last==0 || System.currentTimeMillis()-last>25000) return "ChatGPT MCP : reconnexion…";
+        if (last==0 || System.currentTimeMillis()-last>90000) return "ChatGPT MCP : reconnexion…";
         return "ChatGPT MCP : connecté\n"+p.getString("progress","En attente de commande");
     }
     public static void setEnabled(Context c,boolean enabled) {
@@ -59,6 +60,8 @@ public class McpConnectionService extends Service {
         PowerManager pm=(PowerManager)getSystemService(POWER_SERVICE);
         power=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"Modeliseur3D:McpJob");
         power.setReferenceCounted(false);
+        connectionPower=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"Modeliseur3D:McpConnection");
+        connectionPower.setReferenceCounted(false);
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId) {
         if ((intent!=null && DISCONNECT.equals(intent.getAction())) || !enabled(this)) {
@@ -66,6 +69,8 @@ public class McpConnectionService extends Service {
             disconnect(); return START_NOT_STICKY;
         }
         startForeground(NOTIFICATION,notification());
+        cancelRestart(this);
+        acquireConnectionPower();
         if (!active) {
             active=true;
             polling=network.scheduleWithFixedDelay(this::pollOnce,0,4,TimeUnit.SECONDS);
@@ -165,11 +170,37 @@ public class McpConnectionService extends Service {
         if (connected() && working.get()) power.acquire(10*60*1000L);
     }
     private synchronized void releasePower() { if (power!=null && power.isHeld()) power.release(); }
+    private synchronized void acquireConnectionPower() {
+        if (connectionPower!=null && !connectionPower.isHeld()) connectionPower.acquire();
+    }
+    private synchronized void releaseConnectionPower() {
+        if (connectionPower!=null && connectionPower.isHeld()) connectionPower.release();
+    }
+    private static PendingIntent restartIntent(Context c) {
+        Intent intent=new Intent(c,McpKeepAliveReceiver.class).setAction(McpKeepAliveReceiver.ACTION_RESTART);
+        return PendingIntent.getBroadcast(c,804,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+    }
+    private static void scheduleRestart(Context c,long delayMs) {
+        if (!enabled(c)) return;
+        try {
+            AlarmManager alarms=(AlarmManager)c.getSystemService(ALARM_SERVICE);
+            if (alarms!=null) alarms.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime()+Math.max(1000L,delayMs),
+                    restartIntent(c));
+        } catch (RuntimeException ignored) { }
+    }
+    private static void cancelRestart(Context c) {
+        try {
+            AlarmManager alarms=(AlarmManager)c.getSystemService(ALARM_SERVICE);
+            if (alarms!=null) alarms.cancel(restartIntent(c));
+        } catch (RuntimeException ignored) { }
+    }
     private Notification notification() {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,HomeActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,McpConnectionService.class).setAction(DISCONNECT),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         return new NotificationCompat.Builder(this,CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setContentTitle("Modéliseur 3D · ChatGPT connecté").setContentText(progress)
+                .setContentTitle("Modéliseur 3D · serveur téléphone actif").setContentText(progress)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(progress)).setContentIntent(open)
                 .setOngoing(true).setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .addAction(0,"Déconnecter",stop).build();
@@ -182,6 +213,7 @@ public class McpConnectionService extends Service {
     }
     private void disconnect() {
         active=false;
+        cancelRestart(this);
         if (polling!=null) polling.cancel(false);
         compute.shutdownNow(); releasePower();
         // Serialized after any poll in flight, so a late heartbeat cannot undo disconnection.
@@ -197,16 +229,20 @@ public class McpConnectionService extends Service {
             } catch (Exception ignored) { }
             finally { network.shutdown(); }
         });
+        releaseConnectionPower();
         stopForeground(true); stopSelf();
     }
     @Override public void onTaskRemoved(Intent rootIntent) {
-        // Removing the screen from recent apps does not disable the user's connection.
+        // Some Android/OEM builds still reclaim foreground services. Schedule a cheap restart.
+        scheduleRestart(this,5000L);
         super.onTaskRemoved(rootIntent);
     }
     @Override public void onDestroy() {
+        boolean shouldRestart=enabled(this);
         active=false;
         if (polling!=null) polling.cancel(false);
-        network.shutdown(); compute.shutdownNow(); releasePower();
+        network.shutdown(); compute.shutdownNow(); releasePower(); releaseConnectionPower();
+        if (shouldRestart) scheduleRestart(this,5000L);
         super.onDestroy();
     }
     @Override public IBinder onBind(Intent intent) { return null; }

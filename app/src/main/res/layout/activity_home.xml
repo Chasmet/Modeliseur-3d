@@ -19,7 +19,7 @@
                 android:contentDescription="Activer ou désactiver le serveur ChatGPT en arrière-plan" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Connecté : ChatGPT travaille même quand tu quittes cet écran. Déconnecté : liaison arrêtée, travail conservé."
+            android:text="Connecté : le serveur du téléphone reste actif en arrière-plan, même pendant YouTube ou Netflix. Le relais Internet ne fait que transporter les commandes et les fichiers. Déconnecté : liaison arrêtée, travail conservé."
             android:textColor="@color/text_secondary" android:textSize="12sp" />
         <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="16dp">
