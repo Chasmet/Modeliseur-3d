@@ -1,7 +1,7 @@
 name: Vérifier le relais Android et MCP
 on:
   push:
-    branches: [main]
+    branches: [main, agent/trellis-third-tab-auto-update]
     paths: ['backend/**', 'tools/trellis/**', '.github/workflows/relay.yml']
   pull_request:
     branches: [main]
