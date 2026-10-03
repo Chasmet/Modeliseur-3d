@@ -6,4 +6,11 @@
         <item name="android:navigationBarColor">@color/background</item>
         <item name="colorAccent">#FF8C24</item>
     </style>
+    <style name="Theme.Modeliseur3D.Offline" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#F4F6FA</item>
+        <item name="android:statusBarColor">#10131A</item>
+        <item name="android:navigationBarColor">#10131A</item>
+        <item name="colorAccent">#C65300</item>
+    </style>
 </resources>
