@@ -231,6 +231,9 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
+      - name: Vérifier HTTP et HTTPS du MCP direct
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest --tests com.chasmet.modeliseur3d.mcp.PhoneMcpServerTest
+
       - name: Vérifier MCP direct et moteurs locaux avant publication
         run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest
 

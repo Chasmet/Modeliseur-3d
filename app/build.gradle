@@ -190,7 +190,7 @@ if (providers.gradleProperty('offlineSmoke').isPresent()) {
         sourceSets.test.java.srcDir(rootProject.file('tools/android-smoke'))
         testOptions {
             unitTests.includeAndroidResources = true
-            unitTests.all { maxHeapSize = '3g'; maxParallelForks = 1 }
+            unitTests.all { maxHeapSize = '3g'; maxParallelForks = 1; testLogging { exceptionFormat = 'full' } }
         }
     }
     dependencies {

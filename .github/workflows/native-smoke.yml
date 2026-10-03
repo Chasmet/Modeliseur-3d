@@ -50,6 +50,8 @@ jobs:
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
+      - name: Tester HTTP et HTTPS du serveur téléphone
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest --tests com.chasmet.modeliseur3d.mcp.PhoneMcpServerTest
       - name: Tester la navigation, le téléchargement réel et l'installateur Android
         run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest
       - uses: actions/upload-artifact@v4

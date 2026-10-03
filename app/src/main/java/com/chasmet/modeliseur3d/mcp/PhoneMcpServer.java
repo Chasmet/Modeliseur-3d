@@ -19,6 +19,8 @@ public final class PhoneMcpServer implements AutoCloseable {
     private final ThreadPoolExecutor requests=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
     private final List<ServerSocket> listeners=new ArrayList<>();
     private volatile boolean closed;
+    // Optional in-process diagnostics. No access log or private URL is emitted.
+    java.util.function.Consumer<Exception> clientErrors=error -> { };
     public PhoneMcpServer(Context c,PhoneMcpStore store) { context=c.getApplicationContext();this.store=store;token=PhoneMcpSettings.token(c); }
     public void start() throws Exception {
         try {
@@ -34,7 +36,7 @@ public final class PhoneMcpServer implements AutoCloseable {
             while(!closed) {
                 try {
                     Socket socket=listener.accept();socket.setSoTimeout(20000);clients.add(socket);
-                    try { requests.execute(()->{try { serve(socket,tls); } catch(Exception ignored) { } finally { clients.remove(socket);try {socket.close();}catch(IOException ignored){} } }); }
+                    try { requests.execute(()->{try { serve(socket,tls); } catch(Exception error) { clientErrors.accept(error); } finally { clients.remove(socket);try {socket.close();}catch(IOException ignored){} } }); }
                     catch(RejectedExecutionException overload) {clients.remove(socket);socket.close();}
                 } catch(IOException stopped) { if(closed)return; }
             }

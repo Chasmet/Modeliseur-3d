@@ -98,13 +98,14 @@ public class PhoneMcpServerTest {
             long size=PhoneMcpSettings.certificate(app).length();
             assertThrows(Exception.class,()->{try(InputStream in=new FileInputStream(generated)){PhoneMcpSettings.importCertificate(app,in,"wrong-password");}});
             assertEquals(size,PhoneMcpSettings.certificate(app).length());
+            java.util.concurrent.atomic.AtomicReference<Exception> failure=new java.util.concurrent.atomic.AtomicReference<>();server.clientErrors=failure::set;
             SSLContext serverTls=PhoneMcpSettings.tls(app);assertNotNull(serverTls);
             port=server.listen(serverTls.getServerSocketFactory().createServerSocket(),0,true);
             KeyStore trust=KeyStore.getInstance("PKCS12");try(InputStream in=new FileInputStream(generated)){trust.load(in,password.toCharArray());}
             TrustManagerFactory tm=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());tm.init(trust);
             SSLContext clientTls=SSLContext.getInstance("TLS");clientTls.init(null,tm.getTrustManagers(),null);
             String reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST",path,"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}","",false),StandardCharsets.UTF_8);
-            assertTrue(reply,reply.startsWith("HTTP/1.1 200"));assertTrue(reply.contains("create_model_from_images"));
+            assertTrue(reply+"; transport failure: "+failure.get(),reply.startsWith("HTTP/1.1 200"));assertTrue(reply.contains("create_model_from_images"));
         } finally {if(keytool.isAlive())keytool.destroyForcibly();generated.delete();log.delete();PhoneMcpSettings.certificate(app).delete();}
     }
     @Test public void fourViewsAreOneOrderedCommandAndBadInputsDoNotLeavePartialJobs() throws Exception {
