@@ -33,6 +33,9 @@ public class CloudApi {
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(30_000);
         c.setReadTimeout(45_000);
+        if ("/api/poll".equals(path) || "/api/heartbeat".equals(path)) {
+            c.setConnectTimeout(8_000);c.setReadTimeout(10_000);
+        }
         c.setRequestMethod(method);
         if (token != null && !token.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + token);
         return c;

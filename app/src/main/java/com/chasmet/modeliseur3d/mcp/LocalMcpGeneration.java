@@ -19,8 +19,9 @@ public final class LocalMcpGeneration {
         if (!mode.matches("(triposr|silhouettes)_(single|four)")) throw new IOException("Moteur MCP local inconnu.");
         boolean four = mode.endsWith("_four"), learned = mode.startsWith("triposr");
         JSONObject options = command.optJSONObject("options");
-        String quality = options == null ? "balanced" : options.optString("quality", "balanced");
+        String quality = options == null ? "precise" : options.optString("quality", "precise");
         int detail = "fast".equals(quality) ? 0 : "precise".equals(quality) ? 2 : 1;
+        if (!quality.matches("fast|balanced|precise")) throw new IOException("Qualité MCP invalide.");
         boolean smooth = options == null || options.optBoolean("smoothing", true);
         File folder = new File(context.getFilesDir(), "mcp_inputs/" + id);
         File output = new File(context.getFilesDir(), "cloud_models/" + id + ".glb");
@@ -33,7 +34,7 @@ public final class LocalMcpGeneration {
             OfflineDepthField[] depths = learned ? null : new OfflineDepthField[images.length];
             for (int i = 0; i < images.length; i++) {
                 progress.check(); progress.update("Détourage local · image " + (i + 1) + " / " + images.length);
-                File cutout = new File(folder, "service-cutout-" + i + ".png");
+                File cutout = new File(folder, "service-manual-cutout-" + i + ".png");
                 if (!cutout.isFile()) {
                     Bitmap source = BitmapFactory.decodeFile(new File(folder, "image-" + i + ".png").getPath());
                     if (source == null) throw new IOException("Image MCP illisible.");
@@ -44,14 +45,7 @@ public final class LocalMcpGeneration {
                                     Math.max(3, source.getHeight()*1024/max), true);
                             if (scaled != source) { source.recycle(); source = scaled; }
                         }
-                        AnimeSegmentationEngine.Mask mask = null;
-                        if (!OfflineImageVolume.hasUsefulTransparency(source)) {
-                            try (AnimeSegmentationEngine engine = new AnimeSegmentationEngine(context, 2)) {
-                                mask = engine.segment(source);
-                            }
-                        }
-                        progress.check();
-                        try (OfflineImageVolume.Prepared ready = OfflineImageVolume.prepare(source, 43, mask)) {
+                        try (OfflineImageVolume.Prepared ready = LocalImagePreparation.prepare(context,source,43,true,progress)) {
                             File temp = new File(cutout.getPath() + ".part");
                             try {
                                 try (OutputStream out = new FileOutputStream(temp)) {
@@ -86,13 +80,13 @@ public final class LocalMcpGeneration {
             progress.check();
             if (learned && !four) {
                 TripoSRRefinedField field = TripoSREngine.reconstructSingleDetailed(context, images[0],
-                        new File(folder,"service-triposr-0.bin"),TripoSREngine.CACHE_VERSION+":"+id+":0",
+                        new File(folder,"service-manual-triposr-0.bin"),TripoSREngine.CACHE_VERSION+":"+id+":0",
                         new int[]{128,192,256}[detail],progress);
                 progress.check(); progress.update("Maillage détaillé et texture…");
                 result = TripoSRSingleViewVolume.buildDetailed(field,images[0],smooth);
             } else if (learned) {
                 File[] caches = new File[4]; String[] keys = new String[4];
-                for (int i=0;i<4;i++) { caches[i]=new File(folder,"service-triposr-"+i+".bin"); keys[i]=TripoSREngine.CACHE_VERSION+":"+id+":"+i; }
+                for (int i=0;i<4;i++) { caches[i]=new File(folder,"service-manual-triposr-"+i+".bin"); keys[i]=TripoSREngine.CACHE_VERSION+":"+id+":"+i; }
                 int side = new int[]{64,88,112}[detail];
                 TripoSRField[] fields = TripoSREngine.reconstruct(context,images,caches,keys,side,progress);
                 progress.check(); result = TripoSRFourViewVolume.build(images,fields,side,1f,smooth);
@@ -105,7 +99,7 @@ public final class LocalMcpGeneration {
             if (!output.getParentFile().isDirectory() && !output.getParentFile().mkdirs()) throw new IOException("Stockage GLB indisponible.");
             JSONObject metadata = new JSONObject().put("appVersion",UpdateManager.currentVersion(context))
                     .put("engine",learned?"TripoSR":"Silhouettes").put("method",result.method).put("localOnly",true)
-                    .put("mcpCommandId",id).put("inputViews",images.length).put("detail",detail).put("smoothing",smooth)
+                    .put("mcpCommandId",id).put("quality",quality).put("imagePreparation","IS-Net local / PNG transparent").put("pipeline","manual-workshop-v1").put("neuralResolution",learned&&!four?new int[]{128,192,256}[detail]:new int[]{64,88,112}[detail]).put("inputViews",images.length).put("detail",detail).put("smoothing",smooth)
                     .put("projectName","ChatGPT "+id.substring(0,8)).put("generatedAt",System.currentTimeMillis())
                     .put("reconstructionMode",four?"four-view":"single-image").put("hiddenSurfacesEstimated",!four)
                     .put("textureMode",learned&&!four?"visible-photo-neural-hidden":"existing");

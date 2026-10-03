@@ -1,10 +1,11 @@
-# Modéliseur 3D V6.0.6 — branche TRELLIS isolée
+# Modéliseur 3D V6.3.10 — IA locale et MCP téléphone
 
 Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.
 Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troisième onglet ouvre uniquement l’atelier local et le lecteur GLB embarqué. Aucun compte, serveur ou téléchargement à la première utilisation.
 
-Le relais Render/MCP pilote les moteurs Android quand tu actives la connexion ChatGPT. Les opérations manuelles du troisième onglet restent locales. Son adresse reste `https://modeliseur-trellis-mcp.onrender.com`.
-Voir [le relais Android/MCP](backend/README.md) pour les quotas et l’appairage privé. Render peut se mettre en veille ; les fichiers distants sont éphémères. Les GLB téléchargés restent sur le téléphone.
+Les commandes ChatGPT utilisent **TripoSR Précis + IS-Net** par défaut, avec le même import EXIF et le même détourage que l’atelier manuel. La reconstruction reste exécutée sur Android. Les surfaces cachées d’une photo sont estimées ; le nombre de triangles ne suffit pas à mesurer la fidélité.
+
+Le nouveau **serveur MCP direct du téléphone** reçoit les images, garde sa file en stockage privé et sert les GLB sans relais Render. Il nécessite une adresse HTTPS publique et une configuration de la box. Voir [la configuration directe](docs/MCP-telephone-direct.md). Le [relais existant](backend/README.md) reste optionnel, pour conserver la connexion actuelle avant cette configuration. Aucune création de squelette ou d’animation n’est annoncée par les moteurs de modélisation.
 
 ## Mise à jour automatique
 

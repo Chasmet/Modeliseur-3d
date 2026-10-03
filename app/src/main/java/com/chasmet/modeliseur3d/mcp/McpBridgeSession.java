@@ -121,7 +121,7 @@ public final class McpBridgeSession implements AutoCloseable {
                 current.downloadLocalImage(id, ref, new File(folder, "image-" + i + ".png"));
             }
 
-            String quality = options == null ? "balanced" : options.optString("quality", "balanced");
+            String quality = options == null ? "precise" : options.optString("quality", "precise");
             boolean smoothing = options == null || options.optBoolean("smoothing", true);
             activity.runOnUiThread(() -> {
                 if (!active || !mayLaunchCommands.getAsBoolean() || activity.isFinishing() || activity.isDestroyed()) {

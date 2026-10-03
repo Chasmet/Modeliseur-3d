@@ -32,12 +32,21 @@ public class McpConnectionService extends Service {
     private PowerManager.WakeLock power;
     private PowerManager.WakeLock connectionPower;
     private long lastNotification;
+    private PhoneMcpServer phoneServer;
+    private android.net.wifi.WifiManager.WifiLock wifi;
+
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS,MODE_PRIVATE); }
     public static boolean enabled(Context c) { return prefs(c).getBoolean("enabled",false); }
     public static String status(Context c) {
         SharedPreferences p=prefs(c);
         if (!enabled(c)) return "ChatGPT MCP : déconnecté";
+        if (PhoneMcpSettings.direct(c)) {
+            boolean running=PhoneMcpSettings.prefs(c).getBoolean("running",false);
+            return running ? "MCP direct : serveur téléphone actif\n"+p.getString("progress","En attente de commande")
+                    +(PhoneMcpSettings.publicBase(c).isEmpty()?"\nAccès HTTPS de la box à configurer":!PhoneMcpSettings.certificate(c).isFile()?"\nCertificat HTTPS à importer":"\nAccès Internet à vérifier depuis ChatGPT")
+                    : "MCP direct : démarrage en attente";
+        }
         long last=p.getLong("heartbeat",0);
         if (last==0 || System.currentTimeMillis()-last>90000) return "ChatGPT MCP : reconnexion…";
         return "ChatGPT MCP : connecté\n"+p.getString("progress","En attente de commande");
@@ -52,6 +61,10 @@ public class McpConnectionService extends Service {
     }
     @Override public void onCreate() {
         super.onCreate();
+        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).apply();
+        android.net.wifi.WifiManager manager=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
+        if (manager!=null) { wifi=manager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"Modeliseur3D:McpWifi");wifi.setReferenceCounted(false); }
+
         if (Build.VERSION.SDK_INT>=26) {
             NotificationChannel channel=new NotificationChannel(CHANNEL,"Connexion ChatGPT et calcul 3D",NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Le service reste actif pendant YouTube, Netflix ou lorsque l’écran de l’application est fermé.");
@@ -71,13 +84,25 @@ public class McpConnectionService extends Service {
         startForeground(NOTIFICATION,notification());
         cancelRestart(this);
         acquireConnectionPower();
+        try { if(wifi!=null && !wifi.isHeld())wifi.acquire(); } catch(RuntimeException ignored) { }
+
         if (!active) {
             active=true;
             polling=network.scheduleWithFixedDelay(this::pollOnce,0,4,TimeUnit.SECONDS);
         }
         return START_STICKY;
     }
-    protected CloudApi connect() throws Exception { return McpBridgeSession.ensureApi(this); }
+    protected synchronized CloudApi connect() throws Exception {
+        if (!PhoneMcpSettings.direct(this)) return McpBridgeSession.ensureApi(this);
+        PhoneMcpStore store=new PhoneMcpStore(this);
+        phoneServer=new PhoneMcpServer(this,store);
+        try { phoneServer.start(); }
+        catch(Exception failure) { phoneServer.close();phoneServer=null;throw failure; }
+        if(!connected()) { phoneServer.close();phoneServer=null;throw new CancellationException("Connexion arrêtée."); }
+        PhoneMcpSettings.prefs(this).edit().putBoolean("running",true).apply();
+        progress="En attente de commande · mode Précis + IS-Net";
+        return new PhoneMcpApi(store);
+    }
     protected File generate(JSONObject command,TripoSREngine.Progress callback) throws Exception {
         return LocalMcpGeneration.generate(this,command,callback);
     }
@@ -104,7 +129,7 @@ public class McpConnectionService extends Service {
             showNotification();
         } catch (Exception error) {
             if (error instanceof CloudApi.HttpFailure && ((CloudApi.HttpFailure)error).code==401) api=null;
-            progress=working.get()?progress:"Relais indisponible · reconnexion automatique";
+            progress=working.get()?progress:PhoneMcpSettings.direct(this)?"Serveur téléphone indisponible · vérifie le port et le certificat":"Relais indisponible · reconnexion automatique";
             showNotification();
         }
     }
@@ -225,7 +250,7 @@ public class McpConnectionService extends Service {
         network.execute(()->{
             try {
                 CloudApi current=api;
-                if (current==null) {
+                if (current==null && !PhoneMcpSettings.direct(this)) {
                     SharedPreferences p=getSharedPreferences("mcp_local_bridge",MODE_PRIVATE);
                     String token=p.getString("token","");
                     if (!token.isEmpty()) current=new CloudApi(p.getString("server",McpBridgeSession.DEFAULT_SERVER),token);
@@ -235,6 +260,7 @@ public class McpConnectionService extends Service {
             finally { network.shutdown(); }
         });
         releaseConnectionPower();
+        closePhoneServer();
         stopForeground(true); stopSelf();
     }
     @Override public void onTaskRemoved(Intent rootIntent) {
@@ -243,12 +269,19 @@ public class McpConnectionService extends Service {
         super.onTaskRemoved(rootIntent);
     }
     @Override public void onDestroy() {
+        active=false;
+        closePhoneServer();
         boolean shouldRestart=enabled(this);
         active=false;
         if (polling!=null) polling.cancel(false);
         network.shutdown(); compute.shutdownNow(); releasePower(); releaseConnectionPower();
         if (shouldRestart) scheduleRestart(this,5000L);
         super.onDestroy();
+    }
+    private synchronized void closePhoneServer() {
+        if(phoneServer!=null) {phoneServer.close();phoneServer=null;}
+        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).apply();
+        try {if(wifi!=null && wifi.isHeld())wifi.release();}catch(RuntimeException ignored) { }
     }
     @Override public IBinder onBind(Intent intent) { return null; }
 }

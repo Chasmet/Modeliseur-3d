@@ -196,3 +196,18 @@ def test_disconnect_immediately_marks_only_this_phone_offline_and_poll_reconnect
     assert client.get('/api/poll', headers=a).status_code == 200
     with server.db() as c:
         assert all(r[0] > 0 for r in c.execute('SELECT seen FROM devices'))
+
+def test_default_mcp_matches_manual_precise_workshop(client):
+    a = enroll(client)
+    client.get('/api/poll', headers=a)
+    out = io.BytesIO()
+    Image.new('RGBA', (32, 48), (130, 30, 80, 0)).save(out, 'PNG')
+    result = mcp_result(rpc_open(client, 'tools/call', {
+        'name': 'create_model_from_images',
+        'arguments': {'images': ['data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()]}}))
+    data = json.loads(result['content'][0]['text'])
+    assert data['quality'] == 'precise'
+    command = client.get('/api/poll', headers=a).json()['local_commands'][0]
+    assert command['mode'] == 'triposr_single'
+    assert command['options'] == {'quality': 'precise', 'smoothing': True,
+                                  'pipeline': 'manual-workshop-v1', 'segmentation': 'isnet'}

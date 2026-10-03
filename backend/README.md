@@ -1,10 +1,12 @@
-# MCP Modéliseur 3D — moteurs locaux Android (6.3.9)
+# MCP Modéliseur 3D — moteurs locaux Android (6.3.10)
 
 Le MCP pilote les moteurs déjà embarqués dans l’APK : TripoSR, Silhouettes,
 IS-Net et Depth Anything V2. Le serveur transporte les commandes, les images
 et les GLB terminés. Il ne génère pas de géométrie et ne contacte aucun GPU
 Hugging Face. L’ancienne route de génération distante répond HTTP 410 ; les
 anciens GLB restent téléchargeables.
+
+Le mode direct intégré à l’APK 6.3.10 fonctionne sans ce relais : [configuration du téléphone et de la box](../docs/MCP-telephone-direct.md). Les paragraphes suivants décrivent seulement le mode de compatibilité Render.
 
 ## Connexion et parcours
 
@@ -39,7 +41,7 @@ reconnexion ; un GLB fini est retransmis sans recalculer l’inférence.
 
 Les sources sont des URL HTTPS publiques ou des Data URL/base64. Maximum 8 Mo
 par source, réduction à 1 024 pixels et conservation de la transparence PNG.
-`quality` : `fast`, `balanced`, `precise`. `engine` : `auto`, `triposr`, `silhouettes`.
+`quality` : `fast`, `balanced`, `precise` ; défaut **precise**, y compris lorsque l’ancien connecteur ChatGPT n’envoie aucun réglage. IS-Net et la préparation partagée avec l’atelier manuel sont activés, sans détourage externe supplémentaire. `engine` : `auto`, `triposr`, `silhouettes`.
 Les surfaces absentes des photos restent estimées. La fusion de quatre vues
 est celle de l’application ; TripoSR n’est pas un modèle multivue natif.
 

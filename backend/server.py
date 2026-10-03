@@ -270,7 +270,7 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.3.8-mcp.background',
+    return JSONResponse({'ok': True, 'version': '6.3.10-mcp.direct',
                          'generation': 'android_local_triposr',
                          'mcp': 'streamable_http', 'mcp_auth': 'none',
                          'mcp_path': '/mcp', 'direct_images': True})
@@ -495,12 +495,14 @@ def list_models_and_images() -> dict:
 
 @mcp.tool(annotations={'readOnlyHint': False, 'destructiveHint': False, 'openWorldHint': True})
 async def create_model_from_images(images: list[str], engine: str = 'auto',
-                                   quality: str = 'balanced', smoothing: bool = True) -> dict:
+                                   quality: str = 'precise', smoothing: bool = True) -> dict:
     """Send one to four user images to the Android app and create GLB models with its built-in local engines.
     With four images, provide exactly: front, back, right profile, left profile, in the same pose.
     Auto/TripoSR uses the app's four-view TripoSR fusion.
     With one image, it uses local single-image TripoSR.
     With two or three images, one independent single-image model is queued per image.
+    Defaults reproduce the manual workshop: precise detail, IS-Net local cutout and detailed TripoSR.
+    This application models geometry; it does not rig or animate characters.
     Set engine to 'silhouettes' to use the lighter local silhouette engine instead.
     """
     if not isinstance(images, list) or not 1 <= len(images) <= 4:
@@ -511,7 +513,7 @@ async def create_model_from_images(images: list[str], engine: str = 'auto',
     engine = (engine or 'auto').lower()
     if engine not in ('auto', 'triposr', 'silhouettes'):
         raise ValueError("Moteur invalide : auto, triposr ou silhouettes.")
-    quality = (quality or 'balanced').lower()
+    quality = (quality or 'precise').lower()
     if quality not in ('fast', 'balanced', 'precise'):
         raise ValueError("Qualité invalide : fast, balanced ou precise.")
 
@@ -520,7 +522,8 @@ async def create_model_from_images(images: list[str], engine: str = 'auto',
         raw = await read_image_source(source)
         references.append(store_reference_bytes(owner, raw))
 
-    options = {'quality': quality, 'smoothing': bool(smoothing)}
+    options = {'quality': quality, 'smoothing': bool(smoothing),
+               'pipeline': 'manual-workshop-v1', 'segmentation': 'isnet'}
     commands = []
     if len(references) == 4:
         selected = 'silhouettes_four' if engine == 'silhouettes' else 'triposr_four'

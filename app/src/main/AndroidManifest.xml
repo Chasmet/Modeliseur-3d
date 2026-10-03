@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -17,10 +18,12 @@
 
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Modéliseur 3D V6.3.9"
+        android:label="Modéliseur 3D V6.3.10"
         android:supportsRtl="true"
         android:theme="@style/Theme.Modeliseur3D">
 
@@ -60,6 +63,7 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <activity android:name=".mcp.PhoneMcpSettingsActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".Offline3DActivity" android:theme="@style/Theme.Modeliseur3D.Offline" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name=".CloudModelViewerActivity" android:exported="false" />

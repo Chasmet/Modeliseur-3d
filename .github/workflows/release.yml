@@ -97,14 +97,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.3.9
+      - name: Vérifier l'architecture V6.3.10
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.3.9" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.3.9'" app/build.gradle
-          grep -q "versionCode 55" app/build.gradle
+          grep -q "Modéliseur 3D V6.3.10" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.3.10'" app/build.gradle
+          grep -q "versionCode 56" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -129,6 +129,8 @@ jobs:
           grep -q "McpKeepAliveReceiver" app/src/main/AndroidManifest.xml
           grep -q "setAndAllowWhileIdle" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
           grep -q "Modeliseur3D:McpConnection" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "PhoneMcpServer" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "LocalImagePreparation.prepare" app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
           grep -q "LocalMcpGeneration.generate" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
           grep -q "EXTRA_MCP_COMMAND_ID" app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
           grep -q "uploadLocalResult" app/src/main/java/com/chasmet/modeliseur3d/cloud/CloudApi.java
@@ -160,7 +162,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.3.9",
+                  "User-Agent": "Modeliseur3D-CI/6.3.10",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -229,6 +231,9 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
+      - name: Vérifier MCP direct et moteurs locaux avant publication
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest
+
       - name: Vérifier le paquet prêt à publier
         shell: bash
         run: |
@@ -236,12 +241,12 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           unzip -t "$APK" >/dev/null
-          echo "APK validé. Les tests Android/MCP complets sont exécutés par les workflows dédiés avant publication."
+          echo "APK validé et tests Android/MCP exécutés avant publication."
 
-      - name: Publier l'APK V6.3.9
+      - name: Publier l'APK V6.3.10
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.3.9-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.3.10-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -270,11 +275,11 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.3.9 : bouton Connecté / Déconnecté à côté de ChatGPT MCP. Le service Android avec notification conserve la liaison et exécute les commandes 3D sans dépendre de l’écran, pendant YouTube / Netflix et après fermeture de l’écran de l’application. Reprise des commandes et caches après interruption, GLB sauvegardé avant synchronisation, action Déconnecter dans la notification. Les calculs restent locaux sur Android.
-          La correction de liaison MCP Android est conservée. Active le bouton Connecté sur l’accueil pour maintenir le heartbeat en arrière-plan. Le bouton Déconnecté arrête la liaison et conserve le travail pour la reprise. Un arrêt forcé Android ou un téléphone éteint nécessite de rouvrir l’application. ChatGPT utilise l’URL MCP sans authentification ; l’ancien lien privé reste seulement en compatibilité.
+          V6.3.10 : MCP Précis par défaut, détourage partagé avec l’atelier manuel, serveur MCP direct intégré au téléphone avec file persistante et récupération locale des GLB. Réglages pour le mode sans relais, adresse publique et certificat HTTPS PKCS12. Le serveur direct demande une configuration HTTPS/box accessible depuis Internet ; une URL Wi-Fi seule ne suffit pas pour ChatGPT. Maintien CPU/Wi-Fi et contrôles d’autorisation batterie pour l’écran éteint. Un téléphone complètement éteint ou arrêté de force ne peut pas exécuter le service. L’application modélise ; elle ne crée pas de squelette ni d’animation.
+          La correction de liaison MCP Android est conservée. Active le bouton Connecté sur l’accueil pour maintenir le heartbeat en arrière-plan. Le bouton Déconnecté arrête la liaison et conserve le travail pour la reprise. Un arrêt forcé Android ou un téléphone éteint nécessite de rouvrir l’application. En mode direct, utilise l’URL privée copiée depuis les réglages. Le relais existant reste disponible en compatibilité tant que la box HTTPS n’est pas configurée.
           Qualité TripoSR une image : grille neuronale centrée sur le sujet, jusqu’à 256 points sur le plus grand axe, sans déformer les proportions. Texture photo projetée sur les surfaces réellement visibles, couleurs neuronales sur les surfaces cachées et atlas continu sans petits triangles colorés. Calcul et export GLB entièrement hors ligne. Le dos reste estimé à partir d’une seule photo.
           Une seule photo est requise. Les réglages de profondeur des profils et la comparaison quatre vues sont masqués dans cette option. La photo Face et son encodeur en cache sont réutilisés, sans effacer les autres vues ni les modèles conservés.
-          Les modes TripoSR quatre images, Silhouettes, les deux moteurs d’origine, le catalogue et les mises à jour restent conservés. Aucun téléchargement de poids sur Android. Même package et même certificat V6.0.x–6.3.9.
+          Les modes TripoSR quatre images, Silhouettes, les deux moteurs d’origine, le catalogue et les mises à jour restent conservés. Aucun téléchargement de poids sur Android. Même package et même certificat V6.0.x–6.3.10.
           Les tests incluent une inférence réelle à une image sans réseau, les couleurs, le GLB, la reprise du cache et la navigation entre les trois moteurs. Vitesse et chauffe sur téléphone physique non mesurées.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"

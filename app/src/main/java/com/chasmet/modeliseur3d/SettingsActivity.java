@@ -23,6 +23,8 @@ public final class SettingsActivity extends AppCompatActivity {
         layout.setOrientation(LinearLayout.VERTICAL);int p=(int)(20*getResources().getDisplayMetrics().density);layout.setPadding(p,p,p,p);scroll.addView(layout);setContentView(scroll);
         TextView heading=new TextView(this);heading.setText("Réglages");heading.setTextSize(27);layout.addView(heading);
         TextView version=new TextView(this);version.setText("Version actuelle : "+UpdateManager.currentVersion(this));layout.addView(version);
+        Button mcp=new Button(this);mcp.setText("Connexion permanente et serveur MCP direct");mcp.setAllCaps(false);layout.addView(mcp);
+        mcp.setOnClickListener(v->startActivity(new Intent(this,com.chasmet.modeliseur3d.mcp.PhoneMcpSettingsActivity.class)));
         TextView title=new TextView(this);title.setText("Mise à jour automatique");title.setTextSize(22);layout.addView(title);
         Switch automatic=new Switch(this);automatic.setText("Mise à jour automatique");automatic.setChecked(UpdateManager.automatic(this));layout.addView(automatic);
         automatic.setOnCheckedChangeListener((v,on)->{UpdateManager.prefs(this).edit().putBoolean("automatic",on).apply();UpdateManager.schedule(this);});

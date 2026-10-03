@@ -36,7 +36,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     private static final String[] VIEWS={"Face","Dos","Profil droit","Profil gauche"};
     private CheckBox fourViews;private TextView countLabel;private int selectedSlot;
     private ProgressBar progress;private volatile boolean busy;private volatile boolean cancelled;private String lastId="";
-    private String mcpCommandId="",mcpMode="",mcpQuality="balanced";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
+    private String mcpCommandId="",mcpMode="",mcpQuality="precise";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("offline_workshop",MODE_PRIVATE);}
     private boolean isMcp(){return mcpCommandId.matches("[a-f0-9]{32}");}
     private File mcpFolder(){return new File(getFilesDir(),"mcp_inputs/"+mcpCommandId);}
@@ -98,7 +98,7 @@ public final class Offline3DActivity extends AppCompatActivity {
             mcpMode=getIntent().getStringExtra(EXTRA_MCP_MODE);
             if(mcpMode==null)mcpMode="triposr_single";
             mcpQuality=getIntent().getStringExtra(EXTRA_MCP_QUALITY);
-            if(mcpQuality==null)mcpQuality="balanced";
+            if(mcpQuality==null)mcpQuality="precise";
             mcpSmoothing=getIntent().getBooleanExtra(EXTRA_MCP_SMOOTHING,true);
         }
         selectedSlot=state==null?prefs().getInt("selectedSlot",0):state.getInt("selectedSlot",0);
@@ -215,11 +215,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         checkpoint();Bitmap bitmap=BitmapFactory.decodeFile(source(slot).getAbsolutePath());
         if(bitmap==null)throw new IOException("Photo "+VIEWS[slot]+" illisible.");
         try{
-            AnimeSegmentationEngine.Mask mask=null;
-            if(useAi&&!hasTransparency(bitmap)){message(VIEWS[slot]+" : détourage IA embarqué, calcul CPU local…");
-                try(AnimeSegmentationEngine segment=new AnimeSegmentationEngine(this,2)){checkpoint();mask=segment.segment(bitmap);}}
-            checkpoint();
-            try(OfflineImageVolume.Prepared prepared=OfflineImageVolume.prepare(bitmap,tolerance,mask)){
+            try(OfflineImageVolume.Prepared prepared=LocalImagePreparation.prepare(this,bitmap,tolerance,useAi,new TripoSREngine.Progress(){
+                public void update(String value){message(VIEWS[slot]+" : "+value);}public void check(){checkpoint();}
+            })){
                 saveBitmap(prepared.bitmap,cutout(slot));
                 prefs().edit().putString(key("cutoutKey",slot),cache).putString(key("cutoutMethod",slot),prepared.method).apply();
             }
