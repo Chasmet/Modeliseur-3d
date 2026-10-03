@@ -131,9 +131,9 @@ def phone_online(owner):
 def create_local_command(owner, references, mode, options=None):
     if not phone_online(owner):
         raise ValueError("Le téléphone Modéliseur 3D n'est pas en ligne. Ouvre l'application puis réessaie.")
-    if mode not in ('triposr_single', 'triposr_four'):
+    if mode not in ('triposr_single', 'triposr_four', 'silhouettes_single', 'silhouettes_four'):
         raise ValueError('Mode local invalide.')
-    expected = 1 if mode == 'triposr_single' else 4
+    expected = 1 if mode.endswith('_single') else 4
     if len(references) != expected:
         raise ValueError('Nombre de vues incompatible avec le moteur local.')
     for reference_id in references:
