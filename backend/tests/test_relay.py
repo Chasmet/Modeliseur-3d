@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -36,6 +37,10 @@ def rpc(client, token, method, params=None):
     return client.post('/mcp/' + token, headers={'Accept': 'application/json, text/event-stream'},
                        json={'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params or {}})
 
+def rpc_open(client, method, params=None):
+    return client.post('/mcp', headers={'Accept': 'application/json, text/event-stream'},
+                       json={'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params or {}})
+
 def mcp_result(response):
     assert response.status_code == 200, response.text
     return response.json()['result']
@@ -60,7 +65,8 @@ def test_mcp_protocol_tools_device_isolation_and_revocation(client):
     assert 'tools' in init['capabilities']
     listed = mcp_result(rpc(client, token, 'tools/list'))
     assert {t['name'] for t in listed['tools']} == {
-        'application_status', 'list_models_and_images', 'generate_model', 'open_model_on_phone'}
+        'application_status', 'list_models_and_images', 'create_model_from_images',
+        'model_status', 'model_download', 'generate_model', 'open_model_on_phone'}
     own = mcp_result(rpc(client, token, 'tools/call', {'name': 'list_models_and_images', 'arguments': {}}))
     assert ref in str(own)
     token_b = client.post('/api/mcp', headers=b, json={'enabled': True}).json()['mcp_token']
@@ -73,6 +79,39 @@ def test_mcp_protocol_tools_device_isolation_and_revocation(client):
     client.post('/api/mcp', headers=a, json={'enabled': False})
     assert rpc(client, token, 'tools/list').status_code == 401
     assert rpc(client, 'invalid', 'tools/list').status_code == 401
+
+def test_open_mcp_has_no_auth_and_accepts_inline_images(client, monkeypatch):
+    a = enroll(client)
+    client.get('/api/poll', headers=a)
+    def fake_generate(job):
+        folder = server.DATA / job['id']; folder.mkdir(exist_ok=True)
+        (folder / 'model.glb').write_bytes(b'glTF-open-mcp')
+        server.update_job(job['id'], 'ready', 'GLB prêt.')
+    monkeypatch.setattr(server, 'generate_sync', fake_generate)
+
+    init = mcp_result(rpc_open(client, 'initialize', {
+        'protocolVersion': '2025-06-18', 'capabilities': {},
+        'clientInfo': {'name': 'test-open', 'version': '1'}}))
+    assert 'tools' in init['capabilities']
+
+    out = io.BytesIO()
+    Image.new('RGB', (320, 240), 'orange').save(out, 'PNG')
+    data_url = 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()
+    created = mcp_result(rpc_open(client, 'tools/call', {
+        'name': 'create_model_from_images',
+        'arguments': {'images': [data_url]}}))
+    payload = json.loads(created['content'][0]['text'])
+    job = payload['primary_job_id']
+    for _ in range(30):
+        status = client.get('/api/jobs', headers=a).json()['jobs'][0]
+        if status['status'] == 'ready': break
+        time.sleep(.01)
+    assert status['status'] == 'ready'
+    download = mcp_result(rpc_open(client, 'tools/call', {
+        'name': 'model_download', 'arguments': {'job_id': job}}))
+    assert '/public/jobs/' + job + '/file' in str(download)
+    assert client.get('/public/jobs/' + job + '/file').content == b'glTF-open-mcp'
+
 
 def test_job_download_and_mcp_command_round_trip(client, monkeypatch):
     a, b = enroll(client), enroll(client)
