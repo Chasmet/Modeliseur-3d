@@ -386,12 +386,29 @@ public final class Offline3DActivity extends AppCompatActivity {
             lastId=files[index].getName().substring(0,32);prefs().edit().putString("last",lastId).apply();buttons();openModel(lastId);
         }).setNegativeButton("Fermer",null).show();
     }
+    @Override protected void onStart(){
+        super.onStart();
+        if(mcpBridge!=null)mcpBridge.close();
+        mcpBridge=new McpBridgeSession(this,null,false);
+        mcpBridge.start();
+    }
+    @Override protected void onStop(){
+        if(mcpBridge!=null){mcpBridge.close();mcpBridge=null;}
+        super.onStop();
+    }
     @Override protected void onPause(){
-        prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
-                .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",engine.getSelectedItemPosition()==1?fourViews.isChecked():prefs().getBoolean("fourViews",true)).apply();
-        prefs().edit().putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
+        if(!isMcp()){
+            prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
+                    .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",engine.getSelectedItemPosition()==1?fourViews.isChecked():prefs().getBoolean("fourViews",true)).apply();
+            prefs().edit().putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
+        }
         super.onPause();
     }
     @Override protected void onSaveInstanceState(Bundle state){state.putInt("selectedSlot",selectedSlot);super.onSaveInstanceState(state);}
-    @Override protected void onDestroy(){cancelled=true;worker.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){
+        cancelled=true;
+        if(mcpBridge!=null){mcpBridge.close();mcpBridge=null;}
+        worker.shutdownNow();
+        super.onDestroy();
+    }
 }
