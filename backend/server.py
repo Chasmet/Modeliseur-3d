@@ -259,7 +259,7 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.3.2-mcp.1', 'generation': 'remote_trellis2', 'mcp': 'streamable_http', 'mcp_auth': 'none', 'mcp_path': '/mcp', 'direct_images': True})
+    return JSONResponse({'ok': True, 'version': '6.3.4-mcp.2', 'generation': 'remote_trellis2', 'mcp': 'streamable_http', 'mcp_auth': 'none', 'mcp_path': '/mcp', 'direct_images': True})
 
 async def register(request):
     # Device enrollment only creates an isolated empty account, never grants access to existing devices.
