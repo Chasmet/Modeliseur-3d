@@ -331,7 +331,10 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.3.4-mcp.2', 'generation': 'remote_trellis2', 'mcp': 'streamable_http', 'mcp_auth': 'none', 'mcp_path': '/mcp', 'direct_images': True})
+    return JSONResponse({'ok': True, 'version': '6.3.6-mcp.local1',
+                         'generation': 'android_local_triposr',
+                         'mcp': 'streamable_http', 'mcp_auth': 'none',
+                         'mcp_path': '/mcp', 'direct_images': True})
 
 async def register(request):
     # Device enrollment only creates an isolated empty account, never grants access to existing devices.
@@ -393,6 +396,69 @@ async def public_download(request):
         raise HTTPException(409, 'GLB pas encore disponible.')
     return FileResponse(output, media_type='model/gltf-binary', filename='Modeliseur_' + job_id[:8] + '.glb')
 
+async def local_image_download(request):
+    owner = device(request)
+    command = local_command_for(owner, request.path_params['command_id'])
+    reference_id = request.path_params['reference_id']
+    if reference_id not in command['references']:
+        raise HTTPException(404, 'Image de commande introuvable.')
+    image_path = DATA / (reference_id + '.png')
+    if not image_path.is_file():
+        raise HTTPException(404, 'Image de commande introuvable.')
+    return FileResponse(image_path, media_type='image/png', filename=reference_id + '.png')
+
+async def local_status(request):
+    owner = device(request)
+    command_id = request.path_params['command_id']
+    data = await payload(request)
+    status = data.get('status', '')
+    message = data.get('message', '')
+    if status not in ('pending', 'running', 'error'):
+        raise HTTPException(400, 'État local invalide.')
+    try:
+        command = update_local_command(owner, command_id, status, message)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return JSONResponse(command)
+
+async def local_result(request):
+    owner = device(request)
+    command_id = request.path_params['command_id']
+    command = local_command_for(owner, command_id)
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw) > 64 * 1024 * 1024:
+            raise HTTPException(413, 'GLB supérieur à 64 Mo.')
+    if len(raw) < 12 or bytes(raw[:4]) != b'glTF':
+        raise HTTPException(400, 'GLB invalide.')
+    declared = int.from_bytes(raw[8:12], 'little', signed=False)
+    if declared != len(raw):
+        raise HTTPException(400, 'GLB incomplet.')
+    folder = DATA / ('local-' + command_id)
+    folder.mkdir(exist_ok=True)
+    part = folder / 'model.glb.part'
+    output = folder / 'model.glb'
+    part.write_bytes(raw)
+    part.replace(output)
+    command = update_local_command(owner, command_id, 'ready',
+                                   'Modèle créé localement sur le téléphone et synchronisé.')
+    return JSONResponse(command)
+
+async def public_local_download(request):
+    command_id = request.path_params['command_id']
+    if len(command_id) != 32 or any(ch not in '0123456789abcdef' for ch in command_id):
+        raise HTTPException(404, 'Modèle introuvable.')
+    with db() as c:
+        row = c.execute('SELECT status FROM local_commands WHERE id=?', (command_id,)).fetchone()
+    output = DATA / ('local-' + command_id) / 'model.glb'
+    if not row:
+        raise HTTPException(404, 'Modèle introuvable.')
+    if row['status'] != 'ready' or not output.is_file():
+        raise HTTPException(409, 'GLB local pas encore disponible.')
+    return FileResponse(output, media_type='model/gltf-binary',
+                        filename='Modeliseur_Local_' + command_id[:8] + '.glb')
+
 async def heartbeat(request):
     owner = device(request)
     now = time.time()
@@ -404,8 +470,15 @@ async def poll(request):
     owner = device(request)
     with db() as c:
         c.execute('UPDATE devices SET seen=? WHERE id=?', (time.time(), owner))
-        commands = [dict(r) for r in c.execute('SELECT * FROM commands WHERE device=? AND acknowledged=0', (owner,))]
-    return JSONResponse({'commands': commands, 'jobs': rows('jobs', owner)})
+        commands = [dict(r) for r in c.execute(
+            'SELECT * FROM commands WHERE device=? AND acknowledged=0', (owner,))]
+        local = [dict(r) for r in c.execute(
+            "SELECT * FROM local_commands WHERE device=? AND status='pending' ORDER BY created ASC",
+            (owner,))]
+    for item in local:
+        item['references'] = json.loads(item.pop('refs_json'))
+        item['options'] = json.loads(item.pop('options_json'))
+    return JSONResponse({'commands': commands, 'local_commands': local, 'jobs': rows('jobs', owner)})
 
 async def ack(request):
     owner = device(request)
@@ -420,7 +493,9 @@ async def clear(request):
             raise HTTPException(409, 'Attends la fin du travail en cours.')
         for row in rows('refs', owner): (DATA / (row['id'] + '.png')).unlink(missing_ok=True)
         for row in rows('jobs', owner): shutil.rmtree(DATA / row['id'], ignore_errors=True)
-        for table in ('refs', 'jobs', 'commands'): c.execute(f'DELETE FROM {table} WHERE device=?', (owner,))
+        for row in local_rows(owner): shutil.rmtree(DATA / ('local-' + row['id']), ignore_errors=True)
+        for table in ('refs', 'jobs', 'commands', 'local_commands'):
+            c.execute(f'DELETE FROM {table} WHERE device=?', (owner,))
     return JSONResponse({'ok': True})
 
 # Explicit production host allowlist; SDK protection remains on against DNS rebinding.
@@ -514,6 +589,10 @@ async def error_response(request, error):
 
 api = Starlette(routes=[Route('/health', health), Route('/ci/signing', signing_key), Route('/api/register', register, methods=['POST']),
     Route('/public/jobs/{job_id}/file', public_download),
+    Route('/public/local/{command_id}/file', public_local_download),
+    Route('/api/local/{command_id}/images/{reference_id}', local_image_download),
+    Route('/api/local/{command_id}/status', local_status, methods=['POST']),
+    Route('/api/local/{command_id}/result', local_result, methods=['POST']),
     Route('/api/mcp', mcp_toggle, methods=['POST']), Route('/api/images', upload, methods=['POST']),
     Route('/api/jobs', jobs_api, methods=['GET', 'POST']), Route('/api/jobs/{job_id}/file', download),
     Route('/api/heartbeat', heartbeat), Route('/api/poll', poll), Route('/api/commands/{command_id}/ack', ack, methods=['POST']),
