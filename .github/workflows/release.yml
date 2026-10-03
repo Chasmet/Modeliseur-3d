@@ -123,7 +123,7 @@ jobs:
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
           grep -q 'handler.post(heartbeat)' app/src/main/java/com/chasmet/modeliseur3d/Cloud3DActivity.java
-          grep -q '"/api/heartbeat"' app/src/main/java/com/chasmet/modeliseur3d/Cloud3DActivity.java
+          grep -q 'current.json("/api/poll", null)' app/src/main/java/com/chasmet/modeliseur3d/Cloud3DActivity.java
 
       - name: Vérifier les GLB officiels libres sous 8 Mo
         env:
