@@ -61,8 +61,14 @@ with db() as c:
       status TEXT, message TEXT, rig INTEGER, created REAL);
     CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY, device TEXT, job TEXT,
       acknowledged INTEGER DEFAULT 0, created REAL);
+    CREATE TABLE IF NOT EXISTS local_commands(
+      id TEXT PRIMARY KEY, device TEXT, refs_json TEXT, mode TEXT, options_json TEXT,
+      status TEXT, message TEXT, created REAL, updated REAL);
     UPDATE jobs SET status='interrupted',message='Relais redémarré : relance manuelle nécessaire.'
       WHERE status IN ('queued','running');
+    UPDATE local_commands SET status='pending',
+      message='Application à reconnecter pour reprendre la génération locale.',updated=strftime('%s','now')
+      WHERE status='running';
     ''')
 
 def digest(token):
@@ -94,6 +100,72 @@ def rows(table, owner):
         raise ValueError('Unsupported collection')
     with db() as c:
         return [dict(r) for r in c.execute(f'SELECT * FROM {table} WHERE device=? ORDER BY created DESC', (owner,))]
+
+def local_rows(owner):
+    with db() as c:
+        result = [dict(r) for r in c.execute(
+            'SELECT * FROM local_commands WHERE device=? ORDER BY created DESC', (owner,))]
+    for item in result:
+        item['references'] = json.loads(item.pop('refs_json'))
+        item['options'] = json.loads(item.pop('options_json'))
+    return result
+
+def local_command_for(owner, command_id):
+    with db() as c:
+        row = c.execute('SELECT * FROM local_commands WHERE id=? AND device=?',
+                        (command_id, owner)).fetchone()
+    if not row:
+        raise HTTPException(404, 'Commande locale introuvable.')
+    item = dict(row)
+    item['references'] = json.loads(item.pop('refs_json'))
+    item['options'] = json.loads(item.pop('options_json'))
+    return item
+
+def phone_online(owner):
+    if owner == PUBLIC_OWNER:
+        return False
+    with db() as c:
+        row = c.execute('SELECT seen FROM devices WHERE id=?', (owner,)).fetchone()
+    return bool(row) and time.time() - float(row['seen'] or 0) < 25
+
+def create_local_command(owner, references, mode, options=None):
+    if not phone_online(owner):
+        raise ValueError("Le téléphone Modéliseur 3D n'est pas en ligne. Ouvre l'application puis réessaie.")
+    if mode not in ('triposr_single', 'triposr_four'):
+        raise ValueError('Mode local invalide.')
+    expected = 1 if mode == 'triposr_single' else 4
+    if len(references) != expected:
+        raise ValueError('Nombre de vues incompatible avec le moteur local.')
+    for reference_id in references:
+        with db() as c:
+            row = c.execute('SELECT id FROM refs WHERE id=? AND device=?',
+                            (reference_id, owner)).fetchone()
+        if not row or not (DATA / (reference_id + '.png')).is_file():
+            raise ValueError('Image locale de commande introuvable.')
+    with db() as c:
+        pending = c.execute(
+            "SELECT COUNT(*) FROM local_commands WHERE device=? AND status IN ('pending','running')",
+            (owner,)).fetchone()[0]
+        if pending >= 4:
+            raise ValueError('Trop de créations locales en attente.')
+        command_id = secrets.token_hex(16)
+        now = time.time()
+        c.execute('INSERT INTO local_commands VALUES(?,?,?,?,?,?,?,?,?)',
+                  (command_id, owner, json.dumps(references), mode,
+                   json.dumps(options or {}), 'pending',
+                   'Commande reçue. En attente de l’application Android.', now, now))
+    return local_command_for(owner, command_id)
+
+def update_local_command(owner, command_id, status, message):
+    if status not in ('pending', 'running', 'ready', 'error'):
+        raise ValueError('État de commande invalide.')
+    with db() as c:
+        changed = c.execute(
+            'UPDATE local_commands SET status=?,message=?,updated=? WHERE id=? AND device=?',
+            (status, str(message)[:500], time.time(), command_id, owner)).rowcount
+    if not changed:
+        raise HTTPException(404, 'Commande locale introuvable.')
+    return local_command_for(owner, command_id)
 
 def store_reference_bytes(owner, raw):
     if not raw:
