@@ -1,0 +1,22 @@
+{
+  "changed_float_parameters": 41086,
+  "rgb_output_rows_identical": true,
+  "model_source_commit": "13606309622b4799afc1b8958e769520c5dfc4ed",
+  "python": "3.12.14",
+  "numpy": "2.3.5",
+  "onnx": "1.17.0",
+  "onnxruntime": "1.20.0",
+  "pillow": "12.3.0",
+  "precision_decreases": [
+    {
+      "id": "bottle-301",
+      "before": 1.0,
+      "after": 0.9857234178563818
+    },
+    {
+      "id": "figure-301",
+      "before": 0.7035928143712575,
+      "after": 0.5961204400694846
+    }
+  ]
+}

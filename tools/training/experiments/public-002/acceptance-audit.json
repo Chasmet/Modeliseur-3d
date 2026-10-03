@@ -1,0 +1,376 @@
+{
+  "experiment_protocol": "public-objaverse-decoder-v1",
+  "audit_protocol": "per-object-iou-precision-recall-v2",
+  "checkpoints": [
+    {
+      "checkpoint": "candidate",
+      "sha256": "eb2d905822ae55bbb8e4b342aee03a4a8228de2948cc332f54c53a7fb6b2196f",
+      "changed_parameters": 0,
+      "rgb_final_rows_unchanged": true,
+      "onnx_numpy_max_difference": 4.76837158203125e-07
+    },
+    {
+      "checkpoint": "last",
+      "sha256": "4dbca884c2814f8e39c1a981070f85b6efc63de07679db7689c05eddcd544de7",
+      "changed_parameters": 41086,
+      "rgb_final_rows_unchanged": true,
+      "onnx_numpy_max_difference": 4.76837158203125e-07
+    }
+  ],
+  "source_files": [
+    {
+      "id": "obj-06923953e80342e4bb1f378110a5deaf",
+      "sha256": "86cd22f7b702f4bf0aaa695a47cc95b31d362f1d215502a778c65496e8fb2a6b",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-dbd5967529474547b4777c7a1f6312b0",
+      "sha256": "804bea50581e1bcb0c3096da5765d8c426eb6b16b236ec04e81b34b5d6b461cd",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-d11d8167023e49beba284283446db700",
+      "sha256": "9fbe80702a4de99cb8bfb90ad8626983741d6f21f3eaeb3b230a0761580f252d",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-5aaf34c3eb5e44c5a40a03c7569fa8c5",
+      "sha256": "9fd3008d1b7d84712dd4eb1df5b12af7fcb68d12688b4a10b41a20c5b040bcf1",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+      "sha256": "6a1ccdd60ec0b4135405ef754adc6d6c341eccbc97a93e7973daa51d15aa0265",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-278532499c9048b688ba6840e19e76f9",
+      "sha256": "a06997d4c5715ce6ba726cb620876e363b4fe724a3dff51a1595bbc212f857f2",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+      "sha256": "22c93cccb0da3d34705a4cf24734e6ff0aeae8228b31f4436cb4490ea8ade851",
+      "original_unchanged": true
+    },
+    {
+      "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+      "sha256": "40f6d0ec8fda48837b1c8a77dfd877b1b694cbe780f040284f4fd4937923b2da",
+      "original_unchanged": true
+    }
+  ],
+  "released_assets_unchanged": true,
+  "validation_geometry_regressions": [],
+  "test_geometry_regressions": [],
+  "historical_validation_audit": [
+    {
+      "step": 100,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.12477396021699819
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.19220055710306408
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6406474820143885
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6406474820143885
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.7002477291494632
+        },
+        {
+          "id": "figure-201",
+          "metric": "iou",
+          "before": 0.4393939393939394,
+          "after": 0.4221891288160834
+        },
+        {
+          "id": "figure-201",
+          "metric": "recall",
+          "before": 0.48333333333333334,
+          "after": 0.45725806451612905
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 200,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.20612813370473537
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6455035971223022
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6455035971223022
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6882741535920727
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 300,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.06398104265402843
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.07520891364902507
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9215686274509803
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6151079136690647
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6151079136690647
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.639141205615194
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 400,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.07311320754716981
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.08635097493036212
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9224598930481284
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6600719424460432
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6600719424460432
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6535920726672172
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 500,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.08277404921700224
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10306406685236769
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6857913669064748
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6857913669064748
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6742361684558217
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.7890124705089315
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 600,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.08665105386416862
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10306406685236769
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.7845448592010478
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 700,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.06451612903225806
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.07242339832869081
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9090909090909091
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.7093525179856115
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6655656482246077
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.8045138888888889
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    },
+    {
+      "step": 800,
+      "stricter_validation_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.0896551724137931
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10863509749303621
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9206773618538324
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.694467382328654
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.790891597177678
+        }
+      ],
+      "eligible_under_v2_geometry_safeguards": false
+    }
+  ],
+  "new_weights_pass_stricter_validation": false,
+  "production_approved": false,
+  "decision": "No APK integration; candidate and last checkpoint retained for private research"
+}

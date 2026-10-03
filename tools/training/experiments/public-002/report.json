@@ -1,0 +1,5139 @@
+{
+  "version": "public-objaverse-decoder-v1",
+  "scope": "actual decoder fine-tuning; frozen INT4 encoder; synthetic replay",
+  "training_steps": 800,
+  "objective": "four-view",
+  "sampling": "stratified",
+  "selected_step": 0,
+  "changed_selected_parameters": 0,
+  "changed_last_parameters": 41086,
+  "trainable_parameters": 41089,
+  "frozen_rgb_final_parameters": 195,
+  "object_splits": {
+    "train": [
+      "obj-06923953e80342e4bb1f378110a5deaf",
+      "obj-dbd5967529474547b4777c7a1f6312b0",
+      "obj-d11d8167023e49beba284283446db700",
+      "obj-5aaf34c3eb5e44c5a40a03c7569fa8c5"
+    ],
+    "validation": [
+      "obj-b253b8b5f70a439284655047d8a0c23b",
+      "obj-278532499c9048b688ba6840e19e76f9"
+    ],
+    "test": [
+      "obj-f265e07cc1394f78a5fe59148f84a15c",
+      "obj-97989d443ac048acb6bb42a2f82c6324"
+    ]
+  },
+  "synthetic_objects": {
+    "train": 6,
+    "validation": 3,
+    "test": 3
+  },
+  "released_decoder": {
+    "mesh_validation": {
+      "mean_iou": 0.21383499912373172,
+      "objects": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "family": "private-mesh",
+          "iou": 0.13556618819776714,
+          "precision": 0.24079320113314448,
+          "recall": 0.23676880222841226
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "family": "private-mesh",
+          "iou": 0.2921038100496963,
+          "precision": 0.29735806632939854,
+          "recall": 0.9429590017825312
+        }
+      ]
+    },
+    "mesh_test": {
+      "mean_iou": 0.7384945743524931,
+      "objects": [
+        {
+          "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+          "family": "private-mesh",
+          "iou": 0.70917225950783,
+          "precision": 0.7883507853403141,
+          "recall": 0.8759453170447935
+        },
+        {
+          "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+          "family": "private-mesh",
+          "iou": 0.7678168891971562,
+          "precision": 0.9779151943462897,
+          "recall": 0.7813658020116464
+        }
+      ]
+    },
+    "synthetic_validation": {
+      "mean_iou": 0.4886258686102365,
+      "objects": [
+        {
+          "id": "bottle-201",
+          "family": "bottle",
+          "iou": 0.7248201438848921,
+          "precision": 1.0,
+          "recall": 0.7248201438848921
+        },
+        {
+          "id": "chair-201",
+          "family": "chair",
+          "iou": 0.3016635225518779,
+          "precision": 0.34036377708978327,
+          "recall": 0.7262592898431048
+        },
+        {
+          "id": "figure-201",
+          "family": "figure",
+          "iou": 0.4393939393939394,
+          "precision": 0.8285714285714286,
+          "recall": 0.48333333333333334
+        }
+      ]
+    },
+    "synthetic_test": {
+      "mean_iou": 0.4389126552285627,
+      "objects": [
+        {
+          "id": "bottle-301",
+          "family": "bottle",
+          "iou": 0.6825539568345323,
+          "precision": 1.0,
+          "recall": 0.6825539568345323
+        },
+        {
+          "id": "chair-301",
+          "family": "chair",
+          "iou": 0.34491763760546407,
+          "precision": 0.4326026706979088,
+          "recall": 0.6298606016140865
+        },
+        {
+          "id": "figure-301",
+          "family": "figure",
+          "iou": 0.28926637124569177,
+          "precision": 0.7035928143712575,
+          "recall": 0.32940846649845806
+        }
+      ]
+    }
+  },
+  "initial_candidate": {
+    "mesh_validation": {
+      "mean_iou": 0.21383499912373172,
+      "objects": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "family": "private-mesh",
+          "iou": 0.13556618819776714,
+          "precision": 0.24079320113314448,
+          "recall": 0.23676880222841226
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "family": "private-mesh",
+          "iou": 0.2921038100496963,
+          "precision": 0.29735806632939854,
+          "recall": 0.9429590017825312
+        }
+      ]
+    },
+    "mesh_test": {
+      "mean_iou": 0.7384945743524931,
+      "objects": [
+        {
+          "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+          "family": "private-mesh",
+          "iou": 0.70917225950783,
+          "precision": 0.7883507853403141,
+          "recall": 0.8759453170447935
+        },
+        {
+          "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+          "family": "private-mesh",
+          "iou": 0.7678168891971562,
+          "precision": 0.9779151943462897,
+          "recall": 0.7813658020116464
+        }
+      ]
+    },
+    "synthetic_validation": {
+      "mean_iou": 0.4886258686102365,
+      "objects": [
+        {
+          "id": "bottle-201",
+          "family": "bottle",
+          "iou": 0.7248201438848921,
+          "precision": 1.0,
+          "recall": 0.7248201438848921
+        },
+        {
+          "id": "chair-201",
+          "family": "chair",
+          "iou": 0.3016635225518779,
+          "precision": 0.34036377708978327,
+          "recall": 0.7262592898431048
+        },
+        {
+          "id": "figure-201",
+          "family": "figure",
+          "iou": 0.4393939393939394,
+          "precision": 0.8285714285714286,
+          "recall": 0.48333333333333334
+        }
+      ]
+    },
+    "synthetic_test": {
+      "mean_iou": 0.4389126552285627,
+      "objects": [
+        {
+          "id": "bottle-301",
+          "family": "bottle",
+          "iou": 0.6825539568345323,
+          "precision": 1.0,
+          "recall": 0.6825539568345323
+        },
+        {
+          "id": "chair-301",
+          "family": "chair",
+          "iou": 0.34491763760546407,
+          "precision": 0.4326026706979088,
+          "recall": 0.6298606016140865
+        },
+        {
+          "id": "figure-301",
+          "family": "figure",
+          "iou": 0.28926637124569177,
+          "precision": 0.7035928143712575,
+          "recall": 0.32940846649845806
+        }
+      ]
+    }
+  },
+  "selected_candidate": {
+    "mesh_validation": {
+      "mean_iou": 0.21383499912373172,
+      "objects": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "family": "private-mesh",
+          "iou": 0.13556618819776714,
+          "precision": 0.24079320113314448,
+          "recall": 0.23676880222841226
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "family": "private-mesh",
+          "iou": 0.2921038100496963,
+          "precision": 0.29735806632939854,
+          "recall": 0.9429590017825312
+        }
+      ]
+    },
+    "mesh_test": {
+      "mean_iou": 0.7384945743524931,
+      "objects": [
+        {
+          "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+          "family": "private-mesh",
+          "iou": 0.70917225950783,
+          "precision": 0.7883507853403141,
+          "recall": 0.8759453170447935
+        },
+        {
+          "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+          "family": "private-mesh",
+          "iou": 0.7678168891971562,
+          "precision": 0.9779151943462897,
+          "recall": 0.7813658020116464
+        }
+      ]
+    },
+    "synthetic_validation": {
+      "mean_iou": 0.4886258686102365,
+      "objects": [
+        {
+          "id": "bottle-201",
+          "family": "bottle",
+          "iou": 0.7248201438848921,
+          "precision": 1.0,
+          "recall": 0.7248201438848921
+        },
+        {
+          "id": "chair-201",
+          "family": "chair",
+          "iou": 0.3016635225518779,
+          "precision": 0.34036377708978327,
+          "recall": 0.7262592898431048
+        },
+        {
+          "id": "figure-201",
+          "family": "figure",
+          "iou": 0.4393939393939394,
+          "precision": 0.8285714285714286,
+          "recall": 0.48333333333333334
+        }
+      ]
+    },
+    "synthetic_test": {
+      "mean_iou": 0.4389126552285627,
+      "objects": [
+        {
+          "id": "bottle-301",
+          "family": "bottle",
+          "iou": 0.6825539568345323,
+          "precision": 1.0,
+          "recall": 0.6825539568345323
+        },
+        {
+          "id": "chair-301",
+          "family": "chair",
+          "iou": 0.34491763760546407,
+          "precision": 0.4326026706979088,
+          "recall": 0.6298606016140865
+        },
+        {
+          "id": "figure-301",
+          "family": "figure",
+          "iou": 0.28926637124569177,
+          "precision": 0.7035928143712575,
+          "recall": 0.32940846649845806
+        }
+      ]
+    }
+  },
+  "heldout_geometry_regressions": [],
+  "production_approved": false,
+  "candidate_sha256": "eb2d905822ae55bbb8e4b342aee03a4a8228de2948cc332f54c53a7fb6b2196f",
+  "candidate_bytes": 221114,
+  "last_sha256": "4dbca884c2814f8e39c1a981070f85b6efc63de07679db7689c05eddcd544de7",
+  "initial_sha256": "90b322cae570324f1d699f7307d4f056275b3bc8564db8568a5aebe403691424",
+  "rgb_final_rows_unchanged": true,
+  "source_assets": {
+    "triposr_encoder_int4.onnx": "76dab077ff2768898ace523c72e0a017134bfd3628c4b15fd6f65cf304439089",
+    "triposr_encoder_int4.onnx.data": "fd5be249ab455b368812ba25095a2720e561ab0dcdeb42c81d922f7f67669a00",
+    "triposr_decoder.onnx": "90b322cae570324f1d699f7307d4f056275b3bc8564db8568a5aebe403691424",
+    "triposr_decoder.onnx.data": "9c3b1412ecbc803983003091939e449f9be3078c1c9a1880d5c5196a40a31d6c"
+  },
+  "views_per_object": 4,
+  "grid_resolution": 28,
+  "onnx_numpy_max_difference": 2.384185791015625e-06,
+  "duration_seconds": 37.170537618000026,
+  "history": [
+    {
+      "step": 100,
+      "loss": 0.11047165172123759,
+      "validation_score": 0.36336467964939057,
+      "mesh_validation": {
+        "mean_iou": 0.2134256413895147,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.12477396021699819,
+            "precision": 0.2623574144486692,
+            "recall": 0.19220055710306408
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.3020773225620312,
+            "precision": 0.3087584783249779,
+            "recall": 0.9331550802139037
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.5133037179092664,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.6406474820143885,
+            "precision": 1.0,
+            "recall": 0.6406474820143885
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.4770745428973277,
+            "precision": 0.5995051254860375,
+            "recall": 0.7002477291494632
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.4221891288160834,
+            "precision": 0.8462686567164179,
+            "recall": 0.45725806451612905
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.12477396021699819
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.19220055710306408
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6406474820143885
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6406474820143885
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.7002477291494632
+        },
+        {
+          "id": "figure-201",
+          "metric": "iou",
+          "before": 0.4393939393939394,
+          "after": 0.4221891288160834
+        },
+        {
+          "id": "figure-201",
+          "metric": "recall",
+          "before": 0.48333333333333334,
+          "after": 0.45725806451612905
+        }
+      ]
+    },
+    {
+      "step": 200,
+      "loss": 0.13602499769667903,
+      "validation_score": 0.3754619455993723,
+      "mesh_validation": {
+        "mean_iou": 0.2189512448229956,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.13167259786476868,
+            "precision": 0.26714801444043323,
+            "recall": 0.20612813370473537
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.30622989178122256,
+            "precision": 0.31309808612440193,
+            "recall": 0.9331550802139037
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.531972646375749,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.6455035971223022,
+            "precision": 1.0,
+            "recall": 0.6455035971223022
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.4869997078586036,
+            "precision": 0.6248125937031485,
+            "recall": 0.6882741535920727
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.4634146341463415,
+            "precision": 0.8333333333333334,
+            "recall": 0.510752688172043
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.20612813370473537
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6455035971223022
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6455035971223022
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6882741535920727
+        }
+      ]
+    },
+    {
+      "step": 300,
+      "loss": 0.09081796162037399,
+      "validation_score": 0.36237687278806074,
+      "mesh_validation": {
+        "mean_iou": 0.19674514210457955,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.06398104265402843,
+            "precision": 0.3,
+            "recall": 0.07520891364902507
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.32950924155513067,
+            "precision": 0.33901639344262297,
+            "recall": 0.9215686274509803
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.528008603471542,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.6151079136690647,
+            "precision": 1.0,
+            "recall": 0.6151079136690647
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.496790757381258,
+            "precision": 0.6904549509366636,
+            "recall": 0.639141205615194
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.47212713936430317,
+            "precision": 0.8392003476749239,
+            "recall": 0.5190860215053763
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.06398104265402843
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.07520891364902507
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9215686274509803
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6151079136690647
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6151079136690647
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.639141205615194
+        }
+      ]
+    },
+    {
+      "step": 400,
+      "loss": 0.22994618238850623,
+      "validation_score": 0.37995661100076294,
+      "mesh_validation": {
+        "mean_iou": 0.1997543331964799,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.07311320754716981,
+            "precision": 0.3229166666666667,
+            "recall": 0.08635097493036212
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.32639545884578997,
+            "precision": 0.3356031128404669,
+            "recall": 0.9224598930481284
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.560158888805046,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.6600719424460432,
+            "precision": 1.0,
+            "recall": 0.6600719424460432
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.5020615287028227,
+            "precision": 0.6840968020743302,
+            "recall": 0.6535920726672172
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.5183431952662721,
+            "precision": 0.8126159554730983,
+            "recall": 0.5887096774193549
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.07311320754716981
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.08635097493036212
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9224598930481284
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6600719424460432
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6600719424460432
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6535920726672172
+        }
+      ]
+    },
+    {
+      "step": 500,
+      "loss": 0.1869502204023017,
+      "validation_score": 0.39062723271198563,
+      "mesh_validation": {
+        "mean_iou": 0.19991616711689292,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.08277404921700224,
+            "precision": 0.296,
+            "recall": 0.10306406685236769
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.3170582850167836,
+            "precision": 0.3252974326862868,
+            "recall": 0.9260249554367201
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.5813382983070783,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.6857913669064748,
+            "precision": 1.0,
+            "recall": 0.6857913669064748
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.5195672923958002,
+            "precision": 0.693712829226848,
+            "recall": 0.6742361684558217
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.5386562356189599,
+            "precision": 0.7890124705089315,
+            "recall": 0.6293010752688172
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.08277404921700224
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10306406685236769
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.6857913669064748
+        },
+        {
+          "id": "bottle-201",
+          "metric": "recall",
+          "before": 0.7248201438848921,
+          "after": 0.6857913669064748
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6742361684558217
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.7890124705089315
+        }
+      ]
+    },
+    {
+      "step": 600,
+      "loss": 0.21300546332078496,
+      "validation_score": 0.40030801557803974,
+      "mesh_validation": {
+        "mean_iou": 0.20142047519745254,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.08665105386416862,
+            "precision": 0.3523809523809524,
+            "recall": 0.10306406685236769
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.3161898965307365,
+            "precision": 0.32438339057133936,
+            "recall": 0.9260249554367201
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.599195555958627,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.725229275310196,
+            "precision": 0.9997521070897373,
+            "recall": 0.7253597122302158
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.5250755287009063,
+            "precision": 0.6618431073876618,
+            "recall": 0.717588769611891
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.5472818638647784,
+            "precision": 0.7845448592010478,
+            "recall": 0.6440860215053763
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.08665105386416862
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10306406685236769
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.7845448592010478
+        }
+      ]
+    },
+    {
+      "step": 700,
+      "loss": 0.15881116799706693,
+      "validation_score": 0.3958783257064456,
+      "mesh_validation": {
+        "mean_iou": 0.19746700523527383,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.06451612903225806,
+            "precision": 0.37142857142857144,
+            "recall": 0.07242339832869081
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.3304178814382896,
+            "precision": 0.3417085427135678,
+            "recall": 0.9090909090909091
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.5942896461776174,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.7093525179856115,
+            "precision": 1.0,
+            "recall": 0.7093525179856115
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.5325404691113313,
+            "precision": 0.7271087054578259,
+            "recall": 0.6655656482246077
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.5409759514359094,
+            "precision": 0.8045138888888889,
+            "recall": 0.6228494623655914
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.06451612903225806
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.07242339832869081
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9090909090909091
+        },
+        {
+          "id": "bottle-201",
+          "metric": "iou",
+          "before": 0.7248201438848921,
+          "after": 0.7093525179856115
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.6655656482246077
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.8045138888888889
+        }
+      ]
+    },
+    {
+      "step": 800,
+      "loss": 0.08282762814597885,
+      "validation_score": 0.4110027553813775,
+      "mesh_validation": {
+        "mean_iou": 0.20553075982232905,
+        "objects": [
+          {
+            "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+            "family": "private-mesh",
+            "iou": 0.0896551724137931,
+            "precision": 0.3391304347826087,
+            "recall": 0.10863509749303621
+          },
+          {
+            "id": "obj-278532499c9048b688ba6840e19e76f9",
+            "family": "private-mesh",
+            "iou": 0.321406347230865,
+            "precision": 0.33056,
+            "recall": 0.9206773618538324
+          }
+        ]
+      },
+      "synthetic_validation": {
+        "mean_iou": 0.6164747509404259,
+        "objects": [
+          {
+            "id": "bottle-201",
+            "family": "bottle",
+            "iou": 0.7360661632506292,
+            "precision": 0.99951171875,
+            "recall": 0.7363309352517986
+          },
+          {
+            "id": "chair-201",
+            "family": "chair",
+            "iou": 0.5493141737426519,
+            "precision": 0.7243755383290267,
+            "recall": 0.694467382328654
+          },
+          {
+            "id": "figure-201",
+            "family": "figure",
+            "iou": 0.5640439158279963,
+            "precision": 0.790891597177678,
+            "recall": 0.6629032258064517
+          }
+        ]
+      },
+      "validation_geometry_regressions": [
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "iou",
+          "before": 0.13556618819776714,
+          "after": 0.0896551724137931
+        },
+        {
+          "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+          "metric": "recall",
+          "before": 0.23676880222841226,
+          "after": 0.10863509749303621
+        },
+        {
+          "id": "obj-278532499c9048b688ba6840e19e76f9",
+          "metric": "recall",
+          "before": 0.9429590017825312,
+          "after": 0.9206773618538324
+        },
+        {
+          "id": "chair-201",
+          "metric": "recall",
+          "before": 0.7262592898431048,
+          "after": 0.694467382328654
+        },
+        {
+          "id": "figure-201",
+          "metric": "precision",
+          "before": 0.8285714285714286,
+          "after": 0.790891597177678
+        }
+      ]
+    }
+  ],
+  "reference_audits": [
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "06923953e80342e4bb1f378110a5deaf.glb",
+      "source_sha256": "86cd22f7b702f4bf0aaa695a47cc95b31d362f1d215502a778c65496e8fb2a6b",
+      "source_bytes": 42764,
+      "asset": {
+        "extras": {
+          "author": "mlayer00 (https://sketchfab.com/mlayer00)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/layer-michael-sgd214-low-poly-character-06923953e80342e4bb1f378110a5deaf",
+          "title": "Layer Michael SGD214 Low Poly Character"
+        },
+        "generator": "Sketchfab-12.68.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 1,
+      "triangles": 1308,
+      "welded_triangles": 1307,
+      "welded_vertices": 662,
+      "components": [
+        {
+          "triangles": 40,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 40,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 934,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 292,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        }
+      ],
+      "closed_components": 4,
+      "uncertain_components": 1,
+      "original_bounds": [
+        [
+          -1.0877573490142822,
+          0.009110450744628906,
+          -0.7635281085968018
+        ],
+        [
+          1.0877573490142822,
+          3.165436029434204,
+          0.6637707948684692
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.0,
+          1.5872732400894165,
+          -0.04987865686416626
+        ],
+        "uniform_half_extent": 1.5781627893447876,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-06923953e80342e4bb1f378110a5deaf",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21940,
+      "masked_uncertain_points": 12,
+      "positive_reliable_points": 2432,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "dbd5967529474547b4777c7a1f6312b0.glb",
+      "source_sha256": "804bea50581e1bcb0c3096da5765d8c426eb6b16b236ec04e81b34b5d6b461cd",
+      "source_bytes": 57704,
+      "asset": {
+        "extras": {
+          "author": "Artbake Graphics (https://sketchfab.com/ismir)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/swordsman-1-dbd5967529474547b4777c7a1f6312b0",
+          "title": "Swordsman 1"
+        },
+        "generator": "Sketchfab-12.68.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 6,
+      "triangles": 755,
+      "welded_triangles": 755,
+      "welded_vertices": 447,
+      "components": [
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 60,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 76,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 76,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 72,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 52,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 48,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 15,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 48,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 52,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 28,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 100,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 48,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 10,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        }
+      ],
+      "closed_components": 2,
+      "uncertain_components": 18,
+      "original_bounds": [
+        [
+          -0.30578601360321045,
+          -0.004389999900013135,
+          -0.5650979876518246
+        ],
+        [
+          0.30969199538230896,
+          1.7401599884033203,
+          -0.1508769989013672
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.0019529908895492554,
+          0.8678849942516536,
+          -0.3579874932765959
+        ],
+        "uniform_half_extent": 0.8722749941516668,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          8
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-dbd5967529474547b4777c7a1f6312b0",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 13579,
+      "masked_uncertain_points": 8373,
+      "positive_reliable_points": 1186,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "d11d8167023e49beba284283446db700.glb",
+      "source_sha256": "9fbe80702a4de99cb8bfb90ad8626983741d6f21f3eaeb3b230a0761580f252d",
+      "source_bytes": 12457784,
+      "asset": {
+        "extras": {
+          "author": "sebastian macias (https://sketchfab.com/msebas.macias)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/roberto-bucheron-d11d8167023e49beba284283446db700",
+          "title": "Roberto b\u00fbcheron"
+        },
+        "generator": "Sketchfab-12.66.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 20,
+      "triangles": 167796,
+      "welded_triangles": 167449,
+      "welded_vertices": 81146,
+      "components": [
+        {
+          "triangles": 21218,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 22002,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1098,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 7074,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 84,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 82,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 314,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 114,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 6,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 6,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 108,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1824,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 16,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 194,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1354,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1852,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4540,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 18,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 42,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 106,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 6,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 118,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 116,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 116,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 122,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 118,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 108,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 112,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 112,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 124,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 122,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 76,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 232,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 2870,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 70,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 15608,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 158,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 208,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 38,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 60,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 52,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 54,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 96,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 200,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 160,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 50,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 74,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 54,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 110,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 30,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 34,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1024,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1630,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 20,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 36272,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 22,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 94,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 70,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 4,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 212,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 200,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 43950,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 1,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 8,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        }
+      ],
+      "closed_components": 80,
+      "uncertain_components": 347,
+      "original_bounds": [
+        [
+          -0.5685876777334165,
+          4.435336504987281,
+          1.1395904936829733
+        ],
+        [
+          0.6152582765516704,
+          5.995907763294693,
+          2.60011969577909
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.023335299409126986,
+          5.215622134140987,
+          1.8698550947310317
+        ],
+        "uniform_half_extent": 0.7802856291537061,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-d11d8167023e49beba284283446db700",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21776,
+      "masked_uncertain_points": 176,
+      "positive_reliable_points": 1505,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "5aaf34c3eb5e44c5a40a03c7569fa8c5.glb",
+      "source_sha256": "9fd3008d1b7d84712dd4eb1df5b12af7fcb68d12688b4a10b41a20c5b040bcf1",
+      "source_bytes": 269580,
+      "asset": {
+        "extras": {
+          "author": "hunter40853 (https://sketchfab.com/hunter40853)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/emergent-media-robot-5aaf34c3eb5e44c5a40a03c7569fa8c5",
+          "title": "Emergent Media Robot"
+        },
+        "generator": "Sketchfab-12.68.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 68,
+      "triangles": 5218,
+      "welded_triangles": 5218,
+      "welded_vertices": 2743,
+      "components": [
+        {
+          "triangles": 38,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 38,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 38,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 760,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 760,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 760,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 760,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 800,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        }
+      ],
+      "closed_components": 68,
+      "uncertain_components": 0,
+      "original_bounds": [
+        [
+          -9.502748295431457,
+          0.3284363150596611,
+          -4.285870885458788
+        ],
+        [
+          9.502748295431457,
+          15.856463611125946,
+          4.697931840631097
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.0,
+          8.092449963092804,
+          0.20603047758615434
+        ],
+        "uniform_half_extent": 9.502748295431457,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-5aaf34c3eb5e44c5a40a03c7569fa8c5",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21952,
+      "masked_uncertain_points": 0,
+      "positive_reliable_points": 735,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "b253b8b5f70a439284655047d8a0c23b.glb",
+      "source_sha256": "6a1ccdd60ec0b4135405ef754adc6d6c341eccbc97a93e7973daa51d15aa0265",
+      "source_bytes": 2057132,
+      "asset": {
+        "extras": {
+          "author": "BlueRabbit04 (https://sketchfab.com/bluerabbit04)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/wooden-man-b253b8b5f70a439284655047d8a0c23b",
+          "title": "wooden man"
+        },
+        "generator": "Sketchfab-12.68.0",
+        "version": "2.0"
+      },
+      "extensions_used": [
+        "KHR_materials_unlit"
+      ],
+      "geometry_instances": 1,
+      "triangles": 50000,
+      "welded_triangles": 50000,
+      "welded_vertices": 25002,
+      "components": [
+        {
+          "triangles": 50000,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        }
+      ],
+      "closed_components": 1,
+      "uncertain_components": 0,
+      "original_bounds": [
+        [
+          -0.11134792119264603,
+          -0.10575854778289794,
+          -0.08238866925239566
+        ],
+        [
+          0.12362369149923325,
+          0.1154966503381729,
+          0.08525845408439636
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.00613788515329361,
+          0.004869051277637482,
+          0.0014348924160003523
+        ],
+        "uniform_half_extent": 0.11748580634593964,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21952,
+      "masked_uncertain_points": 0,
+      "positive_reliable_points": 359,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "278532499c9048b688ba6840e19e76f9.glb",
+      "source_sha256": "a06997d4c5715ce6ba726cb620876e363b4fe724a3dff51a1595bbc212f857f2",
+      "source_bytes": 4074276,
+      "asset": {
+        "extras": {
+          "author": "efforya (https://sketchfab.com/efforya)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/mini-robot-278532499c9048b688ba6840e19e76f9",
+          "title": "Mini Robot"
+        },
+        "generator": "Sketchfab-12.67.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 1,
+      "triangles": 3968,
+      "welded_triangles": 3968,
+      "welded_vertices": 2249,
+      "components": [
+        {
+          "triangles": 46,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 56,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 56,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 34,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 80,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 236,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 236,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 44,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 12,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 28,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 28,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 16,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 16,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 188,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 28,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 28,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 20,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 20,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 318,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 318,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 46,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 140,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 30,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 476,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 206,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 92,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 92,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 92,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 92,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        },
+        {
+          "triangles": 48,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 48,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 20,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 86,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 24,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 70,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        },
+        {
+          "triangles": 70,
+          "watertight": false,
+          "winding_consistent": true,
+          "accepted_for_occupancy": false
+        }
+      ],
+      "closed_components": 24,
+      "uncertain_components": 31,
+      "original_bounds": [
+        [
+          0.4053040146827698,
+          -0.645563006401062,
+          -0.3984340131282806
+        ],
+        [
+          1.6599969863891602,
+          0.6792169809341431,
+          1.1446000337600708
+        ]
+      ],
+      "normalization": {
+        "center": [
+          1.032650500535965,
+          0.016826987266540527,
+          0.3730830103158951
+        ],
+        "uniform_half_extent": 0.7715170234441757,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-278532499c9048b688ba6840e19e76f9",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 20276,
+      "masked_uncertain_points": 1676,
+      "positive_reliable_points": 1122,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "f265e07cc1394f78a5fe59148f84a15c.glb",
+      "source_sha256": "22c93cccb0da3d34705a4cf24734e6ff0aeae8228b31f4436cb4490ea8ade851",
+      "source_bytes": 4789556,
+      "asset": {
+        "extras": {
+          "author": "UCAM University (https://sketchfab.com/ucam)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/training-mannequin-f265e07cc1394f78a5fe59148f84a15c",
+          "title": "Training mannequin"
+        },
+        "generator": "Sketchfab-12.68.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 6,
+      "triangles": 35580,
+      "welded_triangles": 35580,
+      "welded_vertices": 17790,
+      "components": [
+        {
+          "triangles": 35580,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        }
+      ],
+      "closed_components": 1,
+      "uncertain_components": 0,
+      "original_bounds": [
+        [
+          -0.05724363633665147,
+          1.7980629177772482,
+          1.5355629686490087
+        ],
+        [
+          0.32335287149319625,
+          2.013196263510842,
+          2.2843915961453964
+        ]
+      ],
+      "normalization": {
+        "center": [
+          0.1330546175782724,
+          1.905629590644045,
+          1.9099772823972025
+        ],
+        "uniform_half_extent": 0.3744143137481939,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ],
+        [
+          1024,
+          1024
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21952,
+      "masked_uncertain_points": 0,
+      "positive_reliable_points": 6876,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    },
+    {
+      "reference_version": "static-glb-reference-v1",
+      "source_name": "97989d443ac048acb6bb42a2f82c6324.glb",
+      "source_sha256": "40f6d0ec8fda48837b1c8a77dfd877b1b694cbe780f040284f4fd4937923b2da",
+      "source_bytes": 3331140,
+      "asset": {
+        "extras": {
+          "author": "Dmytro Rohovyi (https://sketchfab.com/dmitriyslavyanskiy)",
+          "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+          "source": "https://sketchfab.com/3d-models/lamb-statuette-photogrametry-97989d443ac048acb6bb42a2f82c6324",
+          "title": "Lamb statuette. Photogrametry"
+        },
+        "generator": "Sketchfab-12.67.0",
+        "version": "2.0"
+      },
+      "extensions_used": [],
+      "geometry_instances": 1,
+      "triangles": 2674,
+      "welded_triangles": 2674,
+      "welded_vertices": 1339,
+      "components": [
+        {
+          "triangles": 2674,
+          "watertight": true,
+          "winding_consistent": true,
+          "accepted_for_occupancy": true
+        }
+      ],
+      "closed_components": 1,
+      "uncertain_components": 0,
+      "original_bounds": [
+        [
+          -2.422755121089722,
+          0.012779557618215597,
+          -2.0714419929661023
+        ],
+        [
+          2.275470764645661,
+          6.088006498492845,
+          2.2990262261383605
+        ]
+      ],
+      "normalization": {
+        "center": [
+          -0.07364217822203045,
+          3.0503930280555305,
+          0.11379211658612909
+        ],
+        "uniform_half_extent": 3.0376134704373148,
+        "axes": "glTF world: Y up, front camera +Z, right camera +X"
+      },
+      "texture_sizes": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "holes_filled": 0,
+      "license_status": "not established by the supplied file",
+      "reference_kind": "user-supplied authored or generated mesh, not a verified scan",
+      "rendering": "orthographic CPU rays, base color and diffuse shading; not full PBR",
+      "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+      "grid_resolution": 28,
+      "sample_points": 21952,
+      "reliable_points": 21952,
+      "masked_uncertain_points": 0,
+      "positive_reliable_points": 5667,
+      "view_files": [
+        "face.png",
+        "back.png",
+        "right.png",
+        "left.png"
+      ]
+    }
+  ],
+  "limitations": [
+    "8 public authored meshes; scan status not independently established; rendered views, no real photos.",
+    "Object and author split fixed before inference; validation selects weights; test never selects checkpoints.",
+    "Open-component bounds masked; partial supervision and evaluation for affected meshes.",
+    "Coarse sampled occupancy may miss thin parts. Reference bounds used for fixed alignment.",
+    "Base-color diffuse CPU renders omit normal maps, specular and full PBR lighting.",
+    "No full Android pipeline, silhouette clipping, surface or texture training, or phone timing.",
+    "Final RGB rows frozen; hidden-layer updates can still change neural color outputs.",
+    "Attributions preserved; public references do not establish generalization to personal photographs.",
+    "APK, released model assets and main branch unchanged.",
+    "Test objects are withheld from this adaptation; membership in original TripoSR pretraining data is unknown.",
+    "Previously inspected synthetic test objects are regression controls, not a new independent generalization benchmark."
+  ],
+  "reference_origin": "Objaverse; individual CC-BY 4.0 or CC0 metadata and SHA-256 retained",
+  "provenance_manifest_sha256": "84d7533a10f229641f52e3538b7c345b8c69de4572b0ee1ed0cf29820a7b92f0"
+}
