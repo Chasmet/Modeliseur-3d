@@ -268,7 +268,7 @@ jobs:
           V6.3.4 : correction de la liaison MCP Android. Dès que l’écran TRELLIS.2 + MCP est ouvert, l’application se connecte automatiquement au relais et envoie un heartbeat périodique. ChatGPT utilise l’URL MCP sans authentification ; l’ancien lien privé reste seulement en compatibilité.
           Qualité TripoSR une image : grille neuronale centrée sur le sujet, jusqu’à 256 points sur le plus grand axe, sans déformer les proportions. Texture photo projetée sur les surfaces réellement visibles, couleurs neuronales sur les surfaces cachées et atlas continu sans petits triangles colorés. Calcul et export GLB entièrement hors ligne. Le dos reste estimé à partir d’une seule photo.
           Une seule photo est requise. Les réglages de profondeur des profils et la comparaison quatre vues sont masqués dans cette option. La photo Face et son encodeur en cache sont réutilisés, sans effacer les autres vues ni les modèles conservés.
-          Les modes TripoSR quatre images, Silhouettes, les deux moteurs d’origine, le catalogue et les mises à jour restent conservés. Aucun téléchargement de poids sur Android. Même package et même certificat V6.0.x–6.3.2.
+          Les modes TripoSR quatre images, Silhouettes, les deux moteurs d’origine, le catalogue et les mises à jour restent conservés. Aucun téléchargement de poids sur Android. Même package et même certificat V6.0.x–6.3.4.
           Les tests incluent une inférence réelle à une image sans réseau, les couleurs, le GLB, la reprise du cache et la navigation entre les trois moteurs. Vitesse et chauffe sur téléphone physique non mesurées.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
