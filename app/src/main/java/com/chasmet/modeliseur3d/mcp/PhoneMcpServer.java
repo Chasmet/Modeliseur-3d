@@ -126,7 +126,12 @@ public final class PhoneMcpServer implements AutoCloseable {
                 case "model_status":case "model_download":properties.put("model_id",new JSONObject().put("type","string"));schema.put("required",new JSONArray().put("model_id"));description="Read model status or retrieve the saved GLB from the phone.";break;
                 default:description="Read the local Android application state and actual modeling capabilities.";
             }
-            list.put(new JSONObject().put("name",name).put("description",description).put("inputSchema",schema).put("annotations",new JSONObject().put("readOnlyHint",!"create_model_from_images".equals(name)).put("destructiveHint",false).put("openWorldHint","create_model_from_images".equals(name)||"model_download".equals(name)));
+            JSONObject annotations=new JSONObject()
+                    .put("readOnlyHint",!"create_model_from_images".equals(name))
+                    .put("destructiveHint",false)
+                    .put("openWorldHint","create_model_from_images".equals(name)||"model_download".equals(name));
+            list.put(new JSONObject().put("name",name).put("description",description)
+                    .put("inputSchema",schema).put("annotations",annotations));
         }
         return new JSONObject().put("tools",list);
     }
