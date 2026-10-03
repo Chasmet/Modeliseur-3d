@@ -56,6 +56,19 @@ def test_private_images_bounded_upload_and_invalid_json(client):
     assert client.post('/api/images', headers=a, content=b'x' * (server.MAX_IMAGE + 1)).status_code == 413
     assert client.post('/api/jobs', headers=a, json=[]).status_code == 400
 
+def test_android_heartbeat_marks_device_online(client):
+    a = enroll(client)
+    with server.db() as c:
+        before = c.execute('SELECT seen FROM devices').fetchone()[0]
+    assert before == 0
+    r = client.get('/api/heartbeat', headers=a)
+    assert r.status_code == 200
+    assert r.json()['ok'] is True
+    with server.db() as c:
+        after = c.execute('SELECT seen FROM devices').fetchone()[0]
+    assert after > 0
+
+
 def test_mcp_protocol_tools_device_isolation_and_revocation(client):
     a, b = enroll(client), enroll(client)
     ref = image(client, a)
