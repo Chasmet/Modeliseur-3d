@@ -16,19 +16,21 @@ import org.json.*;
 import java.io.*;
 import java.util.concurrent.*;
 
-/** Cloud GPU reconstruction and an explicit, revocable MCP pairing for this phone. */
+/** Cloud GPU reconstruction with automatic no-auth MCP presence for this phone. */
 public final class Cloud3DActivity extends AppCompatActivity {
+    private static final String DEFAULT_SERVER = "https://modeliseur-trellis-mcp.onrender.com";
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService heartbeatWorker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private EditText server;
-    private TextView status;
+    private TextView status, connectionStatus;
     private CheckBox rig;
     private Switch mcpSwitch;
     private Button connect, choose, generate, open, export, copyLink, clear;
-    private CloudApi api;
+    private volatile CloudApi api;
     private JSONObject saved = new JSONObject();
     private File image, model;
-    private boolean visible, busy, suppressToggle;
+    private volatile boolean visible, busy, suppressToggle, registering, heartbeatInFlight;
     private String reference = "", latestJob = "";
     private final ActivityResultLauncher<String[]> picker = registerForActivityResult(
             new ActivityResultContracts.OpenDocument(), this::imagePicked);
@@ -57,7 +59,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
         });
     }
     private File stateFile() { return new File(getNoBackupFilesDir(), "cloud-connection.json"); }
-    private void save() throws Exception {
+    private synchronized void save() throws Exception {
         // Tokens stay in app-private, non-backed-up storage, never in a shared file or APK.
         File tmp = new File(stateFile().getPath() + ".part");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
@@ -96,26 +98,28 @@ public final class Cloud3DActivity extends AppCompatActivity {
         panel.addView(info);
         server = new EditText(this); server.setHint("https://ton-relais.onrender.com");
         server.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        server.setSingleLine(true); server.setText(saved.optString("server", "https://modeliseur-trellis-mcp.onrender.com")); panel.addView(server);
+        server.setSingleLine(true); server.setText(saved.optString("server", DEFAULT_SERVER)); panel.addView(server);
         connect = button(panel, "Connecter ce téléphone au relais", this::connectRelay);
         choose = button(panel, "Choisir une image", () -> picker.launch(new String[]{"image/*"}));
         rig = new CheckBox(this); rig.setText("Ajouter des animations humanoïdes approximatives"); panel.addView(rig);
         generate = button(panel, "Générer le modèle 3D", this::generate);
         open = button(panel, "Ouvrir le dernier GLB", () -> openModel(model));
         export = button(panel, "Exporter le dernier GLB", () -> exporter.launch("TRELLIS_mobile.glb"));
-        mcpSwitch = new Switch(this); mcpSwitch.setText("Autoriser le MCP pour ce téléphone");
+        mcpSwitch = new Switch(this); mcpSwitch.setText("Compatibilité ancien lien MCP privé");
         mcpSwitch.setChecked(!saved.optString("mcp").isEmpty()); panel.addView(mcpSwitch);
+        mcpSwitch.setVisibility(android.view.View.GONE);
         mcpSwitch.setOnCheckedChangeListener((v, enabled) -> { if (!suppressToggle) toggleMcp(enabled); });
-        copyLink = button(panel, "Copier mon lien MCP privé", () -> {
-            String token = saved.optString("mcp");
-            if (api == null || token.isEmpty()) return;
+        copyLink = button(panel, "Copier l’URL MCP ChatGPT", () -> {
+            if (api == null) return;
             ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            if (cb != null) cb.setPrimaryClip(ClipData.newPlainText("MCP privé Modéliseur 3D", api.base() + "/mcp/" + token));
-            status.setText("Lien MCP copié. Ajoute-le dans ChatGPT Plugins en mode développeur. Garde ce lien privé ; désactive le MCP pour le révoquer.");
+            if (cb != null) cb.setPrimaryClip(ClipData.newPlainText("MCP Modéliseur 3D", api.base() + "/mcp"));
+            status.setText("URL MCP copiée. Dans ChatGPT Plugins, choisis Aucune authentification.");
         });
         clear = button(panel, "Effacer mes images et travaux du relais", this::clearRemote);
+        connectionStatus = new TextView(this); panel.addView(connectionStatus);
+        connectionStatus.setText(api == null ? "MCP : connexion automatique au serveur…" : "MCP : vérification de la présence du téléphone…");
         status = new TextView(this); panel.addView(status);
-        status.setText(api == null ? "Le relais doit être hébergé puis son adresse indiquée ici." : "Connexion sauvegardée. Vérification du relais…");
+        status.setText("Prêt. Ouvre cet écran pour rendre le téléphone visible automatiquement dans ChatGPT.");
         buttons();
     }
     private void buttons() {
@@ -124,7 +128,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
         generate.setEnabled(!busy && api != null && (!reference.isEmpty() || image != null));
         open.setEnabled(!busy && model != null); export.setEnabled(!busy && model != null);
         mcpSwitch.setEnabled(!busy && api != null); clear.setEnabled(!busy && api != null);
-        copyLink.setEnabled(!busy && api != null && !saved.optString("mcp").isEmpty());
+        copyLink.setEnabled(!busy && api != null);
         server.setEnabled(!busy); rig.setEnabled(!busy);
     }
     private void connectRelay() {
@@ -142,7 +146,11 @@ public final class Cloud3DActivity extends AppCompatActivity {
             api = new CloudApi(candidate.base(), registration.getString("token"));
             saved = new JSONObject().put("server", candidate.base()).put("token", registration.getString("token"));
             reference = ""; latestJob = ""; save();
-            ui(() -> { checked(false); status.setText("Téléphone connecté. Choisis une image pour commencer."); });
+            ui(() -> {
+                checked(false);
+                connectionStatus.setText("MCP : téléphone connecté. Présence automatique active.");
+                status.setText("Téléphone connecté. Choisis une image pour commencer.");
+            });
         });
     }
     private void checked(boolean enabled) {
@@ -209,6 +217,84 @@ public final class Cloud3DActivity extends AppCompatActivity {
         String id = file.getName().replace(".glb", "");
         startActivity(new Intent(this, CloudModelViewerActivity.class).putExtra("job", id));
     }
+    private void ensureRelayConnected() {
+        if (!visible || api != null || registering || isDestroyed()) return;
+        registering = true;
+        String address = server == null ? saved.optString("server", DEFAULT_SERVER) : server.getText().toString().trim();
+        if (address.isEmpty()) address = DEFAULT_SERVER;
+        final String target = address;
+        heartbeatWorker.execute(() -> {
+            try {
+                CloudApi candidate = new CloudApi(target, "");
+                JSONObject health = candidate.json("/health", null);
+                if (!"remote_trellis2".equals(health.optString("generation"))) {
+                    throw new IOException("Ce serveur n'est pas un relais Modéliseur 3D.");
+                }
+                JSONObject registration = candidate.json("/api/register", new JSONObject());
+                CloudApi connected = new CloudApi(candidate.base(), registration.getString("token"));
+                synchronized (this) {
+                    api = connected;
+                    saved.put("server", candidate.base()).put("token", registration.getString("token"));
+                    saved.remove("mcp");
+                    saved.remove("reference");
+                    saved.remove("job");
+                    reference = "";
+                    latestJob = "";
+                    save();
+                }
+                ui(() -> {
+                    server.setText(candidate.base());
+                    connectionStatus.setText("MCP : téléphone connecté. Présence automatique active.");
+                    buttons();
+                });
+            } catch (Exception e) {
+                ui(() -> connectionStatus.setText("MCP : connexion impossible. Nouvelle tentative automatique…"));
+            } finally {
+                registering = false;
+            }
+        });
+    }
+
+    private void sendHeartbeat() {
+        if (!visible || api == null || heartbeatInFlight || isDestroyed()) return;
+        heartbeatInFlight = true;
+        CloudApi current = api;
+        heartbeatWorker.execute(() -> {
+            try {
+                current.json("/api/heartbeat", null);
+                ui(() -> connectionStatus.setText("MCP : téléphone en ligne."));
+            } catch (CloudApi.HttpFailure e) {
+                if (e.code == 401) {
+                    synchronized (this) {
+                        if (api == current) api = null;
+                        saved.remove("token");
+                        saved.remove("mcp");
+                        saved.remove("reference");
+                        saved.remove("job");
+                        reference = "";
+                        latestJob = "";
+                        try { save(); } catch (Exception ignored) {}
+                    }
+                    ui(() -> connectionStatus.setText("MCP : session serveur renouvelée automatiquement…"));
+                } else {
+                    ui(() -> connectionStatus.setText("MCP : serveur temporairement indisponible."));
+                }
+            } catch (Exception e) {
+                ui(() -> connectionStatus.setText("MCP : serveur temporairement indisponible."));
+            } finally {
+                heartbeatInFlight = false;
+            }
+        });
+    }
+
+    private final Runnable heartbeat = new Runnable() {
+        @Override public void run() {
+            if (!visible) return;
+            if (api == null) ensureRelayConnected(); else sendHeartbeat();
+            handler.postDelayed(this, 4000);
+        }
+    };
+
     private final Runnable polling = new Runnable() {
         @Override public void run() {
             if (!visible) return;
@@ -224,7 +310,7 @@ public final class Cloud3DActivity extends AppCompatActivity {
                     ui(() -> status.setText(message));
                 }
                 JSONArray commands = r.getJSONArray("commands");
-                if (visible && !saved.optString("mcp").isEmpty() && commands.length() > 0) {
+                if (visible && commands.length() > 0) {
                     JSONObject command = commands.getJSONObject(0);
                     File f = obtain(command.getString("job"));
                     api.json("/api/commands/" + CloudApi.id(command.getString("id")) + "/ack", new JSONObject());
@@ -234,7 +320,21 @@ public final class Cloud3DActivity extends AppCompatActivity {
             handler.postDelayed(this, 5000);
         }
     };
-    @Override protected void onStart() { super.onStart(); visible = true; handler.post(polling); }
-    @Override protected void onStop() { visible = false; handler.removeCallbacks(polling); super.onStop(); }
-    @Override protected void onDestroy() { worker.shutdown(); super.onDestroy(); }
+    @Override protected void onStart() {
+        super.onStart();
+        visible = true;
+        handler.post(heartbeat);
+        handler.post(polling);
+    }
+    @Override protected void onStop() {
+        visible = false;
+        handler.removeCallbacks(heartbeat);
+        handler.removeCallbacks(polling);
+        super.onStop();
+    }
+    @Override protected void onDestroy() {
+        worker.shutdown();
+        heartbeatWorker.shutdownNow();
+        super.onDestroy();
+    }
 }
