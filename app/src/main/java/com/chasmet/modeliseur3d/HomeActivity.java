@@ -30,12 +30,14 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.mcpConnectionButton).setOnClickListener(view -> {
             boolean connect = !McpConnectionService.enabled(this);
             McpConnectionService.setEnabled(this, connect);
-            if (connect) requestBackgroundExemption();
-            if (connect && android.os.Build.VERSION.SDK_INT >= 33
+            boolean notificationPermissionNeeded = connect && android.os.Build.VERSION.SDK_INT >= 33
                     && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (notificationPermissionNeeded) {
                 androidx.core.app.ActivityCompat.requestPermissions(this,
                         new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 803);
+            } else if (connect) {
+                requestBackgroundExemption();
             }
             connectionUi.removeCallbacks(refreshConnection);
             refreshConnection.run();
@@ -61,6 +63,11 @@ public final class HomeActivity extends AppCompatActivity {
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
     }
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode==803 && McpConnectionService.enabled(this)) requestBackgroundExemption();
+    }
+
     private void requestBackgroundExemption() {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return;
         android.os.PowerManager power=(android.os.PowerManager)getSystemService(POWER_SERVICE);
