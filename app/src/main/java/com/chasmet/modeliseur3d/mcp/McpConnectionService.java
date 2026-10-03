@@ -2,6 +2,8 @@ package com.chasmet.modeliseur3d.mcp;
 
 import android.app.*;
 import android.content.*;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.os.*;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -31,6 +33,9 @@ public class McpConnectionService extends Service {
     private ScheduledFuture<?> polling;
     private PowerManager.WakeLock power;
     private PowerManager.WakeLock connectionPower;
+    private ConnectivityManager connectivity;
+    private ConnectivityManager.NetworkCallback networkCallback;
+    private BroadcastReceiver legacyNetworkReceiver;
     private long lastNotification;
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS,MODE_PRIVATE); }
@@ -39,7 +44,10 @@ public class McpConnectionService extends Service {
         SharedPreferences p=prefs(c);
         if (!enabled(c)) return "ChatGPT MCP : déconnecté";
         long last=p.getLong("heartbeat",0);
-        if (last==0 || System.currentTimeMillis()-last>90000) return "ChatGPT MCP : reconnexion…";
+        if (last==0 || System.currentTimeMillis()-last>90000) {
+            String reason=p.getString("last_error","");
+            return reason.isEmpty() ? "ChatGPT MCP : reconnexion…" : "ChatGPT MCP : reconnexion…\n"+reason;
+        }
         return "ChatGPT MCP : connecté\n"+p.getString("progress","En attente de commande");
     }
     public static void setEnabled(Context c,boolean enabled) {
@@ -62,6 +70,7 @@ public class McpConnectionService extends Service {
         power.setReferenceCounted(false);
         connectionPower=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"Modeliseur3D:McpConnection");
         connectionPower.setReferenceCounted(false);
+        registerConnectivityMonitor();
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId) {
         if ((intent!=null && DISCONNECT.equals(intent.getAction())) || !enabled(this)) {
@@ -69,7 +78,9 @@ public class McpConnectionService extends Service {
             disconnect(); return START_NOT_STICKY;
         }
         startForeground(NOTIFICATION,notification());
-        cancelRestart(this);
+        // Watchdog: as long as polls succeed this alarm is pushed forward.
+        // If the OEM kills the process without onDestroy(), the last alarm can revive it.
+        scheduleRestart(this,45_000L);
         acquireConnectionPower();
         if (!active) {
             active=true;
@@ -88,7 +99,12 @@ public class McpConnectionService extends Service {
             if (api==null) api=connect();
             JSONObject response=api.json("/api/poll",null);
             if (!connected()) return;
-            prefs(this).edit().putLong("heartbeat",System.currentTimeMillis()).putString("progress",progress).apply();
+            prefs(this).edit()
+                    .putLong("heartbeat",System.currentTimeMillis())
+                    .putString("progress",progress)
+                    .remove("last_error")
+                    .apply();
+            scheduleRestart(this,45_000L);
             if (working.get()) {
                 renewPower();
             } else {
@@ -103,9 +119,66 @@ public class McpConnectionService extends Service {
             }
             showNotification();
         } catch (Exception error) {
-            if (error instanceof CloudApi.HttpFailure && ((CloudApi.HttpFailure)error).code==401) api=null;
+            // HttpURLConnection is recreated for every request. Clearing the API object also
+            // forces token/relay validation after a Wi-Fi <-> mobile handover or server restart.
+            api=null;
+            String message=error.getMessage();
+            if (message==null || message.trim().isEmpty()) message=error.getClass().getSimpleName();
+            prefs(this).edit().putString("last_error",message).apply();
             progress=working.get()?progress:"Relais indisponible · reconnexion automatique";
+            scheduleRestart(this,15_000L);
             showNotification();
+        }
+    }
+
+    private void requestImmediatePoll() {
+        if (!connected()) return;
+        try { network.execute(this::pollOnce); }
+        catch (RejectedExecutionException ignored) { }
+    }
+
+    private void registerConnectivityMonitor() {
+        connectivity=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+        if (connectivity==null) return;
+        if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.N) {
+            networkCallback=new ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(Network network) {
+                    api=null;
+                    progress=working.get()?progress:"Internet disponible · reconnexion…";
+                    requestImmediatePoll();
+                }
+                @Override public void onLost(Network network) {
+                    api=null;
+                    if (!working.get()) progress="Changement de réseau · reconnexion automatique";
+                    showNotification();
+                }
+            };
+            try { connectivity.registerDefaultNetworkCallback(networkCallback); }
+            catch (RuntimeException ignored) { networkCallback=null; }
+        } else {
+            legacyNetworkReceiver=new BroadcastReceiver() {
+                @Override public void onReceive(Context context, Intent intent) {
+                    api=null;
+                    progress=working.get()?progress:"Réseau détecté · reconnexion…";
+                    requestImmediatePoll();
+                }
+            };
+            try {
+                registerReceiver(legacyNetworkReceiver,new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
+            } catch (RuntimeException ignored) { legacyNetworkReceiver=null; }
+        }
+    }
+
+    private void unregisterConnectivityMonitor() {
+        if (connectivity!=null && networkCallback!=null) {
+            try { connectivity.unregisterNetworkCallback(networkCallback); }
+            catch (RuntimeException ignored) { }
+            networkCallback=null;
+        }
+        if (legacyNetworkReceiver!=null) {
+            try { unregisterReceiver(legacyNetworkReceiver); }
+            catch (RuntimeException ignored) { }
+            legacyNetworkReceiver=null;
         }
     }
     private void check() {
@@ -246,6 +319,7 @@ public class McpConnectionService extends Service {
         boolean shouldRestart=enabled(this);
         active=false;
         if (polling!=null) polling.cancel(false);
+        unregisterConnectivityMonitor();
         network.shutdown(); compute.shutdownNow(); releasePower(); releaseConnectionPower();
         if (shouldRestart) scheduleRestart(this,5000L);
         super.onDestroy();
