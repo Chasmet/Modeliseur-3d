@@ -3,8 +3,10 @@ name: Compiler l'APK Android
 on:
   push:
     branches: [main]
+    paths: ['tools/offline-models/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
   pull_request:
     branches: [main]
+    paths: ['app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'validation/java/**', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:
@@ -71,6 +73,30 @@ jobs:
             mv "$PART" "$MODEL"
           fi
 
+      - name: Mettre en cache la profondeur IA embarquée
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+          key: modeliseur-depth-small-fp32-afb6a5c2
+      - name: Vérifier les poids de profondeur avant compilation
+        run: python3 tools/offline-models/fetch_depth.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mettre en cache TripoSR 4 bits embarqué
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-128-fd5be249-v1
+      - name: Préparer et vérifier TripoSR embarqué
+        run: |
+          python3 -m pip install -r tools/offline-models/requirements.txt
+          python3 tools/offline-models/fetch_triposr.py
+
       - name: Préparer le SDK Android
         shell: bash
         run: |
@@ -82,14 +108,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.9.10
+      - name: Vérifier l'architecture V6.3.10
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.10" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.10'" app/build.gradle
-          grep -q "versionCode 35" app/build.gradle
+          grep -q "Modéliseur 3D V6.3.10" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.3.10'" app/build.gradle
+          grep -q "versionCode 56" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -107,12 +133,25 @@ jobs:
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q "McpConnectionService" app/src/main/java/com/chasmet/modeliseur3d/HomeActivity.java
+          grep -q 'android:stopWithTask="false"' app/src/main/AndroidManifest.xml
+          grep -q "android.permission.RECEIVE_BOOT_COMPLETED" app/src/main/AndroidManifest.xml
+          grep -q "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" app/src/main/AndroidManifest.xml
+          grep -q "McpKeepAliveReceiver" app/src/main/AndroidManifest.xml
+          grep -q "setAndAllowWhileIdle" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "LocalMcpGeneration.generate" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "EXTRA_MCP_COMMAND_ID" app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
+          grep -q "uploadLocalResult" app/src/main/java/com/chasmet/modeliseur3d/cloud/CloudApi.java
+          ! grep -q 'android:name=".Cloud3DActivity"' app/src/main/AndroidManifest.xml
 
       - name: Vérifier les GLB officiels libres sous 8 Mo
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           python3 - <<'PY'
           import json
+          import os
           import urllib.request
 
           models = [
@@ -129,7 +168,8 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/5.9.10",
+                  "User-Agent": "Modeliseur3D-CI/6.3.10",
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
               try:
@@ -177,7 +217,7 @@ jobs:
 
       - name: Compiler avec Gradle
         run: |
-          ./gradlew --no-daemon clean lintDebug assembleDebug || {
+          ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebug || {
             find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
             exit 1
           }
@@ -189,16 +229,18 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
           ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          python3 tools/offline-models/check_apk.py "$APK"
           ls -lh "$APK"
           sha256sum "$APK"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
+          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
-      - name: Publier l'APK V5.9.10
+      - name: Publier l'APK V6.3.10
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.10-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.3.10-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
