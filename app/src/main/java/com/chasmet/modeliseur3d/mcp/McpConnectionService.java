@@ -40,6 +40,11 @@ public class McpConnectionService extends Service {
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS,MODE_PRIVATE); }
     public static boolean enabled(Context c) { return prefs(c).getBoolean("enabled",false); }
+    public static void ensureAutoStart(Context c) {
+        SharedPreferences p=prefs(c);
+        if (!p.contains("enabled")) p.edit().putBoolean("enabled",true).commit();
+        if (p.getBoolean("enabled",true)) start(c.getApplicationContext());
+    }
     public static String status(Context c) {
         SharedPreferences p=prefs(c);
         if (!enabled(c)) return "ChatGPT MCP : déconnecté";
