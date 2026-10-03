@@ -84,6 +84,56 @@ public final class CloudApi {
             return response(c);
         } finally { c.disconnect(); }
     }
+    public void downloadLocalImage(String command, String reference, File output) throws Exception {
+        command = id(command); reference = id(reference);
+        HttpURLConnection c = connect("/api/local/" + command + "/images/" + reference, "GET");
+        File part = new File(output.getPath() + ".part");
+        try {
+            ensureSuccess(c);
+            if (output.getParentFile() != null && !output.getParentFile().isDirectory()
+                    && !output.getParentFile().mkdirs()) throw new IOException("Stockage image MCP indisponible.");
+            try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(part)) {
+                byte[] buffer = new byte[64 * 1024]; long total = 0; int n;
+                while ((n = in.read(buffer)) != -1) {
+                    total += n;
+                    if (total > 8L * 1024 * 1024) throw new IOException("Image MCP supérieure à 8 Mo.");
+                    out.write(buffer, 0, n);
+                }
+            }
+            try (InputStream in = new FileInputStream(part)) {
+                byte[] signature = new byte[8];
+                if (in.read(signature) != 8
+                        || signature[0] != (byte)0x89 || signature[1] != 0x50
+                        || signature[2] != 0x4e || signature[3] != 0x47) {
+                    throw new IOException("Image MCP invalide.");
+                }
+            }
+            if (!part.renameTo(output)) throw new IOException("Image MCP non enregistrée.");
+        } finally { part.delete(); c.disconnect(); }
+    }
+    public JSONObject updateLocalStatus(String command, String status, String message) throws Exception {
+        return json("/api/local/" + id(command) + "/status",
+                new JSONObject().put("status", status).put("message", message == null ? "" : message));
+    }
+    public JSONObject uploadLocalResult(String command, File glb) throws Exception {
+        command = id(command);
+        if (!glb.isFile() || glb.length() < 12 || glb.length() > 64L * 1024 * 1024)
+            throw new IOException("GLB local invalide ou trop volumineux.");
+        try (RandomAccessFile file = new RandomAccessFile(glb, "r")) {
+            byte[] header = new byte[12]; file.readFully(header);
+            ByteBuffer b = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
+            if (b.getInt() != 0x46546c67 || b.getInt() != 2
+                    || Integer.toUnsignedLong(b.getInt()) != glb.length()) throw new IOException("GLB local incomplet.");
+        }
+        HttpURLConnection c = connect("/api/local/" + command + "/result", "POST");
+        try {
+            c.setDoOutput(true); c.setRequestProperty("Content-Type", "model/gltf-binary");
+            c.setFixedLengthStreamingMode(glb.length());
+            try (InputStream in = new FileInputStream(glb); OutputStream out = c.getOutputStream()) { copy(in, out); }
+            return response(c);
+        } finally { c.disconnect(); }
+    }
+
     public void download(String job, File output) throws Exception {
         HttpURLConnection c = connect("/api/jobs/" + id(job) + "/file", "GET");
         File part = new File(output.getPath() + ".part");
