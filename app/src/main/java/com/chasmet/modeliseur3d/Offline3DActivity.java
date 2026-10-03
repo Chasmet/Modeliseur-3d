@@ -13,6 +13,7 @@ import com.chasmet.modeliseur3d.model.*;
 import com.chasmet.modeliseur3d.util.OfflineImageImporter;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.update.UpdateManager;
+import com.chasmet.modeliseur3d.mcp.McpBridgeSession;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -21,6 +22,10 @@ import java.util.concurrent.*;
 public final class Offline3DActivity extends AppCompatActivity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     public static final String EXTRA_SINGLE_IMAGE="triposr_single_image";
+    public static final String EXTRA_MCP_COMMAND_ID="mcp_command_id";
+    public static final String EXTRA_MCP_MODE="mcp_mode";
+    public static final String EXTRA_MCP_QUALITY="mcp_quality";
+    public static final String EXTRA_MCP_SMOOTHING="mcp_smoothing";
     private TextView modeHelp,status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
     private Spinner quality,shape,engine;private Button inspect,compare,cancel;private CheckBox ai,depthAi,smoothing;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
@@ -31,15 +36,19 @@ public final class Offline3DActivity extends AppCompatActivity {
     private static final String[] VIEWS={"Face","Dos","Profil droit","Profil gauche"};
     private CheckBox fourViews;private TextView countLabel;private int selectedSlot;
     private ProgressBar progress;private boolean busy;private volatile boolean cancelled;private String lastId="";
+    private String mcpCommandId="",mcpMode="",mcpQuality="balanced";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
+    private McpBridgeSession mcpBridge;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("offline_workshop",MODE_PRIVATE);}
+    private boolean isMcp(){return mcpCommandId.matches("[a-f0-9]{32}");}
+    private File mcpFolder(){return new File(getFilesDir(),"mcp_inputs/"+mcpCommandId);}
     private File source(){return source(0);}
-    private File source(int slot){return new File(getFilesDir(),"offline-workshop-image"+(slot==0?"":"-"+slot)+".png");}
+    private File source(int slot){return isMcp()?new File(mcpFolder(),"image-"+slot+".png"):new File(getFilesDir(),"offline-workshop-image"+(slot==0?"":"-"+slot)+".png");}
     private File cutout(){return cutout(0);}
-    private File cutout(int slot){return new File(getFilesDir(),"offline-workshop-cutout"+(slot==0?"":"-"+slot)+".png");}
+    private File cutout(int slot){return isMcp()?new File(mcpFolder(),"cutout-"+slot+".png"):new File(getFilesDir(),"offline-workshop-cutout"+(slot==0?"":"-"+slot)+".png");}
     private File depthCache(){return depthCache(0);}
-    private File depthCache(int slot){return new File(getFilesDir(),"offline-workshop-depth"+(slot==0?"":"-"+slot)+".bin");}
-    private String key(String name,int slot){return name+(slot==0?"":"_"+slot);}
-    private File learnedCache(int slot){return new File(getFilesDir(),"offline-workshop-triposr-"+slot+".bin");}
+    private File depthCache(int slot){return isMcp()?new File(mcpFolder(),"depth-"+slot+".bin"):new File(getFilesDir(),"offline-workshop-depth"+(slot==0?"":"-"+slot)+".bin");}
+    private String key(String name,int slot){return (isMcp()?"mcp_"+mcpCommandId+"_":"")+name+(slot==0?"":"_"+slot);}
+    private File learnedCache(int slot){return isMcp()?new File(mcpFolder(),"triposr-"+slot+".bin"):new File(getFilesDir(),"offline-workshop-triposr-"+slot+".bin");}
     private File model(String id){return new File(getFilesDir(),"cloud_models/"+id+".glb");}
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(new ActivityResultContracts.OpenDocument(),this::importImage);
     private final ActivityResultLauncher<String> exporter=registerForActivityResult(new ActivityResultContracts.CreateDocument("model/gltf-binary"),uri->{
@@ -64,7 +73,17 @@ public final class Offline3DActivity extends AppCompatActivity {
     private Button button(LinearLayout p,String value,Runnable action){Button b=new Button(this);b.setText(value);b.setAllCaps(false);p.addView(b);b.setOnClickListener(v->action.run());return b;}
     private Spinner spinner(LinearLayout p,String... choices){Spinner s=new Spinner(this);s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices));p.addView(s);return s;}
     @Override protected void onCreate(Bundle state){
-        super.onCreate(state);selectedSlot=state==null?prefs().getInt("selectedSlot",0):state.getInt("selectedSlot",0);
+        super.onCreate(state);
+        String incoming=getIntent().getStringExtra(EXTRA_MCP_COMMAND_ID);
+        if(incoming!=null&&incoming.matches("[a-f0-9]{32}")){
+            mcpCommandId=incoming;
+            mcpMode=getIntent().getStringExtra(EXTRA_MCP_MODE);
+            if(mcpMode==null)mcpMode="triposr_single";
+            mcpQuality=getIntent().getStringExtra(EXTRA_MCP_QUALITY);
+            if(mcpQuality==null)mcpQuality="balanced";
+            mcpSmoothing=getIntent().getBooleanExtra(EXTRA_MCP_SMOOTHING,true);
+        }
+        selectedSlot=state==null?prefs().getInt("selectedSlot",0):state.getInt("selectedSlot",0);
         if(selectedSlot<0||selectedSlot>3)selectedSlot=0;
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xFFF4F6FA);
         if(android.os.Build.VERSION.SDK_INT>=29)scroll.setForceDarkAllowed(false);LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);
