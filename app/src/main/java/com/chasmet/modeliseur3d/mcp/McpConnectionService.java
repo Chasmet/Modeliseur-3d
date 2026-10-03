@@ -184,10 +184,15 @@ public class McpConnectionService extends Service {
         if (!enabled(c)) return;
         try {
             AlarmManager alarms=(AlarmManager)c.getSystemService(ALARM_SERVICE);
-            if (alarms!=null) alarms.setAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime()+Math.max(1000L,delayMs),
-                    restartIntent(c));
+            if (alarms!=null) {
+                long when=SystemClock.elapsedRealtime()+Math.max(1000L,delayMs);
+                PendingIntent restart=restartIntent(c);
+                if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.M) {
+                    alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,restart);
+                } else {
+                    alarms.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,restart);
+                }
+            }
         } catch (RuntimeException ignored) { }
     }
     private static void cancelRestart(Context c) {
