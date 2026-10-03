@@ -99,7 +99,7 @@ public final class HomeActivity extends AppCompatActivity {
     }
     @Override protected void onStart() {
         super.onStart();
-        if (McpConnectionService.enabled(this)) McpConnectionService.start(this);
+        McpConnectionService.ensureAutoStart(this);
         connectionUi.removeCallbacks(refreshConnection);
         refreshConnection.run();
     }
