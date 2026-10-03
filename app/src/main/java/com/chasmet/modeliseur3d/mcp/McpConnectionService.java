@@ -152,7 +152,10 @@ public class McpConnectionService extends Service {
         } catch (CancellationException ignored) {
             // Keep command, cutouts, neural caches and finished GLB for an explicit reconnect.
         } catch (Exception error) {
-            progress="Travail conservé · nouvel essai à la reconnexion";
+            if (error instanceof CloudApi.HttpFailure && ((CloudApi.HttpFailure)error).code==404) {
+                // The free relay may lose its queue on restart. Preserve local files, unblock new commands.
+                clearCommand(); progress="Commande expirée sur le relais · fichiers locaux conservés";
+            } else progress="Travail conservé · nouvel essai à la reconnexion";
         } finally {
             commandId=""; working.set(false); releasePower(); ENGINE.release();
         }

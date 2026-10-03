@@ -38,8 +38,8 @@ public class McpBackgroundServiceTest {
     }
     private static class Transport extends CloudApi {
         final AtomicInteger polls=new AtomicInteger();
-        final CountDownLatch uploaded=new CountDownLatch(1),disconnected=new CountDownLatch(1);
-        volatile boolean sent,failUpload;
+        final CountDownLatch uploaded=new CountDownLatch(1),disconnected=new CountDownLatch(1),expired=new CountDownLatch(1);
+        volatile boolean sent,failUpload,expireCommand;
         Transport() throws Exception { super("https://relay.example",""); }
         @Override public synchronized JSONObject json(String path,JSONObject body) throws Exception {
             if (path.equals("/api/disconnect")) { disconnected.countDown();return new JSONObject(); }
@@ -51,7 +51,11 @@ public class McpBackgroundServiceTest {
             }
             return new JSONObject();
         }
-        @Override public JSONObject updateLocalStatus(String id,String state,String message) { sent=true;return new JSONObject(); }
+        @Override public JSONObject updateLocalStatus(String id,String state,String message) throws Exception {
+            sent=true;
+            if (expireCommand) { expired.countDown();throw new CloudApi.HttpFailure(404,"Lost relay queue"); }
+            return new JSONObject();
+        }
         @Override public void downloadLocalImage(String id,String ref,File file) throws Exception {
             file.getParentFile().mkdirs(); java.nio.file.Files.write(file.toPath(),new byte[]{1});
         }
@@ -118,4 +122,20 @@ public class McpBackgroundServiceTest {
             assertEquals(1,generating.getCount()); assertTrue(model.isFile());
         } finally { controller.destroy();model.delete(); }
     }
+    @Test public void lostRelayCommandDoesNotBlockNewWorkAndKeepsTheSavedGlb() throws Exception {
+        var app=RuntimeEnvironment.getApplication();
+        File model=new File(app.getFilesDir(),"cloud_models/"+ID+".glb");model.getParentFile().mkdirs();
+        java.nio.file.Files.write(model.toPath(),new byte[]{1});transport.expireCommand=true;
+        ServiceController<Background> controller=Robolectric.buildService(Background.class).create();
+        Background service=controller.get();
+        try {
+            service.onStartCommand(new Intent(),0,1);assertTrue(transport.expired.await(5,TimeUnit.SECONDS));
+            long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+            while (!service.getSharedPreferences("mcp_background",0).getString("command","").isEmpty()
+                    && System.nanoTime()<until) Thread.yield();
+            assertEquals("",service.getSharedPreferences("mcp_background",0).getString("command",""));
+            assertTrue(model.isFile());assertEquals(1,generating.getCount());
+        } finally { controller.destroy();model.delete(); }
+    }
+
 }

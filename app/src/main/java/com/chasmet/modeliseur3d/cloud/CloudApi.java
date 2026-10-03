@@ -45,6 +45,7 @@ public class CloudApi {
         int code = c.getResponseCode();
         if (code < 200 || code >= 300) {
             if (code == 401) throw new HttpFailure(code, "Connexion expirée : reconnecte ce téléphone au relais.");
+            if (code == 404) throw new HttpFailure(code, "Commande introuvable sur le relais.");
             if (code == 413) throw new IOException("Image trop volumineuse.");
             if (code == 429) throw new IOException("Limite du relais atteinte. Efface les anciens travaux ou attends.");
             if (code == 409) throw new IOException("Travail en cours : attends sa fin.");
