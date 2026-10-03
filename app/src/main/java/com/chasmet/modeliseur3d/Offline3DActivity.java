@@ -310,13 +310,18 @@ public final class Offline3DActivity extends AppCompatActivity {
     }
     private void generate(){
         int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean single=engine.getSelectedItemPosition()==2,learned=engine.getSelectedItemPosition()!=1,multiple=!single&&fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
-        boolean smooth=smoothing.isChecked();prefs().edit().putBoolean("smoothing",smooth).apply();
+        boolean smooth=smoothing.isChecked();
         String project=projectName.getText().toString().trim();if(project.length()>80)project=project.substring(0,80);final String savedProject=project;
-        prefs().edit().putString("projectName",savedProject).apply();
-        prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind).putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
+        if(!isMcp()){
+            prefs().edit().putBoolean("smoothing",smooth).putString("projectName",savedProject)
+                    .putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind)
+                    .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress())
+                    .putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
+        }
         if(learned&&!single&&!multiple){status.setText("TripoSR utilise les quatre vues. Ajoute face, dos et les deux profils.");return;}
         if(multiple)for(int slot=0;slot<4;slot++)if(!source(slot).isFile()){status.setText("Ajoute la vue "+VIEWS[slot]+" avant de générer.");return;}
-        message("Création du volume local…");work(()->{
+        if(isMcp())mcpGenerating=true;
+        message(isMcp()?"Commande ChatGPT : création du modèle avec le moteur local…":"Création du volume local…");work(()->{
             long started=android.os.SystemClock.elapsedRealtime();
             Bitmap[] bitmaps=new Bitmap[multiple?4:1];OfflineImageVolume.Result result=null;
             String id=UUID.randomUUID().toString().replace("-","");File output=model(id),part=new File(output.getPath()+".part");
@@ -358,7 +363,12 @@ public final class Offline3DActivity extends AppCompatActivity {
                 // Sidecar is optional: a full disk must never invalidate an already saved GLB.
                 try(Writer info=new OutputStreamWriter(new FileOutputStream(new File(output.getPath()+".json")),java.nio.charset.StandardCharsets.UTF_8)){info.write(provenance.toString());}catch(IOException ignored){}
                 prefs().edit().putString("last",id).apply();int triangles=result.mesh.getTriangleCount();String method=result.method;long seconds=(android.os.SystemClock.elapsedRealtime()-started)/1000;
-                ui(()->{lastId=id;status.setText("Modèle enregistré • "+triangles+" triangles • "+String.format(Locale.FRANCE,"%.1f Mo",output.length()/1048576.0)+" • "+seconds+" s\n"+method+"\nOuvre-le ou exporte-le sans connexion.");});
+                if(isMcp()){
+                    message("Modèle créé sur le téléphone. Synchronisation du GLB avec ChatGPT…");
+                    McpBridgeSession.uploadResult(this,mcpCommandId,output);
+                    mcpGenerating=false;
+                }
+                ui(()->{lastId=id;status.setText((isMcp()?"Commande ChatGPT terminée • ":"Modèle enregistré • ")+triangles+" triangles • "+String.format(Locale.FRANCE,"%.1f Mo",output.length()/1048576.0)+" • "+seconds+" s\n"+method+"\n"+(isMcp()?"GLB synchronisé avec le MCP et conservé sur le téléphone.":"Ouvre-le ou exporte-le sans connexion."));});
             }finally{part.delete();for(Bitmap bitmap:bitmaps)if(bitmap!=null)bitmap.recycle();if(result!=null)result.texture.recycle();}
         });
     }
