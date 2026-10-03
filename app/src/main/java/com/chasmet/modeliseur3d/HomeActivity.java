@@ -5,12 +5,14 @@ import android.os.Bundle;
 import android.widget.TabHost;
 import android.widget.TextView;
 import com.chasmet.modeliseur3d.update.UpdateManager;
+import com.chasmet.modeliseur3d.mcp.McpBridgeSession;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-/** Accueil des deux moteurs de reconstruction et du catalogue d'assets 3D. */
+/** Accueil des moteurs locaux, du catalogue et du pont MCP ChatGPT. */
 public final class HomeActivity extends AppCompatActivity {
+    private McpBridgeSession mcpBridge;
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,6 +56,20 @@ public final class HomeActivity extends AppCompatActivity {
         title.setContentDescription(text);
         return title;
     }
+    @Override protected void onStart() {
+        super.onStart();
+        if (mcpBridge != null) mcpBridge.close();
+        mcpBridge = new McpBridgeSession(this, findViewById(R.id.mcpHomeStatus), true);
+        mcpBridge.start();
+    }
+    @Override protected void onStop() {
+        if (mcpBridge != null) {
+            mcpBridge.close();
+            mcpBridge = null;
+        }
+        super.onStop();
+    }
+
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putInt("homeTab", ((TabHost) findViewById(android.R.id.tabhost)).getCurrentTab());
         super.onSaveInstanceState(state);
