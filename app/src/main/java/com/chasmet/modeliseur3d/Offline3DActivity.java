@@ -89,10 +89,14 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(android.os.Build.VERSION.SDK_INT>=29)scroll.setForceDarkAllowed(false);LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(20*getResources().getDisplayMetrics().density);p.setPadding(pad,pad,pad,pad);scroll.addView(p);setContentView(scroll);
         text(p,"Atelier 3D hors connexion",26);
-        projectName=new EditText(this);projectName.setSingleLine(true);projectName.setHint("Nom du projet (facultatif)");projectName.setText(prefs().getString("projectName",""));p.addView(projectName);
+        projectName=new EditText(this);projectName.setSingleLine(true);projectName.setHint("Nom du projet (facultatif)");projectName.setText(isMcp()?"ChatGPT "+mcpCommandId.substring(0,8):prefs().getString("projectName",""));p.addView(projectName);
         modeHelp=text(p,"Quatre vues du même objet entier, dans la même pose : face, dos, profil droit et profil gauche. Une forme 3D apprise est calculée pour chaque photo, puis les quatre formes sont alignées et combinées avec les silhouettes et textures réelles. Tout se calcule sur ce téléphone, sans serveur.",16);
-        text(p,"Moteur de reconstruction",18);engine=spinner(p,"TripoSR · 4 images","Silhouettes · rapide","TripoSR · 1 seule image");engine.setSelection(getIntent().getBooleanExtra(EXTRA_SINGLE_IMAGE,false)?2:Math.max(0,Math.min(2,prefs().getInt("engine",0))));
-        fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");fourViews.setChecked(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true)));p.addView(fourViews);
+        text(p,"Moteur de reconstruction",18);engine=spinner(p,"TripoSR · 4 images","Silhouettes · rapide","TripoSR · 1 seule image");
+        int requestedEngine=getIntent().getBooleanExtra(EXTRA_SINGLE_IMAGE,false)?2:Math.max(0,Math.min(2,prefs().getInt("engine",0)));
+        if(isMcp())requestedEngine=mcpMode.startsWith("silhouettes")?1:(mcpMode.endsWith("_single")?2:0);
+        engine.setSelection(requestedEngine);
+        fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");
+        fourViews.setChecked(isMcp()?mcpMode.endsWith("_four"):(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true))));p.addView(fourViews);
         countLabel=text(p,"",16);
         for(int row=0;row<2;row++) {
             LinearLayout line=new LinearLayout(this);line.setOrientation(LinearLayout.HORIZONTAL);p.addView(line);
@@ -109,18 +113,20 @@ public final class Offline3DActivity extends AppCompatActivity {
             }
         }
         choose=choices[0];rotate=rotations[0];preview=previews[0];
-        text(p,"Détail du modèle",18);quality=spinner(p,"Rapide · économie de mémoire","Équilibré","Précis · plus lent");quality.setSelection(prefs().getInt("quality",1));
+        text(p,"Détail du modèle",18);quality=spinner(p,"Rapide · économie de mémoire","Équilibré","Précis · plus lent");
+        int requestedQuality="fast".equals(mcpQuality)?0:"precise".equals(mcpQuality)?2:1;
+        quality.setSelection(isMcp()?requestedQuality:prefs().getInt("quality",1));
         shape=spinner(p,"Volume arrondi","Relief fin","Objet rond à 360° · vase / bouteille");shape.setSelection(prefs().getInt("shape",0));
         depthLabel=text(p,"",18);depth=new SeekBar(this);depth.setMax(100);depth.setProgress(prefs().getInt("depth",40));p.addView(depth);
         depth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int value,boolean user){updateDepthLabel();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         depthLabel.setText("Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
         text(p,"Tolérance du fond uni",18);tolerance=new SeekBar(this);tolerance.setMax(100);tolerance.setProgress(prefs().getInt("tolerance",35));p.addView(tolerance);
-        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(prefs().getBoolean("ai",false));p.addView(ai);
-        depthAi=new CheckBox(this);depthAi.setText("Profondeur IA locale · Depth Anything V2 Small");depthAi.setChecked(prefs().getBoolean("depthAi",true));p.addView(depthAi);
+        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(isMcp()||prefs().getBoolean("ai",false));p.addView(ai);
+        depthAi=new CheckBox(this);depthAi.setText("Profondeur IA locale · Depth Anything V2 Small");depthAi.setChecked(isMcp()||prefs().getBoolean("depthAi",true));p.addView(depthAi);
         text(p,"TripoSR, IS-Net et Depth Anything sont embarqués dans l’APK. TripoSR calcule une image ou les quatre vues successivement sur CPU ; le premier calcul peut prendre plusieurs minutes. Garde l’application ouverte. Les formes apprises sont conservées pour les réglages suivants.",14);
         text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
         text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
-        smoothing=new CheckBox(this);smoothing.setText("Lissage léger du maillage IA");smoothing.setChecked(prefs().getBoolean("smoothing",true));p.addView(smoothing);
+        smoothing=new CheckBox(this);smoothing.setText("Lissage léger du maillage IA");smoothing.setChecked(isMcp()?mcpSmoothing:prefs().getBoolean("smoothing",true));p.addView(smoothing);
         text(p,"Le lissage réduit les bosses de la grille sans assembler des morceaux séparés. Il réutilise les formes IA en cache. Désactive-le pour garder toute la rugosité du champ appris.",14);
         compare=button(p,"Comparer les silhouettes des quatre vues",this::compareSilhouettes);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
@@ -142,6 +148,10 @@ public final class Offline3DActivity extends AppCompatActivity {
                 buttons();
             }public void onNothingSelected(AdapterView<?> parent){}
         });
+        if(isMcp()&&state==null){
+            status.setText("Commande ChatGPT reçue. Génération locale automatique…");
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(this::generate);
+        }
     }
     private void updateDepthLabel(){
         depthLabel.setText(fourViews.isChecked()?"Profondeur des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":shape.getSelectedItemPosition()==2?"Épaisseur déduite de la silhouette pour l’objet rond à 360°":"Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
