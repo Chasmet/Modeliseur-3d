@@ -99,34 +99,39 @@ public final class McpBridgeSession implements AutoCloseable {
 
     private void prepareAndLaunch(CloudApi current, JSONObject command) throws Exception {
         String id = CloudApi.id(command.getString("id"));
-        String mode = command.getString("mode");
-        JSONArray refs = command.getJSONArray("references");
-        JSONObject options = command.optJSONObject("options");
-        int expected = mode.endsWith("_four") ? 4 : 1;
-        if (refs.length() != expected) {
-            current.updateLocalStatus(id, "error", "Nombre d’images incompatible avec le moteur local.");
-            return;
-        }
+        try {
+            String mode = command.getString("mode");
+            JSONArray refs = command.getJSONArray("references");
+            JSONObject options = command.optJSONObject("options");
+            int expected = mode.endsWith("_four") ? 4 : 1;
+            if (refs.length() != expected) throw new IOException("Nombre d’images incompatible avec le moteur local.");
 
-        current.updateLocalStatus(id, "running", "Images reçues. Préparation du moteur local Android…");
-        File folder = new File(activity.getFilesDir(), "mcp_inputs/" + id);
-        if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Stockage MCP indisponible.");
-        for (int i = 0; i < refs.length(); i++) {
-            String ref = CloudApi.id(refs.getString(i));
-            current.downloadLocalImage(id, ref, new File(folder, "image-" + i + ".png"));
-        }
+            current.updateLocalStatus(id, "running", "Images reçues. Préparation du moteur local Android…");
+            File folder = new File(activity.getFilesDir(), "mcp_inputs/" + id);
+            if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Stockage MCP indisponible.");
+            for (int i = 0; i < refs.length(); i++) {
+                String ref = CloudApi.id(refs.getString(i));
+                current.downloadLocalImage(id, ref, new File(folder, "image-" + i + ".png"));
+            }
 
-        String quality = options == null ? "balanced" : options.optString("quality", "balanced");
-        boolean smoothing = options == null || options.optBoolean("smoothing", true);
-        activity.runOnUiThread(() -> {
-            if (!active || activity.isFinishing() || activity.isDestroyed()) return;
-            Intent intent = new Intent(activity, Offline3DActivity.class)
-                    .putExtra(Offline3DActivity.EXTRA_MCP_COMMAND_ID, id)
-                    .putExtra(Offline3DActivity.EXTRA_MCP_MODE, mode)
-                    .putExtra(Offline3DActivity.EXTRA_MCP_QUALITY, quality)
-                    .putExtra(Offline3DActivity.EXTRA_MCP_SMOOTHING, smoothing);
-            activity.startActivity(intent);
-        });
+            String quality = options == null ? "balanced" : options.optString("quality", "balanced");
+            boolean smoothing = options == null || options.optBoolean("smoothing", true);
+            activity.runOnUiThread(() -> {
+                if (!active || activity.isFinishing() || activity.isDestroyed()) return;
+                Intent intent = new Intent(activity, Offline3DActivity.class)
+                        .putExtra(Offline3DActivity.EXTRA_MCP_COMMAND_ID, id)
+                        .putExtra(Offline3DActivity.EXTRA_MCP_MODE, mode)
+                        .putExtra(Offline3DActivity.EXTRA_MCP_QUALITY, quality)
+                        .putExtra(Offline3DActivity.EXTRA_MCP_SMOOTHING, smoothing);
+                activity.startActivity(intent);
+            });
+        } catch (Exception error) {
+            try {
+                current.updateLocalStatus(id, "error",
+                        error.getMessage() == null ? "Préparation Android impossible." : error.getMessage());
+            } catch (Exception ignored) { }
+            throw error;
+        }
     }
 
     private void setStatus(String value) {
