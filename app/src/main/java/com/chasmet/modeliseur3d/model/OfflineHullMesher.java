@@ -63,25 +63,30 @@ public final class OfflineHullMesher {
     }
     public static MeshData build(boolean[] occupied,int w,int h,int d){
         if(w<4||h<4||d<4||w>128||h>128||d>128||occupied==null||occupied.length!=w*h*d)throw new IllegalArgumentException("Volume mobile invalide.");
-        return buildSurface(smooth(occupied,w,h,d),w,h,d,ISO,false);
+        return buildSurface(smooth(occupied,w,h,d),w,h,d,ISO,0);
     }
     /** Continuous learned density probabilities, without binary silhouette smoothing. */
     public static MeshData buildField(float[] values,int w,int h,int d){
-        if(w<4||h<4||d<4||w>128||h>128||d>128||values==null||values.length!=w*h*d)throw new IllegalArgumentException("Champ mobile invalide.");
+        return buildField(values,w,h,d,128,120000);
+    }
+    /** Object-centred grids are bounded separately from the legacy full-cube path. */
+    public static MeshData buildDetailedField(float[] values,int w,int h,int d){long heap=Runtime.getRuntime().maxMemory();return buildField(values,w,h,d,256,heap<192L*1024*1024?60000:heap<384L*1024*1024?100000:180000);}
+    private static MeshData buildField(float[] values,int w,int h,int d,int limit,int triangleLimit){
+        if(w<4||h<4||d<4||w>limit||h>limit||d>limit||values==null||values.length!=w*h*d)throw new IllegalArgumentException("Champ mobile invalide.");
         float[] f=values.clone();
         for(int y=0;y<h;y++)for(int x=0;x<w;x++)for(int z=0;z<d;z++){int i=index(x,y,z,w,d);
             if(!Float.isFinite(f[i])||f[i]<0||f[i]>1)throw new IllegalArgumentException("Probabilité IA invalide.");
             if(y==0||y==h-1||x==0||x==w-1||z==0||z==d-1)f[i]=0;
         }
-        return buildSurface(f,w,h,d,.5f,true);
+        return buildSurface(f,w,h,d,.5f,triangleLimit);
     }
     public static final class TooComplexException extends IllegalArgumentException {
         TooComplexException(){super("Forme trop complexe pour ce détail mobile.");}
     }
-    private static MeshData buildSurface(float[] f,int w,int h,int d,float iso,boolean capped){
+    private static MeshData buildSurface(float[] f,int w,int h,int d,float iso,int triangleLimit){
         Floats p=new Floats(),n=new Floats();Ints triangles=new Ints();
         Map<Long,Integer> edges=new HashMap<>();int[] cube=new int[8],inside=new int[4],outside=new int[4];
-        for(int y=0;y<h-1;y++){check();if(capped&&triangles.size>120000*3)throw new TooComplexException();for(int x=0;x<w-1;x++)for(int z=0;z<d-1;z++){
+        for(int y=0;y<h-1;y++){check();if(triangleLimit>0&&triangles.size>triangleLimit*3)throw new TooComplexException();for(int x=0;x<w-1;x++)for(int z=0;z<d-1;z++){
             for(int k=0;k<8;k++)cube[k]=index(x+CORNERS[k][0],y+CORNERS[k][1],z+CORNERS[k][2],w,d);
             for(int[] tetra:TETRA){
                 int ni=0,no=0;for(int corner:tetra){int i=cube[corner];if(f[i]>=iso)inside[ni++]=i;else outside[no++]=i;}
@@ -95,7 +100,7 @@ public final class OfflineHullMesher {
                 }
             }
         }}
-        if(capped&&triangles.size>120000*3)throw new TooComplexException();
+        if(triangleLimit>0&&triangles.size>triangleLimit*3)throw new TooComplexException();
         return new MeshData(p.array(),n.array(),new float[p.size/3*2],Arrays.copyOf(triangles.values,triangles.size));
     }
 }

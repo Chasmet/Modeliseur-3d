@@ -41,6 +41,8 @@ public final class TripoSRField {
     }
     private float fit(float v,int axis){return low[axis]+(v+1)*.5f*(high[axis]-low[axis]);}
     public boolean hasColors(){return colors!=null;}
+    /** Padded occupied bounds in the native learned coordinate system. */
+    public float[] occupiedBounds(){return new float[]{low[0],low[1],low[2],high[0],high[1],high[2]};}
     /** Model Y is up; the learned field uses Z up. Keep native proportions. */
     public float singleProbability(float x,float y,float z){
         float raw=sample(z,x,y);

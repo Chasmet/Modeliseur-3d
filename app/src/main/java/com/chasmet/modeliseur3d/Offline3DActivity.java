@@ -134,7 +134,7 @@ public final class Offline3DActivity extends AppCompatActivity {
             choices[slot].setEnabled(!busy);rotations[slot].setEnabled(!busy&&exists);cards[slot].setVisibility(multiple||slot==0?View.VISIBLE:View.GONE);
             mirrors[slot].setEnabled(!busy&&exists);
         }
-        modeHelp.setText(single?"Une seule photo du sujet entier, de face ou de trois-quarts, avec un fond propre ou transparent. TripoSR estime le volume et les couleurs de toutes les faces sur ce téléphone. Le dos et les zones cachées sont estimés, pas mesurés.":"Quatre vues du même objet entier et dans la même pose : face, dos et deux profils. TripoSR combine quatre formes IA ; Silhouettes propose un calcul plus léger.");
+        modeHelp.setText(single?"Une seule photo du sujet entier, de face ou de trois-quarts, avec un fond propre ou transparent. TripoSR estime le volume sur ce téléphone. La photo conserve les détails visibles ; les surfaces cachées utilisent les couleurs IA. Le dos et les zones cachées sont estimés, pas mesurés.":"Quatre vues du même objet entier et dans la même pose : face, dos et deux profils. TripoSR combine quatre formes IA ; Silhouettes propose un calcul plus léger.");
         countLabel.setText(single?(source().isFile()?"1 / 1 image prête. Les autres photos restent conservées.":"0 / 1 image. Choisis une photo dans Face."):multiple?count+" / 4 vues conservées sur ce téléphone. Ajoute les quatre pour générer.":"Une image : volume ou relief approximatif. La photo précédente est conservée dans Face.");
         generate.setEnabled(!busy&&(multiple?count==4:source().isFile()));inspect.setEnabled(!busy&&(multiple?count>0:source().isFile()));
         cancel.setVisibility(busy?View.VISIBLE:View.GONE);cancel.setEnabled(busy&&!cancelled);
@@ -152,7 +152,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }finally{part.delete();}
     }
     private void saveImage(Bitmap bitmap,int slot)throws IOException{
-        saveBitmap(bitmap,source(slot));cutout(slot).delete();depthCache(slot).delete();learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
+        saveBitmap(bitmap,source(slot));TripoSREngine.clearDetailedCache(learnedCache(slot));cutout(slot).delete();depthCache(slot).delete();TripoSREngine.clearDetailedCache(learnedCache(slot));learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
         ui(()->{previews[slot].setImageURI(null);previews[slot].setImageURI(Uri.fromFile(source(slot)));});
     }
     private File prepareCutout(int tolerance,boolean useAi)throws Exception{return prepareCutout(0,tolerance,useAi);}
@@ -250,7 +250,7 @@ public final class Offline3DActivity extends AppCompatActivity {
             .setMessage("Les quatre photos, les modèles GLB et les poids IA restent conservés. Le prochain calcul IA sera plus long.")
             .setPositiveButton("Libérer",(dialog,which)->work(()->{
                 for(int slot=0;slot<4;slot++){
-                    depthCache(slot).delete();learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();
+                    depthCache(slot).delete();TripoSREngine.clearDetailedCache(learnedCache(slot));learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();
                     for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}
                 }message("Calculs en cache libérés. Photos et GLB conservés.");
             })).setNegativeButton("Annuler",null).show();
@@ -276,11 +276,11 @@ public final class Offline3DActivity extends AppCompatActivity {
                     if(useDepth)fields[slot]=prepareDepth(bitmaps[slot],slot);checkpoint();
                 }
                 if(single){
-                    int neuralDetail=new int[]{64,88,112}[selected];
-                    TripoSRField learnedField=TripoSREngine.reconstructSingle(this,bitmaps[0],learnedCache(0),TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",0),""),neuralDetail,new TripoSREngine.Progress(){
+                    int neuralDetail=new int[]{128,192,256}[selected];
+                    TripoSRRefinedField learnedField=TripoSREngine.reconstructSingleDetailed(this,bitmaps[0],learnedCache(0),TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",0),""),neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
-                    });checkpoint();message("Maillage TripoSR une image et couleurs neuronales…");
-                    result=TripoSRSingleViewVolume.build(learnedField,smooth);
+                    });checkpoint();message("Maillage détaillé et texture photo sur les surfaces visibles…");
+                    result=TripoSRSingleViewVolume.buildDetailed(learnedField,bitmaps[0],smooth);
                 }else if(learned){
                     File[] caches=new File[4];String[] keys=new String[4];for(int slot=0;slot<4;slot++){caches[slot]=learnedCache(slot);keys[slot]=TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",slot),"");}
                     int neuralDetail=new int[]{64,88,112}[selected];
@@ -298,7 +298,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                     .put("reconstructionMode",single?"single-image":multiple?"four-view":"silhouette-single").put("hiddenSurfacesEstimated",single)
                     .put("engine",learned?"TripoSR":multiple?"Silhouettes":"Volume local").put("method",result.method)
                     .put("projectName",savedProject).put("localOnly",true).put("inputViews",bitmaps.length)
-                    .put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
+                    .put("textureMode",single?"visible-photo-neural-hidden":"existing").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
                 ExternalViewerGlbExporter.write(part,result.mesh,result.texture,provenance);
                 if(part.length()>64L*1024*1024)throw new IOException("Le modèle dépasse la limite mobile de 64 Mo.");
                 checkpoint();if(!part.renameTo(output))throw new IOException("Modèle non enregistré.");

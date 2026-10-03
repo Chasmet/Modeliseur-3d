@@ -94,3 +94,36 @@ le réglage de profondeur des profils et la comparaison quatre vues sont masqué
 Accès : accueil → IA locale → TripoSR — 1 seule image, ou atelier → troisième
 choix du moteur. Tests : véritable encodeur/décodeur à une image sans sockets,
 cache réutilisé, profondeur non plate, couleurs et export GLB avec inputViews=1.
+
+## Qualité une image — 6.3.3
+
+Le chemin de l’atelier utilise maintenant `reconstructSingleDetailed` : une grille
+64³ localise le sujet, puis le vrai décodeur est interrogé à une nouvelle résolution
+sur un parallélépipède entourant cette occupation. Une marge de deux voxels par
+côté protège les contours. Les réglages ciblent 128, 192 ou 256 échantillons sur
+le plus grand axe ; les deux autres dimensions suivent les proportions physiques.
+Le résultat reste dans les coordonnées natives, sans étirer le corps. Ce calcul
+réutilise les triplans existants et possède un cache `.surface-v1-N` distinct.
+Le détail est plafonné selon la mémoire du processus ; la génération du maillage
+réduit sa grille si elle dépasse 180 000 triangles. Le détail réellement utilisé
+figure dans la provenance GLB. Le mode à quatre vues reste sur son chemin actuel.
+
+La texture est un atlas continu de six projections orthographiques. La photo
+Face est recalée par les silhouettes de lignes et projetée seulement sur les
+surfaces orientées vers elle et visibles dans une carte de profondeur CPU.
+Le dos, les parties occultées et les zones transparentes utilisent les couleurs
+neuronales. L’alpha de la photo n’enlève aucun triangle. Les raccords photo/IA sont
+pondérés par l’angle de la surface. Le calcul des faces supérieure et inférieure
+évite les UV dégénérés d’un atlas ne comportant que des vues latérales.
+
+Ce traitement conserve mieux les motifs visibles, mais ne récupère pas les détails
+anatomiques que le modèle n’a pas inférés. La projection suppose une vue de face
+ou de trois-quarts modérée ; une perspective forte peut laisser des décalages.
+La quantification de l’encodeur demeure inchangée. Un dos fidèle reste impossible
+à vérifier sans image du dos. Aucun serveur ni clé n’est ajouté.
+
+`TripoSRQualityTest` vérifie la conservation des proportions, la présence des
+détails photo devant, leur absence au dos, les caches corrompus, une inférence
+réelle détaillée et la reprise du cache. La comparaison visuelle utilisateur est
+locale et facultative via `MODELISEUR_VISUAL_IMAGE` : aucune photo utilisateur
+n’est ajoutée au dépôt, aux tests CI ou à une publication.

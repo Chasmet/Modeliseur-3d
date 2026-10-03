@@ -95,6 +95,47 @@ public final class TripoSREngine {
         return reconstructViews(context,new Bitmap[]{image},new File[]{cache},new String[]{key},requestedSide,true,progress)[0];
     }
 
+    /** Sample the actual decoder at a finer spacing inside a padded coarse object bound.
+     * The original encoder and all four-view caches remain compatible. */
+    public static TripoSRRefinedField reconstructSingleDetailed(Context context,Bitmap image,File cache,String key,int requestedSide,Progress progress)throws Exception{
+        int target=requestedSide>=256?256:requestedSide>=192?192:128;
+        if(Runtime.getRuntime().maxMemory()<384L*1024*1024)target=Math.min(target,192);
+        if(Runtime.getRuntime().maxMemory()<192L*1024*1024)target=96;
+        File refined=new File(cache.getPath()+".surface-v1-"+target),marker=new File(cache.getPath()+".key");
+        if(image==null||image.isRecycled())throw new IOException("L’image TripoSR est absente.");
+        check(progress);
+        if(cache.isFile()&&marker.isFile()&&readKey(marker).equals(key)&&refined.isFile()){
+            try{TripoSRRefinedField field=TripoSRRefinedField.read(refined);progress.update("Forme détaillée et couleurs reprises du cache local.");return field;}catch(IOException e){refined.delete();}
+        }
+        TripoSRField coarse=reconstructViews(context,new Bitmap[]{image},new File[]{cache},new String[]{key},64,false,progress)[0];
+        float[] bounds=coarse.occupiedBounds();float padding=4f/(coarse.side-1),span=0;
+        for(int a=0;a<3;a++){bounds[a]=Math.max(-1,bounds[a]-padding);bounds[a+3]=Math.min(1,bounds[a+3]+padding);span=Math.max(span,bounds[a+3]-bounds[a]);}
+        int[] dimensions=new int[3];for(int a=0;a<3;a++)dimensions[a]=Math.max(8,Math.min(target,1+(int)Math.ceil((bounds[a+3]-bounds[a])/span*(target-1))));
+        // Rectangular dense sampling is much cheaper than evaluating a 256³ empty cube.
+        int nx=dimensions[0],ny=dimensions[1],nz=dimensions[2],total=nx*ny*nz;
+        float[] density=new float[total];int[] colors=new int[total];float[] scene=readScene(cache);File folder=unpack(context,progress);OrtEnvironment env=OrtEnvironment.getEnvironment();
+        try(OrtSession.SessionOptions options=options();OrtSession decoder=env.createSession(new File(folder,ASSETS[2]).getPath(),options)){
+            for(int start=0;start<total;start+=BATCH){
+                check(progress);if(start%(BATCH*32)==0)progress.update("Détails du sujet · grille "+nx+" × "+ny+" × "+nz+" · "+(100L*start/total)+" %…");
+                int count=Math.min(BATCH,total-start);float[] features=new float[count*120];
+                for(int j=0;j<count;j++){
+                    int index=start+j;float x=bounds[0]+(bounds[3]-bounds[0])*(index/(ny*nz))/(nx-1),y=bounds[1]+(bounds[4]-bounds[1])*(index/nz%ny)/(ny-1),z=bounds[2]+(bounds[5]-bounds[2])*(index%nz)/(nz-1);
+                    samplePlane(scene,0,x,y,features,j*120);samplePlane(scene,1,x,z,features,j*120+40);samplePlane(scene,2,y,z,features,j*120+80);
+                }
+                try(OnnxTensor input=OnnxTensor.createTensor(env,FloatBuffer.wrap(features),new long[]{1,count,120});OrtSession.Result result=decoder.run(Collections.singletonMap("triplane_features",input))){
+                    FloatBuffer out=((OnnxTensor)result.get(0)).getFloatBuffer();if(out.remaining()!=count*4)throw new IOException("Décodage détaillé invalide.");
+                    for(int j=0;j<count;j++){
+                        density[start+j]=out.get();float r=out.get(),g=out.get(),b=out.get();if(!Float.isFinite(r)||!Float.isFinite(g)||!Float.isFinite(b))throw new IOException("Couleurs détaillées non finies.");
+                        colors[start+j]=0xff000000|(colorChannel(r)<<16)|(colorChannel(g)<<8)|colorChannel(b);
+                    }
+                }
+            }
+        }
+        check(progress);TripoSRRefinedField field=new TripoSRRefinedField(nx,ny,nz,bounds,density,colors);File part=new File(refined.getPath()+".part");
+        try{field.write(part);check(progress);if(!part.renameTo(refined))throw new IOException("Cache détaillé non enregistré.");}finally{part.delete();}
+        return field;
+    }
+
     private static TripoSRField[] reconstructViews(Context context,Bitmap[] images,File[] caches,String[] keys,int requestedSide,boolean colors,Progress progress)throws Exception{
         int count=images.length;
         for(int i=0;i<count;i++)if(caches[i]==null||keys[i]==null)throw new IllegalArgumentException("Cache TripoSR absent.");
@@ -181,7 +222,8 @@ public final class TripoSREngine {
     }
 
     private static File fieldCache(File scene,int side,boolean colors){return new File(scene.getPath()+".field-"+side+(colors?"-rgb":""));}
-    private static void deleteDerived(File scene){for(int side:FIELD_SIDES){fieldCache(scene,side,false).delete();fieldCache(scene,side,true).delete();}}
+    private static void deleteDerived(File scene){for(int side:FIELD_SIDES){fieldCache(scene,side,false).delete();fieldCache(scene,side,true).delete();}clearDetailedCache(scene);}
+    public static void clearDetailedCache(File scene){for(int side:new int[]{96,128,192,256})new File(scene.getPath()+".surface-v1-"+side).delete();}
 
     private static String readKey(File file)throws IOException{
         if(file.length()>512)return "";
