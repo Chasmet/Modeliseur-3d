@@ -74,3 +74,23 @@ La vitesse sur le téléphone de l’utilisateur reste à mesurer.
 Les activités originales 2.5D et 3D à quatre photos restent inchangées.
 Le moteur Silhouettes reste disponible dans le troisième onglet pour un calcul
 plus léger. Le MCP est reporté ; Render ne participe pas à la reconstruction.
+
+## Option 3 — TripoSR une image (6.3.2)
+
+Le troisième choix du moteur accepte une seule photo et réutilise le détourage
+Face ainsi que les mêmes triplans locaux. Un seul passage encodeur est exécuté.
+Le décodeur restitue la densité et ses trois logits RGB ; la sigmoid officielle
+convertit les couleurs. La forme est extraite dans le repère natif, avec une
+rotation Z vertical vers Y vertical, sans contrainte issue de photos absentes,
+sans extrusion ni duplication de l’image en quatre fausses vues.
+
+Le champ RGB possède un cache séparé `.field-N-rgb`, compatible avec les anciens
+champs de densité. Le changement de mode conserve les autres photos, réglages
+et GLB. Les textures sont un atlas de petits triangles interpolant les couleurs
+neuronales, puis exportées par le même chemin GLB. Les zones invisibles restent
+estimées par le modèle, pas mesurées. Le détail et le lissage restent disponibles ;
+le réglage de profondeur des profils et la comparaison quatre vues sont masqués.
+
+Accès : accueil → IA locale → TripoSR — 1 seule image, ou atelier → troisième
+choix du moteur. Tests : véritable encodeur/décodeur à une image sans sockets,
+cache réutilisé, profondeur non plate, couleurs et export GLB avec inputViews=1.

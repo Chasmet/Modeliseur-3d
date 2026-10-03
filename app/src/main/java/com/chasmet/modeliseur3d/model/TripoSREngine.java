@@ -87,12 +87,23 @@ public final class TripoSREngine {
     public static TripoSRField[] reconstruct(Context context,Bitmap[] images,File[] caches,String[] keys,int requestedSide,Progress progress)throws Exception{
         if(images==null||images.length!=4||caches==null||caches.length!=4||keys==null||keys.length!=4)
             throw new IllegalArgumentException("TripoSR utilise les quatre vues.");
+        return reconstructViews(context,images,caches,keys,requestedSide,false,progress);
+    }
+
+    /** One genuine encoder pass; shares the front triplanes but has its own RGB field cache. */
+    public static TripoSRField reconstructSingle(Context context,Bitmap image,File cache,String key,int requestedSide,Progress progress)throws Exception{
+        return reconstructViews(context,new Bitmap[]{image},new File[]{cache},new String[]{key},requestedSide,true,progress)[0];
+    }
+
+    private static TripoSRField[] reconstructViews(Context context,Bitmap[] images,File[] caches,String[] keys,int requestedSide,boolean colors,Progress progress)throws Exception{
+        int count=images.length;
+        for(int i=0;i<count;i++)if(caches[i]==null||keys[i]==null)throw new IllegalArgumentException("Cache TripoSR absent.");
         int side=Math.max(48,Math.min(112,requestedSide));
-        TripoSRField[] fields=new TripoSRField[4];
-        float[][] scenes=new float[4][];
+        TripoSRField[] fields=new TripoSRField[count];
+        float[][] scenes=new float[count][];
         boolean needsEncoder=false,needsDecoder=false;
 
-        for(int i=0;i<4;i++){
+        for(int i=0;i<count;i++){
             check(progress);
             if(images[i]==null||images[i].isRecycled())throw new IOException("Une vue TripoSR est absente.");
             File marker=new File(caches[i].getPath()+".key");
@@ -101,9 +112,9 @@ public final class TripoSREngine {
                 caches[i].delete();marker.delete();deleteDerived(caches[i]);
                 needsEncoder=true;needsDecoder=true;continue;
             }
-            File fieldFile=fieldCache(caches[i],side);
+            File fieldFile=fieldCache(caches[i],side,colors);
             if(fieldFile.isFile()){
-                try{fields[i]=TripoSRField.read(fieldFile);}
+                try{fields[i]=TripoSRField.read(fieldFile);if(colors&&!fields[i].hasColors()){fields[i]=null;fieldFile.delete();}}
                 catch(IOException e){fieldFile.delete();}
             }
             if(fields[i]==null){
@@ -115,7 +126,7 @@ public final class TripoSREngine {
 
         boolean allReady=true;for(TripoSRField field:fields)if(field==null){allReady=false;break;}
         if(allReady){
-            progress.update("Les quatre formes IA "+side+"³ sont reprises du cache local.");
+            progress.update(count==1?"La forme IA une image "+side+"³ et ses couleurs sont reprises du cache local.":"Les quatre formes IA "+side+"³ sont reprises du cache local.");
             return fields;
         }
 
@@ -126,13 +137,13 @@ public final class TripoSREngine {
         if(needsEncoder){
             try(OrtSession.SessionOptions options=options();
                 OrtSession encoder=environment.createSession(new File(folder,ASSETS[0]).getPath(),options)){
-                for(int i=0;i<4;i++)if(fields[i]==null&&scenes[i]==null){
+                for(int i=0;i<count;i++)if(fields[i]==null&&scenes[i]==null){
                     check(progress);
                     File marker=new File(caches[i].getPath()+".key");
                     if(caches[i].isFile()&&marker.isFile()&&readKey(marker).equals(keys[i])){
                         try{scenes[i]=readScene(caches[i]);continue;}catch(IOException ignored){}
                     }
-                    progress.update(labels[i]+" · TripoSR IA 3D · "+(i+1)+" / 4 · encodage CPU local…");
+                    progress.update((count==1?"Image unique":labels[i])+" · TripoSR IA 3D · "+(i+1)+" / "+count+" · encodage CPU local…");
                     try(OnnxTensor input=OnnxTensor.createTensor(environment,FloatBuffer.wrap(prepareInput(images[i])),new long[]{1,3,SIZE,SIZE});
                         OrtSession.Result result=encoder.run(Collections.singletonMap("input_image",input))){
                         FloatBuffer out=((OnnxTensor)result.get(0)).getFloatBuffer();
@@ -152,13 +163,13 @@ public final class TripoSREngine {
         if(needsDecoder){
             try(OrtSession.SessionOptions options=options();
                 OrtSession decoder=environment.createSession(new File(folder,ASSETS[2]).getPath(),options)){
-                for(int i=0;i<4;i++)if(fields[i]==null){
+                for(int i=0;i<count;i++)if(fields[i]==null){
                     check(progress);
                     if(scenes[i]==null)scenes[i]=readScene(caches[i]);
-                    progress.update(labels[i]+" · décodage neuronal réel "+side+"³…");
-                    fields[i]=decode(environment,decoder,scenes[i],side,progress);
+                    progress.update((count==1?"Image unique":labels[i])+" · décodage neuronal réel "+side+"³"+(colors?" et couleurs 3D":"")+"…");
+                    fields[i]=decode(environment,decoder,scenes[i],side,colors,progress);
                     scenes[i]=null;
-                    File target=fieldCache(caches[i],side),part=new File(target.getPath()+".part");
+                    File target=fieldCache(caches[i],side,colors),part=new File(target.getPath()+".part");
                     try{
                         fields[i].write(part);check(progress);
                         if(!part.renameTo(target))throw new IOException("Cache 3D "+side+"³ non enregistré.");
@@ -169,8 +180,8 @@ public final class TripoSREngine {
         return fields;
     }
 
-    private static File fieldCache(File scene,int side){return new File(scene.getPath()+".field-"+side);}
-    private static void deleteDerived(File scene){for(int side:FIELD_SIDES)fieldCache(scene,side).delete();}
+    private static File fieldCache(File scene,int side,boolean colors){return new File(scene.getPath()+".field-"+side+(colors?"-rgb":""));}
+    private static void deleteDerived(File scene){for(int side:FIELD_SIDES){fieldCache(scene,side,false).delete();fieldCache(scene,side,true).delete();}}
 
     private static String readKey(File file)throws IOException{
         if(file.length()>512)return "";
@@ -200,8 +211,9 @@ public final class TripoSREngine {
         }
     }
 
-    private static TripoSRField decode(OrtEnvironment env,OrtSession decoder,float[] scene,int side,Progress progress)throws Exception{
+    private static TripoSRField decode(OrtEnvironment env,OrtSession decoder,float[] scene,int side,boolean captureColors,Progress progress)throws Exception{
         float[] density=new float[side*side*side];
+        int[] colors=captureColors?new int[density.length]:null;
         for(int start=0;start<density.length;start+=BATCH){
             check(progress);int count=Math.min(BATCH,density.length-start);float[] features=new float[count*120];
             for(int j=0;j<count;j++){
@@ -216,11 +228,20 @@ public final class TripoSREngine {
                 OrtSession.Result result=decoder.run(Collections.singletonMap("triplane_features",input))){
                 FloatBuffer out=((OnnxTensor)result.get(0)).getFloatBuffer();
                 if(out.remaining()!=count*4)throw new IOException("Sortie du décodeur TripoSR invalide.");
-                for(int j=0;j<count;j++){density[start+j]=out.get();out.get();out.get();out.get();}
+                for(int j=0;j<count;j++){
+                    density[start+j]=out.get();float r=out.get(),g=out.get(),b=out.get();
+                    if(captureColors){
+                        if(!Float.isFinite(r)||!Float.isFinite(g)||!Float.isFinite(b))throw new IOException("Couleurs TripoSR non finies.");
+                        colors[start+j]=0xff000000|(colorChannel(r)<<16)|(colorChannel(g)<<8)|colorChannel(b);
+                    }
+                }
             }
         }
-        return new TripoSRField(density,side);
+        return new TripoSRField(density,side,colors);
     }
+
+    // The pinned decoder outputs raw density and RGB logits, matching upstream sigmoid.
+    private static int colorChannel(float raw){return (int)Math.round(255/(1+Math.exp(Math.max(-40,Math.min(40,-raw)))));}
 
     /** align_corners=false bilinear grid_sample with zero padding, exactly as upstream. */
     public static void samplePlane(float[] scene,int plane,float u,float v,float[] features,int offset){

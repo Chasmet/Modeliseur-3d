@@ -33,6 +33,7 @@ public final class HomeActivity extends AppCompatActivity {
                 startActivity(new Intent(this, Manual3DActivity.class))
         );
         findViewById(R.id.offline3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class)));
+        findViewById(R.id.singleImage3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class).putExtra(Offline3DActivity.EXTRA_SINGLE_IMAGE,true)));
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
         );

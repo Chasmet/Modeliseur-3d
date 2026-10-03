@@ -102,6 +102,49 @@ public class TripoSROfflineTest {
             engine.setSelection(1);org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue(four.isEnabled());
         }
     }
+    @Test public void singleImageChoiceNeedsOnlyTheFrontPhotoAndPreservesOtherModes()throws Exception{
+        var app=RuntimeEnvironment.getApplication();app.getSharedPreferences("offline_workshop",0).edit().clear().commit();
+        Bitmap image=bottle(0);File photo=new File(app.getFilesDir(),"offline-workshop-image.png");
+        try(FileOutputStream out=new FileOutputStream(photo)){assertTrue(image.compress(Bitmap.CompressFormat.PNG,100,out));}finally{image.recycle();}
+        File back=new File(app.getFilesDir(),"offline-workshop-image-1.png");byte[] saved={1,2,3,4};java.nio.file.Files.write(back.toPath(),saved);
+        try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
+            Offline3DActivity activity=controller.get();Spinner engine=ReflectionHelpers.getField(activity,"engine");
+            assertEquals(3,engine.getCount());engine.setSelection(2);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            CheckBox four=ReflectionHelpers.getField(activity,"fourViews");assertFalse(four.isChecked());assertEquals(android.view.View.GONE,four.getVisibility());
+            LinearLayout[] cards=ReflectionHelpers.getField(activity,"cards");assertEquals(android.view.View.VISIBLE,cards[0].getVisibility());
+            for(int i=1;i<4;i++)assertEquals(android.view.View.GONE,cards[i].getVisibility());
+            assertTrue(((Button)ReflectionHelpers.getField(activity,"generate")).isEnabled());
+            assertEquals(android.view.View.GONE,((SeekBar)ReflectionHelpers.getField(activity,"depth")).getVisibility());
+            engine.setSelection(0);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue(four.isChecked());assertFalse(four.isEnabled());
+            engine.setSelection(1);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertTrue(four.isEnabled());
+            assertArrayEquals(saved,java.nio.file.Files.readAllBytes(back.toPath()));
+        }finally{photo.delete();back.delete();}
+    }
+    @Test public void realSingleImageInfersOnceWithNeuralColorsAndExportsAValidGlbOffline()throws Exception{
+        var app=RuntimeEnvironment.getApplication();Bitmap image=bottle(0);File cache=new File(app.getCacheDir(),"single-real-triplanes.bin");
+        String key="single-test-"+System.nanoTime();List<String> messages=new ArrayList<>();OfflineImageVolume.Result model=null;
+        TripoSREngine.Progress progress=new TripoSREngine.Progress(){public void update(String value){messages.add(value);System.out.println(value);}public void check(){}};
+        try(NoNetwork forbidden=new NoNetwork()){
+            TripoSRField field=TripoSREngine.reconstructSingle(app,image,cache,key,64,progress);
+            assertTrue(field.hasColors());assertEquals(1,messages.stream().filter(s->s.contains("encodage CPU")).count());
+            long modified=cache.lastModified();messages.clear();
+            TripoSRField again=TripoSREngine.reconstructSingle(app,image,cache,key,64,progress);
+            assertTrue(again.hasColors());assertEquals(modified,cache.lastModified());assertTrue(messages.stream().anyMatch(s->s.contains("cache local")));
+            assertFalse(messages.stream().anyMatch(s->s.contains("encodage CPU")));
+            model=TripoSRSingleViewVolume.build(again,true);assertTrue(model.mesh.getTriangleCount()>100);
+            float[] positions=model.mesh.getPositions();float min=Float.POSITIVE_INFINITY,max=Float.NEGATIVE_INFINITY;
+            for(int i=2;i<positions.length;i+=3){assertTrue(Float.isFinite(positions[i]));min=Math.min(min,positions[i]);max=Math.max(max,positions[i]);}
+            assertTrue("Learned depth must not be a flat image",max-min>.05f);
+            Set<Integer> colors=new HashSet<>();for(int y=0;y<model.texture.getHeight();y+=7)for(int x=0;x<model.texture.getWidth();x+=7)colors.add(model.texture.getPixel(x,y));assertTrue(colors.size()>20);
+            File folder=new File("build/offline-fixture");assertTrue(folder.isDirectory()||folder.mkdirs());
+            File glb=new File(folder,"00000000000000000000000000000006.glb");
+            ExternalViewerGlbExporter.write(glb,model.mesh,model.texture,new org.json.JSONObject().put("appVersion","6.3.2").put("engine","TripoSR").put("reconstructionMode","single-image").put("inputViews",1).put("localOnly",true));
+            byte[] data=java.nio.file.Files.readAllBytes(glb.toPath());var buffer=java.nio.ByteBuffer.wrap(data).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            assertEquals(0x46546c67,buffer.getInt(0));assertEquals(data.length,buffer.getInt(8));
+            var gltf=new org.json.JSONObject(new String(data,20,buffer.getInt(12),java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(1,gltf.getJSONObject("extras").getInt("inputViews"));assertEquals("single-image",gltf.getJSONObject("extras").getString("reconstructionMode"));
+        }finally{image.recycle();if(model!=null)model.texture.recycle();}
+    }
     @Test public void screenRotationKeepsTheSameWorkshopAndProjectName(){
         try(NoNetwork forbidden=new NoNetwork();var controller=Robolectric.buildActivity(Offline3DActivity.class).setup()){
             Offline3DActivity activity=controller.get();EditText project=ReflectionHelpers.getField(activity,"projectName");project.setText("Projet conservé");
