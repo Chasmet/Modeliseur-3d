@@ -157,9 +157,13 @@ public final class Offline3DActivity extends AppCompatActivity {
         button(p,"Libérer les calculs en cache",this::clearDerivedCaches);
         if(prefs().getBoolean("interruptedWork",false))status.setText("Le calcul précédent a été interrompu. Tes photos et GLB sont conservés. Générer reprend les vues IA déjà calculées.");
         lastId=prefs().getString("last","");buttons();
-        fourViews.setOnCheckedChangeListener((b,checked)->{if(engine.getSelectedItemPosition()==1)prefs().edit().putBoolean("fourViews",checked).apply();buttons();});
+        fourViews.setOnCheckedChangeListener((b,checked)->{if(!isMcp()&&engine.getSelectedItemPosition()==1)prefs().edit().putBoolean("fourViews",checked).apply();buttons();});
         engine.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
-            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){fourViews.setChecked(position==0||(position==1&&prefs().getBoolean("fourViews",true)));if(position==2)selectedSlot=0;buttons();}
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                if(isMcp())fourViews.setChecked(mcpMode.endsWith("_four"));
+                else fourViews.setChecked(position==0||(position==1&&prefs().getBoolean("fourViews",true)));
+                if(position==2)selectedSlot=0;buttons();
+            }
             public void onNothingSelected(AdapterView<?> parent){}
         });
         shape.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
@@ -169,18 +173,19 @@ public final class Offline3DActivity extends AppCompatActivity {
         });
         if(isMcp()&&state==null){
             status.setText("Commande ChatGPT reçue. Génération locale automatique…");
-            new android.os.Handler(android.os.Looper.getMainLooper()).post(this::generate);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::generate,300);
         }
     }
     private void updateDepthLabel(){
         depthLabel.setText(fourViews.isChecked()?"Profondeur des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":shape.getSelectedItemPosition()==2?"Épaisseur déduite de la silhouette pour l’objet rond à 360°":"Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
     }
     private void buttons(){
+        boolean managed=isMcp();
         boolean single=engine.getSelectedItemPosition()==2,learned=engine.getSelectedItemPosition()!=1,multiple=!single&&fourViews.isChecked(),saved=lastId.matches("[a-f0-9]{32}")&&model(lastId).isFile();int count=0;
         for(int slot=0;slot<4;slot++) {
             boolean exists=source(slot).isFile();if(exists)count++;
-            choices[slot].setEnabled(!busy);rotations[slot].setEnabled(!busy&&exists);cards[slot].setVisibility(multiple||slot==0?View.VISIBLE:View.GONE);
-            mirrors[slot].setEnabled(!busy&&exists);
+            choices[slot].setEnabled(!busy&&!managed);rotations[slot].setEnabled(!busy&&!managed&&exists);cards[slot].setVisibility(multiple||slot==0?View.VISIBLE:View.GONE);
+            mirrors[slot].setEnabled(!busy&&!managed&&exists);
         }
         modeHelp.setText(single?"Une seule photo du sujet entier, de face ou de trois-quarts, avec un fond propre ou transparent. TripoSR estime le volume sur ce téléphone. La photo conserve les détails visibles ; les surfaces cachées utilisent les couleurs IA. Le dos et les zones cachées sont estimés, pas mesurés.":"Quatre vues du même objet entier et dans la même pose : face, dos et deux profils. TripoSR combine quatre formes IA ; Silhouettes propose un calcul plus léger.");
         countLabel.setText(single?(source().isFile()?"1 / 1 image prête. Les autres photos restent conservées.":"0 / 1 image. Choisis une photo dans Face."):multiple?count+" / 4 vues conservées sur ce téléphone. Ajoute les quatre pour générer.":"Une image : volume ou relief approximatif. La photo précédente est conservée dans Face.");
@@ -189,9 +194,9 @@ public final class Offline3DActivity extends AppCompatActivity {
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
         depth.setVisibility(single?View.GONE:View.VISIBLE);depthLabel.setVisibility(single?View.GONE:View.VISIBLE);
         depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
-        tolerance.setEnabled(!busy);quality.setEnabled(!busy);shape.setEnabled(!busy&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
-        ai.setEnabled(!busy);engine.setEnabled(!busy);fourViews.setEnabled(!busy&&!learned);fourViews.setVisibility(single?View.GONE:View.VISIBLE);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
-        projectName.setEnabled(!busy);compare.setEnabled(!busy&&multiple);compare.setVisibility(single?View.GONE:View.VISIBLE);smoothing.setEnabled(!busy&&learned);smoothing.setVisibility(learned?View.VISIBLE:View.GONE);
+        tolerance.setEnabled(!busy&&!managed);quality.setEnabled(!busy&&!managed);shape.setEnabled(!busy&&!managed&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
+        ai.setEnabled(!busy&&!managed);engine.setEnabled(!busy&&!managed);fourViews.setEnabled(!busy&&!managed&&!learned);fourViews.setVisibility(single?View.GONE:View.VISIBLE);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
+        projectName.setEnabled(!busy&&!managed);compare.setEnabled(!busy&&!managed&&multiple);compare.setVisibility(single?View.GONE:View.VISIBLE);smoothing.setEnabled(!busy&&!managed&&learned);smoothing.setVisibility(learned?View.VISIBLE:View.GONE);
     }
     private void saveBitmap(Bitmap bitmap,File target)throws IOException{
         File part=new File(target.getPath()+".part");try{
