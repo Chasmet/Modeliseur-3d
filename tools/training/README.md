@@ -122,3 +122,41 @@ Les deux entraînent uniquement le petit décodeur partagé, jamais l’encodeur
 Références primaires : [TripoSR officiel](https://github.com/VAST-AI-Research/TripoSR),
 [rapport technique](https://arxiv.org/abs/2403.02151),
 [poids officiels et licence](https://huggingface.co/stabilityai/TripoSR).
+
+## Ressources publiques attribuées
+
+`fetch_public_references.py` prépare un petit corpus Objaverse à partir d’UID
+explicitement sélectionnés. Il conserve les auteurs, les liens source, les
+licences individuelles CC-BY/CC0 et les empreintes des fichiers et métadonnées.
+Le fichier `public-manifest.json` fixe les rôles par objet **et par auteur avant
+la première inférence**. Les quatre vues sont rendues sur CPU ; les squelettes,
+animations, matériaux transparents, volumes non fiables et doublons sont refusés.
+Une inspection des rendus reste nécessaire : un nom « personnage » ne prouve
+pas que le modèle représente un corps humain complet.
+
+```sh
+OPENBLAS_NUM_THREADS=2 python tools/training/fetch_public_references.py \
+  --output build/training/resources --count 8 --uids <UID1> <UID2> ...
+OPENBLAS_NUM_THREADS=2 python tools/training/train_public_decoder.py \
+  build/training/resources/public-manifest.json \
+  --steps 800 --output build/training/public-001
+```
+
+Le programme ajuste le vrai décodeur publié, avec fusion quatre vues et rejeu
+des références synthétiques. Les mêmes gardes par objet refusent les pertes
+d’IoU, de précision et de rappel. Les références publiques sont retirées des
+gradients pour la validation et le test, mais leur appartenance à l’entraînement
+initial de TripoSR reste inconnue. Les anciens tests synthétiques déjà consultés
+servent de contrôles de régression. Aucun gain sur ces rendus n’est une mesure
+de qualité sur les photos personnelles ni une autorisation de modifier l’APK.
+
+Sources à explorer :
+
+- [Objaverse](https://huggingface.co/datasets/allenai/objaverse) : base ODC-By,
+  licences distinctes par objet ; vérifier les métadonnées de chaque référence.
+- [Objaverse++](https://github.com/TCXX/ObjaversePlusPlus) : annotations de qualité
+  pour sélectionner des modèles ; ne remplace pas les licences individuelles.
+- [YCB](https://ycb-benchmarks.s3.amazonaws.com/index.html) : scans, textures et
+  photographies sous CC-BY 4.0 ; objets du quotidien, pas un corpus de personnes.
+- [Google Scanned Objects](https://research.google/pubs/google-scanned-objects-a-high-quality-dataset-of-3d-scanned-household-items/)
+  : scans d’objets sous CC-BY 4.0 ; autre possibilité pour varier les géométries.
