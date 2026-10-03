@@ -8,7 +8,7 @@ import time
 
 os.environ['MODELISEUR_DATA'] = tempfile.mkdtemp(prefix='modeliseur-tests-')
 from backend import server
-from PIL import Image
+from PIL import Image, ImageColor
 from starlette.testclient import TestClient
 import pytest
 
@@ -50,11 +50,11 @@ def test_private_images_bounded_upload_and_invalid_json(client):
     ref = image(client, a)
     with Image.open(server.DATA / (ref + '.png')) as im: assert im.size == (1024, 512)
     assert client.get('/api/jobs', headers=b).json()['references'] == []
-    assert client.post('/api/jobs', headers=b, json={'reference_id': ref}).status_code == 404
+    assert client.post('/api/jobs', headers=b, json={'reference_id': ref}).status_code == 410
     assert client.get('/api/jobs').status_code == 401
     assert client.post('/api/images', headers=a, content=b'not an image').status_code == 400
     assert client.post('/api/images', headers=a, content=b'x' * (server.MAX_IMAGE + 1)).status_code == 413
-    assert client.post('/api/jobs', headers=a, json=[]).status_code == 400
+    assert client.post('/api/jobs', headers=a, json=[]).status_code == 410
 
 def test_android_heartbeat_marks_device_online(client):
     a = enroll(client)
@@ -134,37 +134,52 @@ def test_open_mcp_queues_android_local_generation(client):
     assert client.get('/public/local/' + model_id + '/file').content == glb
 
 
-def test_legacy_remote_api_remains_device_isolated(client, monkeypatch):
-    a, b = enroll(client), enroll(client)
-    ref = image(client, a)
-    def fake_generate(job):
-        folder = server.DATA / job['id']; folder.mkdir(exist_ok=True)
-        (folder / 'model.glb').write_bytes(b'glTF-test')
-        server.update_job(job['id'], 'ready', 'GLB prêt.')
-    monkeypatch.setattr(server, 'generate_sync', fake_generate)
-    result = client.post('/api/jobs', headers=a, json={'reference_id': ref})
-    assert result.status_code == 202
-    job = result.json()['id']
-    for _ in range(30):
-        if client.get('/api/jobs', headers=a).json()['jobs'][0]['status'] == 'ready': break
-        time.sleep(.01)
-    assert client.get('/api/jobs/' + job + '/file', headers=a).content == b'glTF-test'
-    assert client.get('/api/jobs/' + job + '/file', headers=b).status_code == 404
+def test_remote_generation_is_disabled(client):
+    a = enroll(client)
+    reference = image(client, a)
+    response = client.post('/api/jobs', headers=a, json={'reference_id': reference})
+    assert response.status_code == 410
+    assert 'locaux' in response.json()['error']
+    assert client.get('/api/jobs', headers=a).json()['jobs'] == []
+    assert not hasattr(server, 'generate_sync')
 
 
-def test_gpu_quota_does_not_retry_or_leak_credentials(client, monkeypatch):
-    a = enroll(client); ref = image(client, a); calls = []
-    def quota(job):
-        calls.append(job['id'])
-        raise RuntimeError('ZeroGPU quota exceeded https://secret/token hf_private')
-    monkeypatch.setattr(server, 'generate_sync', quota)
-    r = client.post('/api/jobs', headers=a, json={'reference_id': ref})
-    assert r.status_code == 202
-    for _ in range(30):
-        result = client.get('/api/jobs', headers=a).json()['jobs'][0]
-        if result['status'] == 'quota': break
-        time.sleep(.01)
-    assert result['status'] == 'quota'
-    assert len(calls) == 1
-    assert 'hf_private' not in json.dumps(result)
-    assert 'https://' not in json.dumps(result)
+def test_transparency_and_four_view_order_survive_mcp(client):
+    a = enroll(client)
+    client.get('/api/poll', headers=a)
+    images = []
+    for color in ['red', 'green', 'blue', 'yellow']:
+        out = io.BytesIO()
+        image = Image.new('RGBA', (20, 20), (0, 0, 0, 0))
+        image.putpixel((10, 10), ImageColor.getrgb(color) + (255,))
+        image.save(out, 'PNG')
+        images.append('base64:' + base64.b64encode(out.getvalue()).decode())
+    result = mcp_result(rpc_open(client, 'tools/call', {
+        'name': 'create_model_from_images',
+        'arguments': {'images': images, 'quality': 'precise'}}))
+    created = json.loads(result['content'][0]['text'])
+    assert created['count'] == 1
+    command = client.get('/api/poll', headers=a).json()['local_commands'][0]
+    assert command['mode'] == 'triposr_four'
+    assert command['options']['quality'] == 'precise'
+    for reference, expected in zip(command['references'], [(255,0,0), (0,128,0), (0,0,255), (255,255,0)]):
+        with Image.open(server.DATA / (reference + '.png')) as actual:
+            assert actual.getpixel((0,0))[3] == 0
+            assert actual.getpixel((10,10))[:3] == expected
+    assert client.post('/api/clear', headers=a).status_code == 409
+
+
+def test_three_images_queue_three_independent_models_and_reject_invalid_glb(client):
+    a = enroll(client)
+    client.get('/api/poll', headers=a)
+    out = io.BytesIO()
+    Image.new('RGB', (20,20), 'red').save(out, 'PNG')
+    data = 'base64:' + base64.b64encode(out.getvalue()).decode()
+    result = mcp_result(rpc_open(client, 'tools/call', {
+        'name': 'create_model_from_images', 'arguments': {'images': [data]*3}}))
+    assert json.loads(result['content'][0]['text'])['count'] == 3
+    commands = client.get('/api/poll', headers=a).json()['local_commands']
+    assert len(commands) == 3
+    assert all(c['mode'] == 'triposr_single' for c in commands)
+    bad_glb = b'glTF' + (1).to_bytes(4, 'little') + (12).to_bytes(4, 'little')
+    assert client.post('/api/local/' + commands[0]['id'] + '/result', headers=a, content=bad_glb).status_code == 400

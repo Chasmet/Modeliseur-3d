@@ -1,4 +1,4 @@
-"""Android relay and stateless Streamable HTTP MCP. One GPU job at a time.
+"""Android local-engine relay and stateless Streamable HTTP MCP.
 
 The public /mcp endpoint deliberately has no authentication for the owner's private setup.
 Legacy per-device capability URLs remain supported for backward compatibility.
@@ -19,7 +19,6 @@ from pathlib import Path
 import secrets
 import shutil
 import sqlite3
-import subprocess
 import time
 from urllib.parse import urlsplit
 
@@ -39,8 +38,6 @@ DATA = Path(os.environ.get('MODELISEUR_DATA', '/tmp/modeliseur-data'))
 DATA.mkdir(parents=True, exist_ok=True)
 Image.MAX_IMAGE_PIXELS = 16_000_000
 owner_context = ContextVar('device')
-tasks = set()
-gpu_lock = asyncio.Lock()
 MAX_IMAGE = 8 * 1024 * 1024
 PUBLIC_OWNER = '__public__'
 
@@ -181,7 +178,7 @@ def store_reference_bytes(owner, raw):
             image.load()
             image.thumbnail((1024, 1024))
             reference_id = secrets.token_hex(16)
-            image.convert('RGB').save(DATA / (reference_id + '.png'))
+            image.convert('RGBA' if image.mode in ('RGBA', 'LA', 'P') else 'RGB').save(DATA / (reference_id + '.png'))
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
         raise ValueError('Image invalide.') from error
     with db() as c:
@@ -263,65 +260,6 @@ def update_job(job_id, status, message):
     with db() as c:
         c.execute('UPDATE jobs SET status=?,message=? WHERE id=?', (status, message, job_id))
 
-def generate_sync(job):
-    # Fixed official endpoint only: never fetch an arbitrary URL supplied by MCP.
-    from gradio_client import Client, handle_file
-    folder = DATA / job['id']
-    folder.mkdir(exist_ok=True)
-    client = Client('https://microsoft-trellis-2.hf.space/', token=os.environ.get('HF_TOKEN'),
-                    verbose=False, download_files=str(folder), httpx_kwargs={'timeout': 90})
-    client.predict(api_name='/start_session')
-    prepared = client.predict(input=handle_file(str(DATA / (job['reference'] + '.png'))), api_name='/preprocess_image')
-    update_job(job['id'], 'running', 'Calcul TRELLIS.2 sur le GPU distant…')
-    client.predict(image=handle_file(prepared), seed=secrets.randbelow(2**31), resolution='512', api_name='/image_to_3d')
-    update_job(job['id'], 'running', 'Export mobile : 100 000 triangles, texture 1 024 pixels…')
-    result = client.predict(decimation_target=100_000, texture_size=1024, api_name='/extract_glb')
-    source = Path(result[0] if isinstance(result, (list, tuple)) else result)
-    if source.stat().st_size > 64 * 1024 * 1024:
-        raise ValueError('Export exceeds mobile limit')
-    output = folder / 'model.glb'
-    process = subprocess.run(['node', str(ROOT / 'tools/trellis/mobile.mjs'), str(source), str(output),
-                              'humanoid' if job['rig'] else 'none'],
-                             capture_output=True, text=True, timeout=180, check=True)
-    info = json.loads(process.stdout.strip().splitlines()[-1])
-    update_job(job['id'], 'ready', info.get('warning') or 'GLB prêt. Animation procédurale ajoutée.' if info.get('added')
-               else info.get('warning') or 'GLB prêt sans animation.')
-    # Gradio intermediate files and latents are not exposed by the API.
-    for child in folder.iterdir():
-        if child != output:
-            if child.is_dir(): shutil.rmtree(child)
-            else: child.unlink()
-
-async def run_job(job):
-    async with gpu_lock:
-        try:
-            update_job(job['id'], 'running', 'Connexion au moteur distant…')
-            await asyncio.to_thread(generate_sync, job)
-        except Exception as error:
-            # Do not leak tokens, URLs, file paths or uploaded images from upstream errors.
-            quota = any(s in str(error).lower() for s in ('quota', 'zerogpu'))
-            update_job(job['id'], 'quota' if quota else 'error',
-                       'Quota GPU atteint. Réessaye après sa remise à zéro ; aucun nouvel essai automatique.' if quota
-                       else 'Le moteur distant est indisponible ou son export a échoué. Relance manuelle nécessaire.')
-
-def start_job(owner, reference_id, humanoid=False):
-    with db() as c:
-        ref = c.execute('SELECT id FROM refs WHERE id=? AND device=?', (reference_id, owner)).fetchone()
-        count = c.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
-        own = c.execute('SELECT COUNT(*) FROM jobs WHERE device=?', (owner,)).fetchone()[0]
-        if not ref or not (DATA / (reference_id + '.png')).is_file():
-            raise HTTPException(404, 'Image introuvable.')
-        if count >= 4 or own >= 12:
-            raise HTTPException(429, 'Limite de travaux atteinte. Attends ou efface les anciens travaux.')
-        job_id = secrets.token_hex(16)
-        c.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)',
-                  (job_id, owner, reference_id, 'queued', 'En attente du GPU distant…', int(humanoid), time.time()))
-    job = job_for(owner, job_id)
-    task = asyncio.create_task(run_job(job))
-    tasks.add(task)
-    task.add_done_callback(tasks.discard)
-    return job
-
 async def payload(request):
     try:
         value = await request.json()
@@ -331,7 +269,7 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.3.6-mcp.local1',
+    return JSONResponse({'ok': True, 'version': '6.3.7-mcp.local2',
                          'generation': 'android_local_triposr',
                          'mcp': 'streamable_http', 'mcp_auth': 'none',
                          'mcp_path': '/mcp', 'direct_images': True})
@@ -372,8 +310,7 @@ async def jobs_api(request):
     owner = device(request)
     if request.method == 'GET':
         return JSONResponse({'jobs': rows('jobs', owner), 'references': rows('refs', owner)})
-    data = await payload(request)
-    return JSONResponse(start_job(owner, data.get('reference_id', ''), data.get('humanoid') is True), status_code=202)
+    raise HTTPException(410, 'Le calcul distant a été désactivé. Utilise les moteurs locaux Android via le MCP.')
 
 async def download(request):
     owner = device(request)
@@ -432,6 +369,8 @@ async def local_result(request):
             raise HTTPException(413, 'GLB supérieur à 64 Mo.')
     if len(raw) < 12 or bytes(raw[:4]) != b'glTF':
         raise HTTPException(400, 'GLB invalide.')
+    if int.from_bytes(raw[4:8], 'little') != 2:
+        raise HTTPException(400, 'Version GLB invalide.')
     declared = int.from_bytes(raw[8:12], 'little', signed=False)
     if declared != len(raw):
         raise HTTPException(400, 'GLB incomplet.')
@@ -491,6 +430,8 @@ async def clear(request):
     with db() as c:
         if c.execute("SELECT COUNT(*) FROM jobs WHERE device=? AND status IN ('queued','running')", (owner,)).fetchone()[0]:
             raise HTTPException(409, 'Attends la fin du travail en cours.')
+        if c.execute("SELECT COUNT(*) FROM local_commands WHERE device=? AND status IN ('pending','running')", (owner,)).fetchone()[0]:
+            raise HTTPException(409, 'Attends la fin des commandes locales en cours.')
         for row in rows('refs', owner): (DATA / (row['id'] + '.png')).unlink(missing_ok=True)
         for row in rows('jobs', owner): shutil.rmtree(DATA / row['id'], ignore_errors=True)
         for row in local_rows(owner): shutil.rmtree(DATA / ('local-' + row['id']), ignore_errors=True)
@@ -548,7 +489,8 @@ def list_models_and_images() -> dict:
 async def create_model_from_images(images: list[str], engine: str = 'auto',
                                    quality: str = 'balanced', smoothing: bool = True) -> dict:
     """Send one to four user images to the Android app and create GLB models with its built-in local engines.
-    With four images, auto/TripoSR uses the app's four-view TripoSR fusion.
+    With four images, provide exactly: front, back, right profile, left profile, in the same pose.
+    Auto/TripoSR uses the app's four-view TripoSR fusion.
     With one image, it uses local single-image TripoSR.
     With two or three images, one independent single-image model is queued per image.
     Set engine to 'silhouettes' to use the lighter local silhouette engine instead.

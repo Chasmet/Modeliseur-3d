@@ -1,92 +1,85 @@
-# TRELLIS.2 Android + MCP (V6.0.0)
+# MCP Modéliseur 3D — moteurs locaux Android (6.3.7)
 
-L'APK possède un écran TRELLIS.2/MCP, un sélecteur d'image, une connexion HTTPS,
-le suivi de génération, un téléchargement GLB, l'ouverture et la lecture des animations dans l'APK
-et l'export par le sélecteur Android. Aucun compte OpenAI/API payante n'est nécessaire.
-Les modèles TRELLIS.2 ne sont **pas** exécutés sur le téléphone : leur implémentation
-officielle exige CUDA/NVIDIA. Les 12 Go de RAM du téléphone ne changent pas cela.
-Les modes de reconstruction locale précédents restent disponibles à l'accueil.
+Le MCP pilote les moteurs déjà embarqués dans l’APK : TripoSR, Silhouettes,
+IS-Net et Depth Anything V2. Le serveur transporte les commandes, les images
+et les GLB terminés. Il ne génère pas de géométrie et ne contacte aucun GPU
+Hugging Face. L’ancienne route de génération distante répond HTTP 410 ; les
+anciens GLB restent téléchargeables.
 
-Profil distant mobile : résolution 512, 100 000 triangles, texture 1 024 pixels.
-Images normalisées à 1 024 pixels, transferts par blocs de 64 Ko, GLB limité à
-64 Mo. Le résultat est un GLB standard, sans décodeur Meshopt obligatoire.
-Les animations optionnelles sont des approximations procédurales, adaptées aux
-humanoïdes verticaux ; un rig incompatible conserve le GLB sans animation.
+## Connexion et parcours
 
-## Relais HTTPS sur Render
+URL MCP : `https://modeliseur-trellis-mcp.onrender.com/mcp`.
+Authentification ChatGPT : aucune. Aucun PAT GitHub ou compte IA n’est demandé.
+L’application crée et conserve automatiquement son jeton de liaison local.
+Le MCP utilise le téléphone le plus récemment actif.
 
-Créer un **Web Service Python gratuit** sur la branche qui contient ces fichiers.
-Commande de build :
+Installer la dernière APK et garder l’accueil ou l’atelier IA locale ouvert.
+L’accueil affiche l’état de connexion. Le pont vérifie la file toutes les quatre
+secondes et lance le calcul dans l’atelier sans remplacer les photos personnelles.
+Pendant un calcul, le téléphone reste présent et conserve les commandes suivantes.
+Après chaque GLB, la commande suivante peut démarrer. Quitter l’écran pendant la
+préparation rend la commande à la file ; une erreur d’image est signalée.
 
-```sh
-python -m pip install -r backend/requirements.txt && npm ci --prefix tools/trellis
-```
+`create_model_from_images(images, engine, quality, smoothing)` accepte :
 
-Commande de démarrage :
+- Une image : TripoSR local ou Silhouettes local.
+- Quatre images du même sujet dans la même pose, dans cet ordre : **face, dos,
+  profil droit, profil gauche**. Un seul modèle utilise la fusion de l’application.
+- Deux ou trois images : un modèle indépendant par image, traité successivement.
+
+Les sources sont des URL HTTPS publiques ou des Data URL/base64. Maximum 8 Mo
+par source, réduction à 1 024 pixels et conservation de la transparence PNG.
+`quality` : `fast`, `balanced`, `precise`. `engine` : `auto`, `triposr`, `silhouettes`.
+Les surfaces absentes des photos restent estimées. La fusion de quatre vues
+est celle de l’application ; TripoSR n’est pas un modèle multivue natif.
+
+Les outils `application_status`, `application_capabilities`,
+`list_models_and_images`, `model_status` et `model_download` indiquent la présence,
+les moteurs, la file et le lien du GLB. La réponse indique explicitement une
+exécution Android locale. Le GLB est enregistré sur le téléphone avant sa
+synchronisation : une panne réseau ne supprime pas le fichier local.
+
+La génération manuelle reste possible hors connexion. Le pilotage ChatGPT et la
+synchronisation des entrées/résultats demandent une connexion Internet. Le pont
+fonctionne sur l’accueil et dans l’atelier ; il n’est pas un service permanent
+quand Android ferme l’application.
+
+## Déploiement du relais existant
+
+Web Service Python, branche `agent/trellis-third-tab-auto-update`.
+Build : `python -m pip install -r backend/requirements.txt`.
+Démarrage :
 
 ```sh
 python -m uvicorn backend.server:app --host 0.0.0.0 --port "$PORT" --no-access-log
 ```
 
-Node doit être disponible dans l'environnement de build et d'exécution ; le relais
-ne déclare pas le moteur prêt si l'export Node est absent. Ajouter `HF_TOKEN` seulement
-sur le serveur si un compte Hugging Face est nécessaire. Ne jamais mettre de token
-Hugging Face dans l'APK, le dépôt ou le lien MCP. `RENDER_EXTERNAL_HOSTNAME` permet
-au SDK MCP de valider le Host et est fourni par Render.
-
-Le service Render gratuit peut se mettre en veille, interrompre un travail et perdre
-ses fichiers/SQLite lors d'un redéploiement. Les erreurs et quotas sont affichés sans
-relance automatique. Ce relais utilise la démo officielle Hugging Face, soumise à ses
-quotas et à sa disponibilité, et n'héberge pas lui-même un GPU. Une instance GPU
-dédiée serait une étape séparée. Conserver les GLB via l'export Android.
-Les images/travaux distants restent jusqu'à effacement depuis l'application ou perte
-du stockage éphémère. Le stockage refuse les nouvelles images au-delà de 256 Mo ;
-12 images et 12 travaux maximum par connexion, 2 travaux simultanément en attente,
-1 génération exécutée à la fois. Aucun lien source arbitraire n'est accepté.
-
-## Connexion MCP sans authentification
-
-Le point d'entrée principal est :
-
-`https://modeliseur-trellis-mcp.onrender.com/mcp`
-
-Dans ChatGPT Plugins, choisir **Aucune authentification**. Aucun OAuth, PAT GitHub,
-clé API ni secret n'est demandé par ce MCP. Le relais associe automatiquement les
-commandes au téléphone Android Modéliseur 3D le plus récemment actif. Si aucun
-téléphone n'est connecté, les générations restent dans un espace public éphémère
-du relais jusqu'au prochain redéploiement Render.
-
-Le parcours historique avec un lien privé `/mcp/<capacité>` reste disponible pour
-compatibilité avec les anciennes versions de l'APK, mais il n'est plus nécessaire
-pour le plugin ChatGPT principal.
-
-Outils : `application_status`, `list_models_and_images`,
-`create_model_from_images`, `model_status`, `model_download`,
-`generate_model` et `open_model_on_phone`.
-
-`create_model_from_images` accepte de 1 à 4 images sous forme d'URL HTTPS publique,
-de Data URL base64, de `base64:<données>` ou de base64 brut. Les fichiers sont
-bornés à 8 Mo et normalisés à 1 024 px. TRELLIS.2 étant un moteur mono-vue, plusieurs
-images produisent volontairement plusieurs candidats 3D plutôt qu'une fausse fusion
-multicaméra. L'image la plus informative doit être placée en premier. Le GLB prêt est
-récupérable par `model_download` et peut être demandé à l'ouverture dans l'application.
-
-**Sécurité :** ce choix sans authentification rend `/mcp` accessible depuis Internet.
-Il est volontaire pour cet usage personnel. Les anciennes routes Android restent
-protégées par leur jeton d'appairage ; aucune commande shell ni accès général aux
-fichiers du téléphone n'est exposé.
+`RENDER_EXTERNAL_HOSTNAME` est fourni par Render et vérifie l’hôte MCP.
+Le relais gratuit peut se mettre en veille et perdre ses fichiers/SQLite lors
+d’un redéploiement. Les GLB enregistrés dans l’APK restent disponibles.
+La limite serveur est de 256 Mo, 12 références et quatre commandes en attente
+par téléphone. L’effacement est refusé pendant un travail local actif.
+Les anciens liens privés `/mcp/<capacité>` restent compatibles.
 
 ## Vérification
 
 ```sh
-python -m pip install -r backend/requirements.txt pytest==9.1.1
+python -m pip install -r backend/requirements.txt pytest
 python -m pytest backend/tests -q
+./gradlew --no-daemon -PofflineSmoke testDebugUnitTest lintDebug
 ```
 
-Les tests utilisent le vrai transport MCP et un moteur GPU simulé pour vérifier
-l'isolation, la révocation, l'envoi borné, le cycle commandes/acquittement et l'arrêt
-sur quota. Ils ne valident pas une génération GPU réelle ni le téléphone physique.
+Les tests du relais passent par le vrai transport MCP et vérifient l’isolation,
+les images, l’alpha, l’ordre des quatre vues, la file, le retour GLB et l’absence
+de génération GPU. Les tests Android vérifient les intents, l’attente pendant
+un calcul et la restitution d’une commande quand l’écran quitte le premier plan.
+Les tests TripoSR réalisent une inférence avec les connexions réseau interdites.
+Le téléphone physique n’est pas simulé par un statut de présence en production.
 
-## Signature de publication
+## Signature des mises à jour
 
-`/ci/signing` est réservé au workflow de publication : JWT GitHub OIDC signé, audience/émetteur, IDs du dépôt et du propriétaire, acteur, branche et workflow contrôlés. Les requêtes MCP/Android ne peuvent pas récupérer la clé. La clé V6.0.0 est persistée comme variable privée Render ; pas dans le stockage éphémère ni dans le dépôt. Ne jamais activer les logs d’accès ni afficher la réponse de signature dans les logs CI.
+`/ci/signing` reste réservé au workflow de publication : JWT GitHub OIDC signé,
+audience/émetteur, IDs du dépôt et du propriétaire, acteur, branche et workflow
+contrôlés. La clé Android existante est conservée dans une variable privée Render.
+Les requêtes MCP/Android ne peuvent pas récupérer la clé. Ne jamais activer les
+logs d’accès ni afficher la réponse de signature dans les logs CI.

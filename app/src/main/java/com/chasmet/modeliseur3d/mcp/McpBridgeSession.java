@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BooleanSupplier;
 
 /**
  * Lightweight bridge between ChatGPT MCP and the local Android reconstruction engines.
@@ -28,10 +29,11 @@ public final class McpBridgeSession implements AutoCloseable {
     private static final String PREFS = "mcp_local_bridge";
     private static final String KEY_SERVER = "server";
     private static final String KEY_TOKEN = "token";
+    private static final ExecutorService STATUS_WORKER = Executors.newSingleThreadExecutor();
 
     private final Activity activity;
     private final TextView statusView;
-    private final boolean mayLaunchCommands;
+    private final BooleanSupplier mayLaunchCommands;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean active;
@@ -39,6 +41,10 @@ public final class McpBridgeSession implements AutoCloseable {
     private volatile CloudApi api;
 
     public McpBridgeSession(Activity activity, TextView statusView, boolean mayLaunchCommands) {
+        this(activity, statusView, () -> mayLaunchCommands);
+    }
+
+    public McpBridgeSession(Activity activity, TextView statusView, BooleanSupplier mayLaunchCommands) {
         this.activity = activity;
         this.statusView = statusView;
         this.mayLaunchCommands = mayLaunchCommands;
@@ -72,7 +78,7 @@ public final class McpBridgeSession implements AutoCloseable {
                         api = current;
                         JSONObject response = current.json("/api/poll", null);
                         setStatus("ChatGPT MCP : téléphone connecté");
-                        if (mayLaunchCommands) {
+                        if (mayLaunchCommands.getAsBoolean()) {
                             JSONArray commands = response.optJSONArray("local_commands");
                             if (commands != null && commands.length() > 0) {
                                 prepareAndLaunch(current, commands.getJSONObject(0));
@@ -97,7 +103,8 @@ public final class McpBridgeSession implements AutoCloseable {
         }
     };
 
-    private void prepareAndLaunch(CloudApi current, JSONObject command) throws Exception {
+    void prepareAndLaunch(CloudApi current, JSONObject command) throws Exception {
+        if (!active || !mayLaunchCommands.getAsBoolean()) return;
         String id = CloudApi.id(command.getString("id"));
         try {
             String mode = command.getString("mode");
@@ -117,7 +124,14 @@ public final class McpBridgeSession implements AutoCloseable {
             String quality = options == null ? "balanced" : options.optString("quality", "balanced");
             boolean smoothing = options == null || options.optBoolean("smoothing", true);
             activity.runOnUiThread(() -> {
-                if (!active || activity.isFinishing() || activity.isDestroyed()) return;
+                if (!active || !mayLaunchCommands.getAsBoolean() || activity.isFinishing() || activity.isDestroyed()) {
+                    STATUS_WORKER.execute(() -> {
+                        try { current.updateLocalStatus(id, "pending", "L’application reprendra cette commande à son retour."); }
+                        catch (Exception ignored) { }
+                    });
+                    return;
+                }
+                stop();
                 Intent intent = new Intent(activity, Offline3DActivity.class)
                         .putExtra(Offline3DActivity.EXTRA_MCP_COMMAND_ID, id)
                         .putExtra(Offline3DActivity.EXTRA_MCP_MODE, mode)
@@ -182,7 +196,7 @@ public final class McpBridgeSession implements AutoCloseable {
 
     public static void reportError(Context context, String commandId, String message) {
         if (commandId == null || !commandId.matches("[a-f0-9]{32}")) return;
-        Executors.newSingleThreadExecutor().execute(() -> {
+        STATUS_WORKER.execute(() -> {
             try {
                 ensureApi(context.getApplicationContext()).updateLocalStatus(
                         commandId, "error", message == null ? "Échec du calcul local." : message);

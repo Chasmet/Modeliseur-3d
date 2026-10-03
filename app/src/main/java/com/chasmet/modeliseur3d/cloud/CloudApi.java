@@ -8,7 +8,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /** HTTPS only, no redirects of bearer credentials, bounded streaming transfers. */
-public final class CloudApi {
+public class CloudApi {
     private final String base;
     private final String token;
     public CloudApi(String address, String token) throws IOException {

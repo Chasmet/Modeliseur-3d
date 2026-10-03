@@ -35,7 +35,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     private final LinearLayout[] cards=new LinearLayout[4];
     private static final String[] VIEWS={"Face","Dos","Profil droit","Profil gauche"};
     private CheckBox fourViews;private TextView countLabel;private int selectedSlot;
-    private ProgressBar progress;private boolean busy;private volatile boolean cancelled;private String lastId="";
+    private ProgressBar progress;private volatile boolean busy;private volatile boolean cancelled;private String lastId="";
     private String mcpCommandId="",mcpMode="",mcpQuality="balanced";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
     private McpBridgeSession mcpBridge;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("offline_workshop",MODE_PRIVATE);}
@@ -171,7 +171,8 @@ public final class Offline3DActivity extends AppCompatActivity {
                 buttons();
             }public void onNothingSelected(AdapterView<?> parent){}
         });
-        if(isMcp()&&state==null){
+        if(isMcp()&&!prefs().getBoolean("mcpComplete_"+mcpCommandId,false)){
+            mcpGenerating=true;
             status.setText("Commande ChatGPT reçue. Génération locale automatique…");
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::generate,300);
         }
@@ -366,6 +367,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                 if(isMcp()){
                     message("Modèle créé sur le téléphone. Synchronisation du GLB avec ChatGPT…");
                     McpBridgeSession.uploadResult(this,mcpCommandId,output);
+                    prefs().edit().putBoolean("mcpComplete_"+mcpCommandId,true).apply();
                     mcpGenerating=false;
                 }
                 ui(()->{lastId=id;status.setText((isMcp()?"Commande ChatGPT terminée • ":"Modèle enregistré • ")+triangles+" triangles • "+String.format(Locale.FRANCE,"%.1f Mo",output.length()/1048576.0)+" • "+seconds+" s\n"+method+"\n"+(isMcp()?"GLB synchronisé avec le MCP et conservé sur le téléphone.":"Ouvre-le ou exporte-le sans connexion."));});
@@ -389,7 +391,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     @Override protected void onStart(){
         super.onStart();
         if(mcpBridge!=null)mcpBridge.close();
-        mcpBridge=new McpBridgeSession(this,null,false);
+        mcpBridge=new McpBridgeSession(this,null,()->!busy&&!mcpGenerating);
         mcpBridge.start();
     }
     @Override protected void onStop(){
