@@ -19,7 +19,7 @@ def running_client():
 @pytest.fixture
 def client(running_client):
     with server.db() as c:
-        for table in ('commands', 'jobs', 'refs', 'devices'): c.execute(f'DELETE FROM {table}')
+        for table in ('local_commands', 'commands', 'jobs', 'refs', 'devices'): c.execute(f'DELETE FROM {table}')
     yield running_client
 
 def enroll(client):
@@ -78,8 +78,8 @@ def test_mcp_protocol_tools_device_isolation_and_revocation(client):
     assert 'tools' in init['capabilities']
     listed = mcp_result(rpc(client, token, 'tools/list'))
     assert {t['name'] for t in listed['tools']} == {
-        'application_status', 'list_models_and_images', 'create_model_from_images',
-        'model_status', 'model_download', 'generate_model', 'open_model_on_phone'}
+        'application_status', 'application_capabilities', 'list_models_and_images',
+        'create_model_from_images', 'model_status', 'model_download'}
     own = mcp_result(rpc(client, token, 'tools/call', {'name': 'list_models_and_images', 'arguments': {}}))
     assert ref in str(own)
     token_b = client.post('/api/mcp', headers=b, json={'enabled': True}).json()['mcp_token']
@@ -93,14 +93,9 @@ def test_mcp_protocol_tools_device_isolation_and_revocation(client):
     assert rpc(client, token, 'tools/list').status_code == 401
     assert rpc(client, 'invalid', 'tools/list').status_code == 401
 
-def test_open_mcp_has_no_auth_and_accepts_inline_images(client, monkeypatch):
+def test_open_mcp_queues_android_local_generation(client):
     a = enroll(client)
     client.get('/api/poll', headers=a)
-    def fake_generate(job):
-        folder = server.DATA / job['id']; folder.mkdir(exist_ok=True)
-        (folder / 'model.glb').write_bytes(b'glTF-open-mcp')
-        server.update_job(job['id'], 'ready', 'GLB prêt.')
-    monkeypatch.setattr(server, 'generate_sync', fake_generate)
 
     init = mcp_result(rpc_open(client, 'initialize', {
         'protocolVersion': '2025-06-18', 'capabilities': {},
@@ -112,21 +107,34 @@ def test_open_mcp_has_no_auth_and_accepts_inline_images(client, monkeypatch):
     data_url = 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()
     created = mcp_result(rpc_open(client, 'tools/call', {
         'name': 'create_model_from_images',
-        'arguments': {'images': [data_url]}}))
+        'arguments': {'images': [data_url], 'engine': 'triposr', 'quality': 'balanced'}}))
     payload = json.loads(created['content'][0]['text'])
-    job = payload['primary_job_id']
-    for _ in range(30):
-        status = client.get('/api/jobs', headers=a).json()['jobs'][0]
-        if status['status'] == 'ready': break
-        time.sleep(.01)
-    assert status['status'] == 'ready'
+    model_id = payload['primary_model_id']
+
+    poll = client.get('/api/poll', headers=a).json()
+    assert poll['local_commands'][0]['id'] == model_id
+    assert poll['local_commands'][0]['mode'] == 'triposr_single'
+    reference = poll['local_commands'][0]['references'][0]
+    image_response = client.get(f'/api/local/{model_id}/images/{reference}', headers=a)
+    assert image_response.status_code == 200
+    assert image_response.content.startswith(b'\x89PNG')
+
+    running = client.post(f'/api/local/{model_id}/status', headers=a,
+                          json={'status': 'running', 'message': 'Calcul local'}).json()
+    assert running['status'] == 'running'
+
+    glb = b'glTF' + (2).to_bytes(4, 'little') + (12).to_bytes(4, 'little')
+    ready = client.post(f'/api/local/{model_id}/result', headers=a, content=glb)
+    assert ready.status_code == 200
+    assert ready.json()['status'] == 'ready'
+
     download = mcp_result(rpc_open(client, 'tools/call', {
-        'name': 'model_download', 'arguments': {'job_id': job}}))
-    assert '/public/jobs/' + job + '/file' in str(download)
-    assert client.get('/public/jobs/' + job + '/file').content == b'glTF-open-mcp'
+        'name': 'model_download', 'arguments': {'model_id': model_id}}))
+    assert '/public/local/' + model_id + '/file' in str(download)
+    assert client.get('/public/local/' + model_id + '/file').content == glb
 
 
-def test_job_download_and_mcp_command_round_trip(client, monkeypatch):
+def test_legacy_remote_api_remains_device_isolated(client, monkeypatch):
     a, b = enroll(client), enroll(client)
     ref = image(client, a)
     def fake_generate(job):
@@ -134,25 +142,15 @@ def test_job_download_and_mcp_command_round_trip(client, monkeypatch):
         (folder / 'model.glb').write_bytes(b'glTF-test')
         server.update_job(job['id'], 'ready', 'GLB prêt.')
     monkeypatch.setattr(server, 'generate_sync', fake_generate)
-    token = client.post('/api/mcp', headers=a, json={'enabled': True}).json()['mcp_token']
-    result = mcp_result(rpc(client, token, 'tools/call', {
-        'name': 'generate_model', 'arguments': {'reference_id': ref}}))
-    job = json.loads(result['content'][0]['text'])['id']
+    result = client.post('/api/jobs', headers=a, json={'reference_id': ref})
+    assert result.status_code == 202
+    job = result.json()['id']
     for _ in range(30):
         if client.get('/api/jobs', headers=a).json()['jobs'][0]['status'] == 'ready': break
         time.sleep(.01)
     assert client.get('/api/jobs/' + job + '/file', headers=a).content == b'glTF-test'
     assert client.get('/api/jobs/' + job + '/file', headers=b).status_code == 404
-    mcp_result(rpc(client, token, 'tools/call', {'name': 'open_model_on_phone', 'arguments': {'job_id': job}}))
-    assert client.get('/api/poll', headers=b).json()['commands'] == []
-    command = client.get('/api/poll', headers=a).json()['commands'][0]['id']
-    client.post('/api/commands/' + command + '/ack', headers=b)
-    assert len(client.get('/api/poll', headers=a).json()['commands']) == 1
-    client.post('/api/commands/' + command + '/ack', headers=a)
-    assert client.get('/api/poll', headers=a).json()['commands'] == []
-    client.post('/api/clear', headers=a)
-    assert not (server.DATA / job).exists()
-    assert not (server.DATA / (ref + '.png')).exists()
+
 
 def test_gpu_quota_does_not_retry_or_leak_credentials(client, monkeypatch):
     a = enroll(client); ref = image(client, a); calls = []
