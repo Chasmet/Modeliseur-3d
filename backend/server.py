@@ -1,6 +1,7 @@
-"""Private Android relay and stateless Streamable HTTP MCP. One GPU job at a time.
+"""Android relay and stateless Streamable HTTP MCP. One GPU job at a time.
 
-Capability URLs are secrets. Disable access logging; never publish the link.
+The public /mcp endpoint deliberately has no authentication for the owner's private setup.
+Legacy per-device capability URLs remain supported for backward compatibility.
 Local SQLite/files survive process restarts, not ephemeral Render redeploys.
 """
 import asyncio
@@ -258,7 +259,7 @@ async def payload(request):
         raise HTTPException(400, 'Corps JSON invalide.')
 
 async def health(request):
-    return JSONResponse({'ok': True, 'version': '6.0.0', 'generation': 'remote_trellis2', 'mcp': 'streamable_http'})
+    return JSONResponse({'ok': True, 'version': '6.3.2-mcp.1', 'generation': 'remote_trellis2', 'mcp': 'streamable_http', 'mcp_auth': 'none', 'mcp_path': '/mcp', 'direct_images': True})
 
 async def register(request):
     # Device enrollment only creates an isolated empty account, never grants access to existing devices.
@@ -416,6 +417,8 @@ def open_model_on_phone(job_id: str) -> dict:
     """
     owner = owner_context.get()
     if job_for(owner, job_id)['status'] != 'ready': raise ValueError('GLB pas encore prêt.')
+    if owner == PUBLIC_OWNER:
+        raise ValueError('Aucun téléphone Modéliseur 3D n’est actuellement associé à ce MCP.')
     with db() as c:
         if c.execute('SELECT COUNT(*) FROM commands WHERE device=? AND acknowledged=0', (owner,)).fetchone()[0] >= 8:
             raise ValueError('Trop de commandes en attente.')
