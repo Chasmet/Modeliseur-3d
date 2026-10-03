@@ -160,3 +160,22 @@ Sources à explorer :
   photographies sous CC-BY 4.0 ; objets du quotidien, pas un corpus de personnes.
 - [Google Scanned Objects](https://research.google/pubs/google-scanned-objects-a-high-quality-dataset-of-3d-scanned-household-items/)
   : scans d’objets sous CC-BY 4.0 ; autre possibilité pour varier les géométries.
+
+`--sampling stratified` réserve la moitié du lot aux points occupés et la moitié
+aux points vides. Les poids d’importance compensent exactement les probabilités
+d’échantillonnage : la cible reste la BCE de la population, sans favoriser
+artificiellement les volumes pleins. Les gradients pondérés et la correction
+des proportions sont vérifiés par différences finies et contrôles analytiques.
+Cette réduction de variance ne répare pas un encodage ou un alignement incorrect.
+
+```sh
+OPENBLAS_NUM_THREADS=2 python tools/training/train_public_decoder.py \
+  build/training/resources/public-manifest.json --sampling stratified \
+  --reuse-cache build/training/public-001 --steps 800 \
+  --output build/training/public-002
+```
+
+Le réemploi exige les mêmes objets, empreintes, auteurs, licences et rôles.
+Les caches d’encodeur et de géométrie conservent aussi leurs propres clés de
+validation. Chaque optimisation repart des poids publiés, pas du dernier
+checkpoint refusé. La validation seule guide la sélection.

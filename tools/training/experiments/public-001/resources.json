@@ -1,0 +1,197 @@
+{
+  "version": "objaverse-pilot-v1",
+  "dataset_url": "https://huggingface.co/datasets/allenai/objaverse",
+  "dataset_license": "ODC-By 1.0",
+  "object_paths_sha256": "db88ff78942613f10566ec4723fb8b8f558c37ffe8e78a8fc5428a20b93886a0",
+  "references": [
+    {
+      "id": "obj-06923953e80342e4bb1f378110a5deaf",
+      "uid": "06923953e80342e4bb1f378110a5deaf",
+      "name": "Layer Michael SGD214 Low Poly Character",
+      "author": "mlayer00",
+      "author_id": "17fc52d68dbf4a44a9541e3a26f3dcd9",
+      "author_url": "https://sketchfab.com/mlayer00",
+      "source_url": "https://sketchfab.com/3d-models/06923953e80342e4bb1f378110a5deaf",
+      "download_path": "glbs/000-000/06923953e80342e4bb1f378110a5deaf.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "86cd22f7b702f4bf0aaa695a47cc95b31d362f1d215502a778c65496e8fb2a6b",
+      "metadata_sha256": "6ad1e0398b17cab9f2e7a956d312a36a9ac88e55baa08b0926ba300f506d11f7",
+      "reliable_fraction": 0.9996355685131195,
+      "closed_components": 4,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "train"
+    },
+    {
+      "id": "obj-dbd5967529474547b4777c7a1f6312b0",
+      "uid": "dbd5967529474547b4777c7a1f6312b0",
+      "name": "Swordsman 1",
+      "author": "Artbake Graphics",
+      "author_id": "e77c746ac0854a8aaf9e09810f96d1f6",
+      "author_url": "https://sketchfab.com/artbake_graphics",
+      "source_url": "https://sketchfab.com/3d-models/dbd5967529474547b4777c7a1f6312b0",
+      "download_path": "glbs/000-000/dbd5967529474547b4777c7a1f6312b0.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "804bea50581e1bcb0c3096da5765d8c426eb6b16b236ec04e81b34b5d6b461cd",
+      "metadata_sha256": "9533e8fa10a0f595c1ca6233620b3d6a4b9b655ff06491db09a4761d0bf0ff86",
+      "reliable_fraction": 0.9294369533527697,
+      "closed_components": 2,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "train"
+    },
+    {
+      "id": "obj-b253b8b5f70a439284655047d8a0c23b",
+      "uid": "b253b8b5f70a439284655047d8a0c23b",
+      "name": "wooden man",
+      "author": "BlueRabbit04",
+      "author_id": "805f941aa06b449ca1309dabcd74739e",
+      "author_url": "https://sketchfab.com/bluerabbit04",
+      "source_url": "https://sketchfab.com/3d-models/b253b8b5f70a439284655047d8a0c23b",
+      "download_path": "glbs/000-000/b253b8b5f70a439284655047d8a0c23b.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "6a1ccdd60ec0b4135405ef754adc6d6c341eccbc97a93e7973daa51d15aa0265",
+      "metadata_sha256": "1ca81270f651470446b778166301d54292a98ea0c2985d942df4cec60b7f71ed",
+      "reliable_fraction": 1.0,
+      "closed_components": 1,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "validation"
+    },
+    {
+      "id": "obj-f265e07cc1394f78a5fe59148f84a15c",
+      "uid": "f265e07cc1394f78a5fe59148f84a15c",
+      "name": "Training mannequin",
+      "author": "UCAM University",
+      "author_id": "c3c86add36c6493496ef6b8a7cb2d2c8",
+      "author_url": "https://sketchfab.com/ucam",
+      "source_url": "https://sketchfab.com/3d-models/f265e07cc1394f78a5fe59148f84a15c",
+      "download_path": "glbs/000-000/f265e07cc1394f78a5fe59148f84a15c.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "22c93cccb0da3d34705a4cf24734e6ff0aeae8228b31f4436cb4490ea8ade851",
+      "metadata_sha256": "80900a463919c588ca651c5b5019e53c4c5f9648eb061f432fe038f26186cf42",
+      "reliable_fraction": 1.0,
+      "closed_components": 1,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "test"
+    },
+    {
+      "id": "obj-d11d8167023e49beba284283446db700",
+      "uid": "d11d8167023e49beba284283446db700",
+      "name": "Roberto bûcheron",
+      "author": "sebastian macias",
+      "author_id": "637be4ac006b48b088072bb24fc21ca2",
+      "author_url": "https://sketchfab.com/msebas.macias",
+      "source_url": "https://sketchfab.com/3d-models/d11d8167023e49beba284283446db700",
+      "download_path": "glbs/000-000/d11d8167023e49beba284283446db700.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "9fbe80702a4de99cb8bfb90ad8626983741d6f21f3eaeb3b230a0761580f252d",
+      "metadata_sha256": "7b336474c512e0e2dadc8d38fb06d31324611995fba0c790eb639ccfa478d087",
+      "reliable_fraction": 0.9917091836734694,
+      "closed_components": 80,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "train"
+    },
+    {
+      "id": "obj-5aaf34c3eb5e44c5a40a03c7569fa8c5",
+      "uid": "5aaf34c3eb5e44c5a40a03c7569fa8c5",
+      "name": "Emergent Media Robot",
+      "author": "hunter40853",
+      "author_id": "f60fb949bc0f4b3cb01051b1bc3ca441",
+      "author_url": "https://sketchfab.com/hunter40853",
+      "source_url": "https://sketchfab.com/3d-models/5aaf34c3eb5e44c5a40a03c7569fa8c5",
+      "download_path": "glbs/000-000/5aaf34c3eb5e44c5a40a03c7569fa8c5.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "9fd3008d1b7d84712dd4eb1df5b12af7fcb68d12688b4a10b41a20c5b040bcf1",
+      "metadata_sha256": "fec40212cce8199bc51c32d7d75ff1e1c5486aebf8be1792492ccf57369582cb",
+      "reliable_fraction": 1.0,
+      "closed_components": 68,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "train"
+    },
+    {
+      "id": "obj-278532499c9048b688ba6840e19e76f9",
+      "uid": "278532499c9048b688ba6840e19e76f9",
+      "name": "Mini Robot",
+      "author": "efforya",
+      "author_id": "217c64f9af6344f6b340862d2941da79",
+      "author_url": "https://sketchfab.com/efforya",
+      "source_url": "https://sketchfab.com/3d-models/278532499c9048b688ba6840e19e76f9",
+      "download_path": "glbs/000-000/278532499c9048b688ba6840e19e76f9.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "a06997d4c5715ce6ba726cb620876e363b4fe724a3dff51a1595bbc212f857f2",
+      "metadata_sha256": "7b2713b1fb99081144634b09b6d6ec65cb1c1a4280c44bab4ac0183c22aef7e1",
+      "reliable_fraction": 0.921875,
+      "closed_components": 24,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "validation"
+    },
+    {
+      "id": "obj-97989d443ac048acb6bb42a2f82c6324",
+      "uid": "97989d443ac048acb6bb42a2f82c6324",
+      "name": "Lamb statuette. Photogrametry",
+      "author": "Dmytro Rohovyi",
+      "author_id": "0d7c833970c94b889c6b619a12009bc9",
+      "author_url": "https://sketchfab.com/dmitriyslavyanskiy",
+      "source_url": "https://sketchfab.com/3d-models/97989d443ac048acb6bb42a2f82c6324",
+      "download_path": "glbs/000-000/97989d443ac048acb6bb42a2f82c6324.glb",
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "sha256": "40f6d0ec8fda48837b1c8a77dfd877b1b694cbe780f040284f4fd4937923b2da",
+      "metadata_sha256": "8c0db9ff864fcbca0ea88238329ecfa3120aedb6ff33a34fcf4a8938a0dd0fd4",
+      "reliable_fraction": 1.0,
+      "closed_components": 1,
+      "reference_kind": "public authored mesh; scan status not independently established",
+      "split": "test"
+    }
+  ],
+  "rejected": [
+    {
+      "uid": "191e8d6b334e48e59362472ba52c9ab3",
+      "name": "The Watcher",
+      "reason": "Insufficient trustworthy volume for occupancy supervision"
+    },
+    {
+      "uid": "a653f530e40a442d842a6170db63831d",
+      "name": "Boy",
+      "reason": "Insufficient trustworthy volume for occupancy supervision"
+    },
+    {
+      "uid": "0f2f8b18671c467fa210057f140ad26e",
+      "name": "MAN4",
+      "reason": "Required GLB extensions are not supported by this importer"
+    },
+    {
+      "uid": "2db3cade1b06478ab36a4fa48ac91c68",
+      "name": "Modelo Humano",
+      "reason": "No closed, consistently wound solids; volume training refused"
+    },
+    {
+      "uid": "6279c0f18623412c8359adf959fa0eb0",
+      "name": "Sluur In A Ninja Suit",
+      "reason": "Insufficient trustworthy volume for occupancy supervision"
+    },
+    {
+      "uid": "e149897ddf354aa18dfcf27e6a78921d",
+      "name": "butterfly girl",
+      "reason": "Insufficient trustworthy volume for occupancy supervision"
+    },
+    {
+      "uid": "ccda4c4b83d9400a82732a6dc098d933",
+      "name": "Girl model 01",
+      "reason": "Insufficient trustworthy volume for occupancy supervision"
+    },
+    {
+      "uid": "042691a0afb8497798bc50174f633e68",
+      "name": "Firefighter (free download)",
+      "reason": "Transparent materials need a separate surface supervision policy"
+    }
+  ],
+  "views_per_object": 4,
+  "split_policy": "distinct objects and authors; fixed before inference; no metric filtering",
+  "production_approved": false
+}

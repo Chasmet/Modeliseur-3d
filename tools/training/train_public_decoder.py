@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 
 from fetch_public_references import LICENSES, ROOT, digest
 
@@ -33,6 +34,8 @@ def main():
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=800)
+    parser.add_argument("--sampling", choices=("uniform", "stratified"), default="uniform")
+    parser.add_argument("--reuse-cache", type=Path)
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     records = validate_manifest(manifest)
@@ -40,9 +43,17 @@ def main():
     if ROOT/"build" not in output.parents or output.exists():
         raise ValueError("Use a new experiment directory inside ignored build/")
     output.mkdir(parents=True)
+    if args.reuse_cache:
+        previous = args.reuse_cache.resolve()
+        if ROOT/"build" not in previous.parents:
+            raise ValueError("Cache must come from ignored build/")
+        from fetch_public_references import verify_lock
+        verify_lock(json.loads((previous/"public-provenance.json").read_text()), manifest)
+        for name in ("scenes", "references"):
+            shutil.copytree(previous/name, output/name)
     command = [sys.executable, str(Path(__file__).with_name("train_mesh_decoder.py")),
                "--steps", str(args.steps), "--objective", "four-view", "--grid", "28",
-               "--output", str(output)]
+               "--sampling", args.sampling, "--output", str(output)]
     for record in records:
         if digest(record["source_path"]) != record["sha256"]:
             raise ValueError("Downloaded reference content changed")

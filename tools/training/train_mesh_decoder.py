@@ -26,6 +26,24 @@ from train_decoder import (ASSETS, ROOT, FAMILIES, SPLITS, digest, session,
 VERSION = "private-mesh-decoder-v2"
 
 
+def point_batch(labels, rng, size, policy):
+    """Reduce rare-solid sampling variance without changing the BCE objective."""
+    if policy == "uniform":
+        return rng.integers(len(labels), size=size), np.ones(size)
+    if policy != "stratified" or size < 2:
+        raise ValueError("Unknown point sampling policy or too small batch")
+    positive, negative = np.flatnonzero(labels == 1), np.flatnonzero(labels == 0)
+    if len(positive)+len(negative) != len(labels):
+        raise ValueError("Stratification requires binary occupancy targets")
+    if not len(positive) or not len(negative):
+        return rng.integers(len(labels), size=size), np.ones(size)
+    n_positive = size//2
+    indices = np.concatenate([rng.choice(positive, n_positive), rng.choice(negative, size-n_positive)])
+    weights = np.concatenate([np.full(n_positive, len(positive)/len(labels)*size/n_positive),
+                              np.full(size-n_positive, len(negative)/len(labels)*size/(size-n_positive))])
+    return indices, weights
+
+
 def reference_specs(args):
     records, names, hashes = [], set(), set()
     for split in ("train", "validation", "test"):
@@ -131,6 +149,7 @@ def main():
                             metavar=("IDENTIFIER", "LOCAL_GLB"))
     parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--objective", choices=("per-view", "four-view"), default="per-view")
+    parser.add_argument("--sampling", choices=("uniform", "stratified"), default="uniform")
     parser.add_argument("--grid", type=int, choices=(28, 40, 48), default=40)
     parser.add_argument("--encoder-threads", type=int, choices=range(1, 9), default=6)
     parser.add_argument("--initial", type=Path, default=ASSETS/"triposr_decoder.onnx")
@@ -161,7 +180,8 @@ def main():
     manifest = {"version": VERSION, "seed": 84219, "references": records,
                 "audits": audits, "source_assets": source_assets, "initial_sha256": digest(args.initial),
                 "views_per_object": 4, "grid_resolution": args.grid,
-                "synthetic_replay_probability": .5, "objective": args.objective, "production_approved": False,
+                "synthetic_replay_probability": .5, "objective": args.objective, "sampling": args.sampling,
+                "production_approved": False,
                 "redistribution": "Private data and derived checkpoints; rights not established for public distribution"}
     (folder/"dataset.json").write_text(json.dumps(manifest, indent=2))
     encode_references(records, folder, source_assets, args.encoder_threads)
@@ -191,13 +211,13 @@ def main():
         examples = uploaded["train"] if rng.random() < .5 else synthetic["train"]
         example = examples[int(rng.integers(len(examples)))]
         if args.objective == "four-view":
-            indices = rng.integers(len(example["labels"]), size=256)
+            indices, point_weights = point_batch(example["labels"], rng, 256, args.sampling)
             loss, gradients = model.fused_loss_and_gradient(
-                [x[indices] for x in example["features"]], example["labels"][indices])
+                [x[indices] for x in example["features"]], example["labels"][indices], sample_weights=point_weights)
         else:
             view = int(rng.integers(4))
-            indices = rng.integers(len(example["labels"]), size=512)
-            loss, gradients = model.loss_and_gradient(example["features"][view][indices], example["labels"][indices])
+            indices, point_weights = point_batch(example["labels"], rng, 512, args.sampling)
+            loss, gradients = model.loss_and_gradient(example["features"][view][indices], example["labels"][indices], sample_weights=point_weights)
         model.update(gradients, 2e-5)
         if step % 100 == 0 or step == args.steps:
             mesh_val = evaluate(model, uploaded["validation"])
@@ -231,7 +251,7 @@ def main():
                    + geometry_regressions(initial_metrics["synthetic_test"], final_metrics["synthetic_test"]))
     changed = sum(int(np.count_nonzero(a != b)) for a, b in zip(model.parameters, model.initial))
     report = {"version": VERSION, "scope": "actual decoder fine-tuning; frozen INT4 encoder; synthetic replay",
-              "training_steps": args.steps, "objective": args.objective, "selected_step": best_step,
+              "training_steps": args.steps, "objective": args.objective, "sampling": args.sampling, "selected_step": best_step,
               "changed_selected_parameters": changed, "changed_last_parameters": last_changed,
               "trainable_parameters": 41089, "frozen_rgb_final_parameters": 195,
               "object_splits": {k: [r["id"] for r in records if r["split"] == k] for k in SPLITS},

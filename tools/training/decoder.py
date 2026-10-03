@@ -46,16 +46,17 @@ class Decoder:
             x = z * s if i < len(self.parameters)-2 else z
         return (x, cache) if tape else x
 
-    def loss_and_gradient(self, x, labels, anchor=1e-4):
+    def loss_and_gradient(self, x, labels, anchor=1e-4, sample_weights=None):
+        weights = self._sample_weights(labels, sample_weights)
         out, tape = self.forward(x, tape=True)
         logits = 2 * (out[:, 0] - ISO)
-        loss = np.mean(np.logaddexp(0, logits) - labels * logits)
+        loss = np.mean(weights*(np.logaddexp(0, logits) - labels * logits))
         derivative = np.zeros_like(out)
-        derivative[:, 0] = 2 * (sigmoid(logits) - labels) / len(labels)
+        derivative[:, 0] = weights*2 * (sigmoid(logits) - labels) / len(labels)
         gradients = self._backward(tape, derivative)
         return self._regularize(loss, gradients, anchor)
 
-    def fused_loss_and_gradient(self, views, labels, anchor=1e-4):
+    def fused_loss_and_gradient(self, views, labels, anchor=1e-4, sample_weights=None):
         """Differentiate the same top-two-plus-mean four-view occupancy fusion.
 
         Each row must describe the same world point in all four image fields.
@@ -63,6 +64,7 @@ class Decoder:
         """
         if len(views) != 4 or any(len(x) != len(labels) for x in views):
             raise ValueError("Four corresponding feature batches are required")
+        point_weights = self._sample_weights(labels, sample_weights)
         out, tape = self.forward(np.concatenate(views), tape=True)
         logits = 2*(out[:, 0].reshape(4, -1).astype(np.float64)-ISO)
         probabilities = sigmoid(logits)
@@ -76,12 +78,21 @@ class Decoder:
         # Compute the complementary probability independently to avoid 1-1=0
         # and 0*log(0) on saturated fields. Keep the BCE gradient useful there.
         fused_complement = (weights*complements).sum(0)
-        loss = -np.mean(labels*np.log(fused)+(1-labels)*np.log(fused_complement))
-        derivative_fused = ((1-labels)/fused_complement-labels/fused)/len(labels)
+        loss = -np.mean(point_weights*(labels*np.log(fused)+(1-labels)*np.log(fused_complement)))
+        derivative_fused = point_weights*((1-labels)/fused_complement-labels/fused)/len(labels)
         derivative = np.zeros_like(out)
         derivative[:, 0] = (derivative_fused[None]*weights*2*probabilities*complements).reshape(-1)
         gradients = self._backward(tape, derivative)
         return self._regularize(loss, gradients, anchor)
+
+    @staticmethod
+    def _sample_weights(labels, weights):
+        if not len(labels):
+            raise ValueError("Nonempty batch required")
+        result = np.ones(len(labels)) if weights is None else np.asarray(weights)
+        if result.shape != (len(labels),) or not np.isfinite(result).all() or (result < 0).any() or not result.sum():
+            raise ValueError("Use finite nonnegative per-point importance weights")
+        return result
 
     def _backward(self, tape, derivative):
         gradients = [None] * len(self.parameters)
