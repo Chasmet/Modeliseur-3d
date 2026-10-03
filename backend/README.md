@@ -44,25 +44,37 @@ du stockage éphémère. Le stockage refuse les nouvelles images au-delà de 256
 12 images et 12 travaux maximum par connexion, 2 travaux simultanément en attente,
 1 génération exécutée à la fois. Aucun lien source arbitraire n'est accepté.
 
-## Appairage MCP
+## Connexion MCP sans authentification
 
-1. Ouvrir l'écran TRELLIS/MCP dans l'APK et connecter l'adresse HTTPS du relais.
-2. Activer « Autoriser le MCP », puis copier le lien privé.
-3. Dans ChatGPT, activer le mode développeur et ajouter ce lien comme MCP personnel
-   dans Plugins. La connexion au client ChatGPT est une étape distincte du déploiement.
-4. Garder cet écran de l'APK ouvert pour recevoir les demandes d'ouverture.
+Le point d'entrée principal est :
 
-Le lien est une capacité secrète de 256 bits, pas un lien à partager : sa possession
-donne accès aux images/travaux de **cette connexion uniquement**. Choisir sans OAuth
-pour ce lien personnel ; ce mécanisme n'est pas conçu pour publier un plugin public.
-Le désactiver révoque immédiatement le lien côté serveur ; le réactiver le remplace.
-Les logs d'accès doivent rester désactivés car l'URL contient cette capacité.
-Les secrets Android restent dans `getNoBackupFilesDir()`.
+`https://modeliseur-trellis-mcp.onrender.com/mcp`
 
-Outils : `application_status`, `list_models_and_images`, `generate_model` sur une
-image déjà envoyée depuis le téléphone, `open_model_on_phone` sur un GLB prêt.
-Une commande acceptée signifie **en attente**, pas exécutée sur le téléphone.
-Le MCP ne lit pas les autres fichiers du téléphone et ne fournit aucune commande shell.
+Dans ChatGPT Plugins, choisir **Aucune authentification**. Aucun OAuth, PAT GitHub,
+clé API ni secret n'est demandé par ce MCP. Le relais associe automatiquement les
+commandes au téléphone Android Modéliseur 3D le plus récemment actif. Si aucun
+téléphone n'est connecté, les générations restent dans un espace public éphémère
+du relais jusqu'au prochain redéploiement Render.
+
+Le parcours historique avec un lien privé `/mcp/<capacité>` reste disponible pour
+compatibilité avec les anciennes versions de l'APK, mais il n'est plus nécessaire
+pour le plugin ChatGPT principal.
+
+Outils : `application_status`, `list_models_and_images`,
+`create_model_from_images`, `model_status`, `model_download`,
+`generate_model` et `open_model_on_phone`.
+
+`create_model_from_images` accepte de 1 à 4 images sous forme d'URL HTTPS publique,
+de Data URL base64, de `base64:<données>` ou de base64 brut. Les fichiers sont
+bornés à 8 Mo et normalisés à 1 024 px. TRELLIS.2 étant un moteur mono-vue, plusieurs
+images produisent volontairement plusieurs candidats 3D plutôt qu'une fausse fusion
+multicaméra. L'image la plus informative doit être placée en premier. Le GLB prêt est
+récupérable par `model_download` et peut être demandé à l'ouverture dans l'application.
+
+**Sécurité :** ce choix sans authentification rend `/mcp` accessible depuis Internet.
+Il est volontaire pour cet usage personnel. Les anciennes routes Android restent
+protégées par leur jeton d'appairage ; aucune commande shell ni accès général aux
+fichiers du téléphone n'est exposé.
 
 ## Vérification
 
