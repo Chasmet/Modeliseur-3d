@@ -60,12 +60,31 @@ public final class Offline3DActivity extends AppCompatActivity {
     private void ui(Runnable action){runOnUiThread(()->{if(!isDestroyed())action.run();});}
     private void message(String value){ui(()->status.setText(value));}
     private interface Task{void run()throws Exception;}
+    private void reportMcpFailure(String value){
+        if(mcpGenerating&&isMcp()){
+            mcpGenerating=false;
+            McpBridgeSession.reportError(this,mcpCommandId,value);
+        }
+    }
     private void work(Task action){
         if(busy||isDestroyed())return;busy=true;cancelled=false;prefs().edit().putBoolean("interruptedWork",true).apply();getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);buttons();worker.execute(()->{
             runningThread=Thread.currentThread();
-            try(ProcessingPowerLock lock=ProcessingPowerLock.acquire(this,"atelier-local")){action.run();}catch(CancellationException e){message("Opération arrêtée. Les modèles précédents sont conservés.");}catch(OutOfMemoryError e){message("Mémoire de l’application insuffisante. Choisis le moteur Silhouettes et le détail Rapide pour un calcul plus léger.");}
-            catch(Exception e){message(e.getMessage()==null?"Opération locale impossible.":e.getMessage());}
-            finally{runningThread=null;prefs().edit().putBoolean("interruptedWork",false).apply();ui(()->{busy=false;getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);buttons();});}
+            try(ProcessingPowerLock lock=ProcessingPowerLock.acquire(this,"atelier-local")){
+                action.run();
+            }catch(CancellationException e){
+                reportMcpFailure("Calcul local arrêté sur le téléphone.");
+                message("Opération arrêtée. Les modèles précédents sont conservés.");
+            }catch(OutOfMemoryError e){
+                reportMcpFailure("Mémoire Android insuffisante pendant la reconstruction locale.");
+                message("Mémoire de l’application insuffisante. Choisis le moteur Silhouettes et le détail Rapide pour un calcul plus léger.");
+            }catch(Exception e){
+                String value=e.getMessage()==null?"Opération locale impossible.":e.getMessage();
+                reportMcpFailure(value);
+                message(value);
+            }finally{
+                runningThread=null;prefs().edit().putBoolean("interruptedWork",false).apply();
+                ui(()->{busy=false;getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);buttons();});
+            }
         });
     }
     private void checkpoint(){if(cancelled||Thread.currentThread().isInterrupted())throw new CancellationException();}
