@@ -175,6 +175,12 @@ jobs:
             validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
           java -cp build/legacy-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
 
+      - name: Installer les dépendances Python des modèles hors ligne
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check -r tools/offline-models/requirements.txt
+
       - name: Compiler avec Gradle
         run: |
           ./gradlew --no-daemon clean lintDebug assembleDebug || {
