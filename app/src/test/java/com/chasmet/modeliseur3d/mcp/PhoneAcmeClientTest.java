@@ -90,11 +90,15 @@ public class PhoneAcmeClientTest {
             return new String(PhoneHttp.body(socket.getInputStream(),-1,false,8192),StandardCharsets.US_ASCII);
         }
     }
-    @Test public void generatedCsrIsIndependentlyVerifiedByOpenSslWithIpSan() throws Exception {
+    @Test public void generatedCsrIsIndependentlyVerifiedByOpenSslWithIpSanAndNoIpCommonName() throws Exception {
         File csr=File.createTempFile("phone-ip-csr-",".der"),log=File.createTempFile("phone-ip-csr-",".txt");
         try {try(FileOutputStream out=new FileOutputStream(csr)) {out.write(IpCertificateRequest.csr(key(),InetAddress.getByName("8.8.8.8")));}
             Process p=new ProcessBuilder("openssl","req","-inform","DER","-in",csr.getPath(),"-verify","-text","-noout").redirectErrorStream(true).redirectOutput(log).start();
-            assertTrue(p.waitFor(10,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue());String text=new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8);assertTrue(text,text.contains("IP Address:8.8.8.8"));
+            assertTrue(p.waitFor(10,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue());
+            String text=new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8);
+            assertTrue(text,text.contains("IP Address:8.8.8.8"));
+            assertFalse(text,text.contains("CN = 8.8.8.8"));
+            assertFalse(text,text.contains("CN=8.8.8.8"));
         }finally {csr.delete();log.delete();}
     }
 }

@@ -164,7 +164,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.4.2",
+                  "User-Agent": "Modeliseur3D-CI/6.4.3",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -248,10 +248,10 @@ jobs:
           unzip -t "$APK" >/dev/null
           echo "APK validé et tests Android/MCP exécutés avant publication."
 
-      - name: Publier l'APK V6.4.2
+      - name: Publier l'APK V6.4.3
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.4.2-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.4.3-ACME-IP-fix-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -280,10 +280,10 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.4.2 : gestion HTTPS automatique depuis le téléphone, IPv4 publique et passerelle détectées, tentatives PCP/NAT-PMP/UPnP, ACME HTTP-01 et certificats IP Let’s Encrypt shortlived avec renouvellement avant expiration.
-          Activation dans Réglages → Serveur MCP du téléphone → Activer HTTPS automatique. Le diagnostic fournit la seule règle de box manquante si l’ouverture automatique du port externe 80 échoue. Une redirection existante n’est pas une preuve de HTTPS ou de MCP.
-          Connexion HTTPS sans authentification : application_status et application_capabilities uniquement, sans modèles privés ni écriture. Les six outils complets et les anciennes URL privées restent disponibles avec leur secret. Le certificat et le compte ACME sont chiffrés avec Android Keystore.
-          Mêmes moteurs, projets, package et signature APK. Les tests de protocole, CSR OpenSSL, sockets HTTP-01/TLS et compatibilité passent avant publication. Émission sur téléphone réel, accès extérieur, restrictions constructeur et connexion ChatGPT restent à vérifier après installation ; aucun état CHATGPT_CONNECTED n’est inventé.
+          V6.4.3 : correction du certificat HTTPS direct sur IP publique. Le CSR PKCS#10 n’inscrit plus l’adresse IP dans le Common Name : l’IP est uniquement placée dans Subject Alternative Name, conformément aux exigences de l’autorité ACME.
+          Le bouton « Renouveler le certificat » peut désormais relancer immédiatement une tentative après correction du réseau ou du CSR, avec une protection locale de 5 minutes contre les clics répétés.
+          La configuration Livebox reste inchangée : TCP externe 80 vers le port de challenge local (8080 actuellement) et TCP 8443 vers 8443. Le certificat, sa clé et le PKCS#12 restent gérés automatiquement sur le téléphone.
+          Mêmes moteurs, projets, package et identité de signature APK. Les tests CSR OpenSSL, MCP direct, TLS et moteurs locaux sont exécutés avant publication. Après installation, l’émission réelle Let’s Encrypt et l’accès ChatGPT doivent encore être confirmés depuis le téléphone.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")

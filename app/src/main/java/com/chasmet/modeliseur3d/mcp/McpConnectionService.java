@@ -72,7 +72,13 @@ public class McpConnectionService extends Service {
     }
     public static void renewCertificate(Context c) {
         if(!enabled(c))setEnabled(c,true);
-        PhoneMcpSettings.prefs(c).edit().putBoolean("automatic_force_renew",true).apply();
+        SharedPreferences p=PhoneMcpSettings.prefs(c);
+        long now=System.currentTimeMillis(),last=p.getLong("manual_acme_retry_at",0);
+        SharedPreferences.Editor edit=p.edit().putBoolean("automatic_force_renew",true);
+        // A deliberate retry after fixing NAT/CSR may bypass the one-hour automatic backoff once.
+        // Keep a five-minute local throttle so repeated taps cannot hammer the ACME service.
+        if(now-last>=5*60*1000L)edit.putLong("acme_retry_at",0).putLong("manual_acme_retry_at",now);
+        edit.apply();
         ContextCompat.startForegroundService(c,new Intent(c,McpConnectionService.class).setAction(PUBLIC_SETUP));
     }
     @Override public void onCreate() {

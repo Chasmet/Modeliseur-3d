@@ -2,19 +2,19 @@ package com.chasmet.modeliseur3d.mcp;
 
 import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.Signature;
 import java.util.Arrays;
 
-/** Small DER encoder for a PKCS#10 request containing exactly one IP subjectAltName. */
+/** Small DER encoder for an IP PKCS#10 request: empty subject, exactly one IP subjectAltName. */
 final class IpCertificateRequest {
     private IpCertificateRequest() { }
     static byte[] csr(KeyPair key, InetAddress ip) throws Exception {
-        byte[] cn=sequence(tag(0x31, sequence(oid(2,5,4,3),tag(12,ip.getHostAddress().getBytes(StandardCharsets.UTF_8)))));
+        // Public CAs reject an IP address in Common Name; the IP must live only in subjectAltName.
+        byte[] subject=sequence();
         byte[] san=sequence(oid(2,5,29,17),tag(4,sequence(tag(0x87,ip.getAddress()))));
         byte[] extension=sequence(oid(1,2,840,113549,1,9,14),tag(0x31,sequence(san)));
-        byte[] info=sequence(tag(2,new byte[]{0}),cn,key.getPublic().getEncoded(),tag(0xa0,extension));
+        byte[] info=sequence(tag(2,new byte[]{0}),subject,key.getPublic().getEncoded(),tag(0xa0,extension));
         Signature signer=Signature.getInstance("SHA256withRSA");signer.initSign(key.getPrivate());signer.update(info);
         byte[] signature=signer.sign(),bits=new byte[signature.length+1];System.arraycopy(signature,0,bits,1,signature.length);
         return sequence(info,sequence(oid(1,2,840,113549,1,1,11),tag(5,new byte[0])),tag(3,bits));
