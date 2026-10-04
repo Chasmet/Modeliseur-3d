@@ -47,6 +47,11 @@ public final class ExternalViewerGlbExporter {
             MeshData mesh,
             Bitmap texture
     ) throws IOException {
+        write(outputFile,mesh,texture,null);
+    }
+
+    /** Optional provenance is used only by the new workshop; legacy export stays identical. */
+    public static void write(File outputFile,MeshData mesh,Bitmap texture,org.json.JSONObject provenance)throws IOException {
         byte[] png = encodeViewerSafePng(texture);
         float[] positions = mesh.getPositions();
         float[] normals = mesh.getNormals();
@@ -105,6 +110,13 @@ public final class ExternalViewerGlbExporter {
                 minimum,
                 maximum
         );
+        if(provenance!=null){
+            try{
+                org.json.JSONObject root=new org.json.JSONObject(json);
+                root.getJSONObject("asset").put("generator","Modéliseur 3D "+provenance.optString("appVersion","inconnue")+" Android");
+                root.put("extras",provenance);json=root.toString();
+            }catch(org.json.JSONException e){throw new IOException("Métadonnées GLB invalides.",e);}
+        }
         byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
         int paddedJsonLength = align4(jsonBytes.length);
         int paddedBinaryLength = align4(binaryLength);
