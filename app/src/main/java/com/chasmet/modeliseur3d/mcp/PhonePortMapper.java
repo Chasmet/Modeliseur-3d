@@ -70,7 +70,7 @@ final class PhonePortMapper {
                 if("NAT-PMP".equals(old.method))return keep(pmp(internal,external,seconds));
             }catch(Exception ignored) { }
         }
-        byte[] nonce=new byte[12];new SecureRandom().nextBytes(nonce);
+        byte[] nonce=nonce(internal,external);
         try {return keep(pcp(internal,external,seconds,nonce));}catch(Exception ignored) { }
         try {return keep(pmp(internal,external,seconds));}catch(Exception ignored) { }
         discover();
@@ -94,6 +94,18 @@ final class PhonePortMapper {
         return keep(new Lease(internal,external,seconds,"UPnP","",null,true));
     }
     private Lease keep(Lease lease) {leases.put(lease.external,lease);return lease;}
+    byte[] nonce(int internal,int external) throws Exception {
+        String name="pcp_nonce_"+local.getHostAddress()+"_"+gateway.getHostAddress()+"_"+internal+"_"+external;
+        String encoded=PhoneMcpSettings.prefs(context).getString(name,"");
+        if(!encoded.isEmpty()) {
+            byte[] saved=PhoneSecretStorage.decrypt(context,android.util.Base64.decode(encoded,android.util.Base64.NO_WRAP));
+            if(saved.length!=12)throw new IOException("Nonce PCP enregistré invalide.");return saved;
+        }
+        byte[] nonce=new byte[12];new SecureRandom().nextBytes(nonce);
+        byte[] encrypted=PhoneSecretStorage.encrypt(context,nonce);
+        if(!PhoneMcpSettings.prefs(context).edit().putString(name,android.util.Base64.encodeToString(encrypted,android.util.Base64.NO_WRAP)).commit())throw new IOException("Nonce PCP non enregistré.");
+        return nonce;
+    }
     private Lease pcp(int in,int out,int ttl,byte[] nonce) throws Exception {
         PortMappingProtocol.Mapping m=PortMappingProtocol.pcpReply(udp(PortMappingProtocol.pcp(local,in,out,ttl,nonce)),in,out,nonce,ttl==0);
         return new Lease(in,out,m.lifetime,"PCP",m.externalIp,nonce,true);

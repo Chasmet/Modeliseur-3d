@@ -153,6 +153,14 @@ public class PhoneMcpServerTest {
         assertThrows(Exception.class,()->PhoneSecretStorage.decrypt(app,bytes));
         assertArrayEquals(new byte[0],PhoneSecretStorage.decrypt(app,PhoneSecretStorage.encrypt(app,new byte[0])));
     }
+    @Test public void portMappingNonceSurvivesProcessStateAndIsBoundToTheGatewayAndPorts() throws Exception {
+        var app=RuntimeEnvironment.getApplication();
+        var local=InetAddress.getByName("192.168.50.20");var gateway=InetAddress.getByName("192.168.50.1");
+        byte[] first=new PhonePortMapper(app,local,gateway).nonce(8443,8443);
+        assertEquals(12,first.length);assertArrayEquals(first,new PhonePortMapper(app,local,gateway).nonce(8443,8443));
+        assertFalse(java.util.Arrays.equals(first,new PhonePortMapper(app,local,gateway).nonce(8080,80)));
+        assertFalse(java.util.Arrays.equals(first,new PhonePortMapper(app,local,InetAddress.getByName("192.168.50.2")).nonce(8443,8443)));
+    }
     @Test public void handlesSimultaneousPingsTimesOutIncompleteHeadersAndRestarts() throws Exception {
         server.clientTimeoutMs=250;
         java.util.concurrent.ExecutorService callers=java.util.concurrent.Executors.newFixedThreadPool(4);

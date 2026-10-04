@@ -22,6 +22,7 @@ final class PhonePublicConnection implements AutoCloseable {
     private volatile PhonePortMapper mapper;
     private final java.util.concurrent.atomic.AtomicReference<PhonePortMapper.Lease> mainLease=new java.util.concurrent.atomic.AtomicReference<>(),temporaryLease=new java.util.concurrent.atomic.AtomicReference<>();
     private long leaseRetryAt;
+    private final Object mappingGuard=new Object();
     private String link="";
     private long retryAt;
     private final java.util.concurrent.atomic.AtomicBoolean queued=new java.util.concurrent.atomic.AtomicBoolean();
@@ -31,12 +32,14 @@ final class PhonePublicConnection implements AutoCloseable {
         leaseWorker.scheduleWithFixedDelay(this::renewLeases,5,5,TimeUnit.SECONDS);
     }
     private void renewLeases() {
+        synchronized(mappingGuard) {
         if(closed||System.currentTimeMillis()<leaseRetryAt)return;
         PhonePortMapper current=mapper;if(current==null)return;
         try {PhonePortMapper.Lease lease=mainLease.get();if(lease!=null&&lease.created&&System.currentTimeMillis()>=lease.renewAt)
             mainLease.compareAndSet(lease,current.map(lease.internal,lease.external,1800));}catch(Exception ignored) {leaseRetryAt=System.currentTimeMillis()+60000;}
         try {PhonePortMapper.Lease lease=temporaryLease.get();if(lease!=null&&lease.created&&System.currentTimeMillis()>=lease.renewAt)
             temporaryLease.compareAndSet(lease,current.map(lease.internal,lease.external,600));}catch(Exception ignored) {leaseRetryAt=System.currentTimeMillis()+60000;}
+        }
     }
     void request() {if(!closed&&queued.compareAndSet(false,true))try {worker.execute(()->{try {cycle();}finally {queued.set(false);}});}catch(RejectedExecutionException ignored) {queued.set(false);}}
     private SharedPreferences prefs() {return PhoneMcpSettings.prefs(context);}
@@ -48,7 +51,7 @@ final class PhonePublicConnection implements AutoCloseable {
             state("Détection de l’IPv4 publique et de la passerelle…");
             PhonePortMapper current=PhonePortMapper.active(context);
             String network=current.local.getHostAddress()+"/"+current.gateway.getHostAddress();
-            if(!network.equals(link)) {mapper=current;link=network;mainLease.set(null);
+            if(!network.equals(link)) {synchronized(mappingGuard) {mapper=current;link=network;mainLease.set(null);}
                 prefs().edit().remove("external_client").remove("public_mcp_client").remove("chatgpt_client").putString("automatic_local_ip",current.local.getHostAddress()).putString("automatic_gateway",current.gateway.getHostAddress()).apply();}
             mapper.retryDiscovery();
             String wan="";try {wan=mapper.wan();}catch(Exception ignored) { }
@@ -69,7 +72,7 @@ final class PhonePublicConnection implements AutoCloseable {
             // Establish the actual TLS listener first, then map its actual port (including conflict fallback).
             if(ip.equals(storedIp)&&expires>now&&!server.httpsRunning())server.reloadTls();
             int internal=PhoneMcpSettings.httpsPort(context),external=8443;
-            try {PhonePortMapper.Lease lease=mapper.map(internal,external,1800);mainLease.set(lease);mapping=lease.method+" accepté · test extérieur requis";}
+            try {synchronized(mappingGuard) {PhonePortMapper.Lease lease=mapper.map(internal,external,1800);mainLease.set(lease);mapping=lease.method+" accepté · test extérieur requis";}}
             catch(Exception failure) {mapping="Automatisation refusée. Livebox : TCP 8443 → "+internal+" → "+mapper.local.getHostAddress()+". Garder le pare-feu Moyen.";}
             prefs().edit().putString("automatic_mapping",mapping).putInt("public_port",external).putLong("public_ip_measured_at",now)
                     .putString("box_wan_ip",wan).apply();
@@ -79,7 +82,7 @@ final class PhonePublicConnection implements AutoCloseable {
                 issue(ip);
                 if(closed)return;
                 server.reloadTls();internal=PhoneMcpSettings.httpsPort(context);
-                try {PhonePortMapper.Lease lease=mapper.map(internal,external,1800);mainLease.set(lease);prefs().edit().putString("automatic_mapping",lease.method+" accepté · test extérieur requis").apply();}
+                try {synchronized(mappingGuard) {PhonePortMapper.Lease lease=mapper.map(internal,external,1800);mainLease.set(lease);prefs().edit().putString("automatic_mapping",lease.method+" accepté · test extérieur requis").apply();}}
                 catch(Exception ignored) {prefs().edit().putString("automatic_mapping","Livebox : TCP 8443 → "+internal+" → "+mapper.local.getHostAddress()+". Garder le pare-feu Moyen.").apply();}
             }
             String base="https://"+ip+":"+external;
@@ -101,7 +104,7 @@ final class PhonePublicConnection implements AutoCloseable {
         PhonePortMapper.Lease temporary=null;
         try(AcmeChallengeServer responder=challenge) {
             String rule;
-            try {temporary=mapper.map(challenge.port(),80,600);temporaryLease.set(temporary);rule=temporary.method+" : TCP 80 → "+challenge.port();}
+            try {synchronized(mappingGuard) {temporary=mapper.map(challenge.port(),80,600);temporaryLease.set(temporary);rule=temporary.method+" : TCP 80 → "+challenge.port();}}
             catch(Exception unavailable) {rule="Si la validation échoue : Livebox NAT/PAT, TCP externe 80 → interne "+challenge.port()+" → "+mapper.local.getHostAddress()+". Une seule règle initiale suffit ; garder le pare-feu Moyen.";}
             prefs().edit().putString("acme_challenge_mapping",rule).apply();
             state("Validation du certificat IP par Let’s Encrypt. "+rule);
@@ -121,7 +124,7 @@ final class PhonePublicConnection implements AutoCloseable {
                     .putLong("acme_retry_at",0).putBoolean("automatic_force_renew",false).putString("automatic_last_error","").commit();retryAt=0;
         }catch(PhoneAcmeClient.Failure failure) {
             retryAt=System.currentTimeMillis()+failure.retryMs;prefs().edit().putLong("acme_retry_at",retryAt).commit();throw failure;
-        }finally {temporaryLease.set(null);if(temporary!=null)temporary.close();}
+        }finally {synchronized(mappingGuard) {temporaryLease.set(null);if(temporary!=null)temporary.close();}}
     }
     static void validateChain(X509Certificate[] chain,KeyPair key,String ip) throws Exception {
         if(chain.length==0)throw new IOException("Chaîne du certificat absente.");

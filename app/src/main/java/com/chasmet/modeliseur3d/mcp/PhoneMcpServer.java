@@ -29,9 +29,14 @@ public final class PhoneMcpServer implements AutoCloseable {
     public synchronized void reloadTls() throws Exception {
         if(closed)throw new IOException("Serveur arrêté.");
         SSLContext tls=PhoneMcpSettings.tls(context);if(tls==null)throw new IOException("Certificat absent.");
-        pauseTls();int port;
-        try {port=listen(tls.getServerSocketFactory().createServerSocket(),PhoneMcpSettings.httpsPort(context),true);}
-        catch(BindException busy) {port=listen(tls.getServerSocketFactory().createServerSocket(),0,true);}
+        pauseTls();int port,previous=PhoneMcpSettings.httpsPort(context);
+        int requested=PhoneMcpSettings.prefs(context).getBoolean("automatic_https",false)?PhoneMcpSettings.HTTPS_PORT:previous;
+        try {port=listen(tls.getServerSocketFactory().createServerSocket(),requested,true);}
+        catch(BindException busy) {
+            if(previous!=requested)try {port=listen(tls.getServerSocketFactory().createServerSocket(),previous,true);}
+            catch(BindException stillBusy) {port=listen(tls.getServerSocketFactory().createServerSocket(),0,true);}
+            else port=listen(tls.getServerSocketFactory().createServerSocket(),0,true);
+        }
         PhoneMcpSettings.prefs(context).edit().putInt("https_port",port).putBoolean("https_running",true).putString("tls_error","").apply();
     }
     // Optional in-process diagnostics. No access log or private URL is emitted.
