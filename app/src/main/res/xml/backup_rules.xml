@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <exclude domain="file" path="phone_mcp/tls.p12" />
+    <exclude domain="file" path="phone_mcp/" />
     <exclude domain="sharedpref" path="phone_mcp.xml" />
     <exclude domain="sharedpref" path="mcp_local_bridge.xml" />
 </full-backup-content>

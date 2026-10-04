@@ -15,11 +15,11 @@
                 android:layout_height="wrap_content" android:paddingTop="8dp" android:paddingBottom="4dp"
                 android:text="ChatGPT MCP : déconnecté" android:textColor="@color/text_secondary" android:textSize="14sp" />
             <Button android:id="@+id/mcpConnectionButton" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="Déconnecté" android:textAllCaps="false"
+                android:layout_height="wrap_content" android:text="Activer MCP" android:textAllCaps="false"
                 android:contentDescription="Activer ou désactiver le serveur ChatGPT en arrière-plan" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Connecté : le serveur du téléphone reste actif en arrière-plan, même pendant YouTube ou Netflix. Le relais Internet ne fait que transporter les commandes et les fichiers. Déconnecté : liaison arrêtée, travail conservé."
+            android:text="Le MCP reste actif en arrière-plan lorsqu’il est activé. Serveur local et accès depuis Internet sont indiqués séparément dans Réglages. Désactiver le MCP conserve le travail."
             android:textColor="@color/text_secondary" android:textSize="12sp" />
         <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="16dp">

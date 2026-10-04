@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** User-controlled foreground service. Polling never waits for the local inference worker. */
 public class McpConnectionService extends Service {
     public static final String DISCONNECT = "com.chasmet.modeliseur3d.MCP_DISCONNECT";
+    private static final String RECONFIGURE = "com.chasmet.modeliseur3d.MCP_RECONFIGURE";
     private static final String PREFS="mcp_background", CHANNEL="mcp_background";
     private static final int NOTIFICATION=803;
     private final ScheduledExecutorService network=Executors.newSingleThreadScheduledExecutor();
@@ -34,6 +35,10 @@ public class McpConnectionService extends Service {
     private long lastNotification;
     private PhoneMcpServer phoneServer;
     private android.net.wifi.WifiManager.WifiLock wifi;
+    private android.net.ConnectivityManager connectivity;
+    private android.net.ConnectivityManager.NetworkCallback networkCallback;
+    private int failures;
+    private long retryAt;
 
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS,MODE_PRIVATE); }
@@ -44,7 +49,8 @@ public class McpConnectionService extends Service {
         if (PhoneMcpSettings.direct(c)) {
             boolean running=PhoneMcpSettings.prefs(c).getBoolean("running",false);
             return running ? "MCP direct : serveur téléphone actif\n"+p.getString("progress","En attente de commande")
-                    +(PhoneMcpSettings.publicBase(c).isEmpty()?"\nAccès HTTPS de la box à configurer":!PhoneMcpSettings.certificate(c).isFile()?"\nCertificat HTTPS à importer":"\nAccès Internet à vérifier depuis ChatGPT")
+                    +(PhoneMcpSettings.publicBase(c).isEmpty()?"\nAdresse HTTPS publique à configurer":!PhoneMcpSettings.prefs(c).getBoolean("https_running",false)?"\n"+PhoneMcpSettings.prefs(c).getString("tls_error","HTTPS indisponible")
+                    :PhoneMcpSettings.prefs(c).getLong("external_client",0)>0?"\nAccès HTTPS extérieur observé":"\nAccès Internet non vérifié")
                     : "MCP direct : démarrage en attente";
         }
         long last=p.getLong("heartbeat",0);
@@ -59,9 +65,12 @@ public class McpConnectionService extends Service {
     public static void start(Context c) {
         ContextCompat.startForegroundService(c,new Intent(c,McpConnectionService.class));
     }
+    public static void restart(Context c) {
+        ContextCompat.startForegroundService(c,new Intent(c,McpConnectionService.class).setAction(RECONFIGURE));
+    }
     @Override public void onCreate() {
         super.onCreate();
-        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).apply();
+        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).remove("external_client").apply();
         android.net.wifi.WifiManager manager=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
         if (manager!=null) { wifi=manager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"Modeliseur3D:McpWifi");wifi.setReferenceCounted(false); }
 
@@ -75,6 +84,28 @@ public class McpConnectionService extends Service {
         power.setReferenceCounted(false);
         connectionPower=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"Modeliseur3D:McpConnection");
         connectionPower.setReferenceCounted(false);
+        connectivity=(android.net.ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+        networkCallback=new android.net.ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(android.net.Network n) { changed(); }
+            @Override public void onLost(android.net.Network n) { changed(); }
+            @Override public void onLinkPropertiesChanged(android.net.Network n,android.net.LinkProperties p) { changed(); }
+            private void changed() {
+                if(network.isShutdown())return;
+                try {network.execute(()->{
+                    retryAt=0;failures=0;
+                    try {
+                        String snapshot=PhoneNetworkDiagnostics.snapshot(McpConnectionService.this).toString();
+                        SharedPreferences state=PhoneMcpSettings.prefs(McpConnectionService.this);
+                        if(!snapshot.equals(state.getString("network_snapshot","")))
+                            state.edit().putString("network_snapshot",snapshot).remove("external_client").apply();
+                    } catch(Exception ignored) { }
+                });} catch(RejectedExecutionException ignored) { }
+            }
+        };
+        try {
+            if(connectivity!=null)connectivity.registerNetworkCallback(new android.net.NetworkRequest.Builder()
+                    .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET).build(),networkCallback);
+        } catch(RuntimeException ignored) { }
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId) {
         if ((intent!=null && DISCONNECT.equals(intent.getAction())) || !enabled(this)) {
@@ -82,6 +113,9 @@ public class McpConnectionService extends Service {
             disconnect(); return START_NOT_STICKY;
         }
         startForeground(NOTIFICATION,notification());
+        if(intent!=null && RECONFIGURE.equals(intent.getAction()) && active) {
+            network.execute(()->{closePhoneServer();api=null;retryAt=0;failures=0;});
+        }
         cancelRestart(this);
         acquireConnectionPower();
         try { if(wifi!=null && !wifi.isHeld())wifi.acquire(); } catch(RuntimeException ignored) { }
@@ -100,6 +134,7 @@ public class McpConnectionService extends Service {
         catch(Exception failure) { phoneServer.close();phoneServer=null;throw failure; }
         if(!connected()) { phoneServer.close();phoneServer=null;throw new CancellationException("Connexion arrêtée."); }
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",true).apply();
+        try {if(wifi!=null && !wifi.isHeld())wifi.acquire();}catch(RuntimeException ignored) { }
         progress="En attente de commande · mode Précis + IS-Net";
         return new PhoneMcpApi(store);
     }
@@ -109,10 +144,12 @@ public class McpConnectionService extends Service {
     private boolean connected() { return active && enabled(this); }
     void pollOnce() {
         if (!connected()) return;
+        if(api==null && SystemClock.elapsedRealtime()<retryAt)return;
         try {
             if (api==null) api=connect();
             JSONObject response=api.json("/api/poll",null);
             if (!connected()) return;
+            failures=0;retryAt=0;
             prefs(this).edit().putLong("heartbeat",System.currentTimeMillis()).putString("progress",progress).apply();
             if (working.get()) {
                 renewPower();
@@ -129,6 +166,7 @@ public class McpConnectionService extends Service {
             showNotification();
         } catch (Exception error) {
             if (error instanceof CloudApi.HttpFailure && ((CloudApi.HttpFailure)error).code==401) api=null;
+            if(api==null)retryAt=SystemClock.elapsedRealtime()+Math.min(60000L,1000L << Math.min(6,failures++));
             progress=working.get()?progress:PhoneMcpSettings.direct(this)?"Serveur téléphone indisponible · vérifie le port et le certificat":"Relais indisponible · reconnexion automatique";
             showNotification();
         }
@@ -270,6 +308,7 @@ public class McpConnectionService extends Service {
     }
     @Override public void onDestroy() {
         active=false;
+        try { if(connectivity!=null && networkCallback!=null)connectivity.unregisterNetworkCallback(networkCallback); }catch(RuntimeException ignored) { }
         closePhoneServer();
         boolean shouldRestart=enabled(this);
         active=false;
@@ -281,6 +320,7 @@ public class McpConnectionService extends Service {
     private synchronized void closePhoneServer() {
         if(phoneServer!=null) {phoneServer.close();phoneServer=null;}
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).apply();
+        PhoneMcpSettings.prefs(this).edit().putBoolean("https_running",false).apply();
         try {if(wifi!=null && wifi.isHeld())wifi.release();}catch(RuntimeException ignored) { }
     }
     @Override public IBinder onBind(Intent intent) { return null; }

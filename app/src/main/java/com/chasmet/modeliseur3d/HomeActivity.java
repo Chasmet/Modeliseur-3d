@@ -16,7 +16,7 @@ public final class HomeActivity extends AppCompatActivity {
     private final Runnable refreshConnection = new Runnable() {
         @Override public void run() {
             boolean enabled = McpConnectionService.enabled(HomeActivity.this);
-            ((android.widget.Button)findViewById(R.id.mcpConnectionButton)).setText(enabled ? "Connecté" : "Déconnecté");
+            ((android.widget.Button)findViewById(R.id.mcpConnectionButton)).setText(enabled ? "Désactiver MCP" : "Activer MCP");
             ((TextView)findViewById(R.id.mcpHomeStatus)).setText(McpConnectionService.status(HomeActivity.this));
             connectionUi.postDelayed(this, 1000);
         }

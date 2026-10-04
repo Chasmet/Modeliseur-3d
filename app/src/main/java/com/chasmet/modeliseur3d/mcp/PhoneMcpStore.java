@@ -101,7 +101,7 @@ public final class PhoneMcpStore {
         if(source.length()>12*1024*1024)throw new IOException("Image supérieure à 8 Mo.");
         if(source.startsWith("https://")) {
             URI uri=new URI(source);if(uri.getHost()==null || uri.getUserInfo()!=null)throw new IOException("URL image HTTPS invalide.");
-            for(InetAddress ip:InetAddress.getAllByName(uri.getHost())) if(ip.isAnyLocalAddress()||ip.isLoopbackAddress()||ip.isSiteLocalAddress()||ip.isLinkLocalAddress()||ip.isMulticastAddress())throw new IOException("L’image HTTPS doit être publique.");
+            for(InetAddress ip:InetAddress.getAllByName(uri.getHost())) if(!PhoneNetworkDiagnostics.global(ip))throw new IOException("L’image HTTPS doit être publique.");
             HttpURLConnection request=(HttpURLConnection)uri.toURL().openConnection();request.setInstanceFollowRedirects(false);request.setConnectTimeout(15000);request.setReadTimeout(30000);
             try { if(request.getResponseCode()!=200)throw new IOException("Image HTTPS indisponible. Fournis un PNG en base64 ou une URL directe.");try(InputStream in=request.getInputStream()) { return bounded(in); } }
             finally { request.disconnect(); }

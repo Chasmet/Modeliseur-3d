@@ -22,6 +22,7 @@ import static org.junit.Assert.*;
 public class PhoneMcpServerTest {
     private PhoneMcpStore store;private PhoneMcpServer server;private int port;private String path;
     @Before public void start() throws Exception {
+        PhoneSecretTestProvider.install();
         var app=RuntimeEnvironment.getApplication();app.getSharedPreferences("phone_mcp",0).edit().clear().commit();
         File inputs=new File(app.getFilesDir(),"mcp_inputs");File[] dirs=inputs.listFiles();
         if(dirs!=null)for(File dir:dirs)if(new File(dir,"phone-command.json").isFile()) {
@@ -107,6 +108,63 @@ public class PhoneMcpServerTest {
             String reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST",path,"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}","",false),StandardCharsets.UTF_8);
             assertTrue(reply+"; transport failure: "+failure.get(),reply.startsWith("HTTP/1.1 200"));assertTrue(reply.contains("create_model_from_images"));
         } finally {if(keytool.isAlive())keytool.destroyForcibly();generated.delete();log.delete();PhoneMcpSettings.certificate(app).delete();}
+    }
+    @Test public void healthStatusBearerAndLatestProtocolHaveDistinctAccessRules() throws Exception {
+        String health=new String(request("GET","/health","","",false),StandardCharsets.UTF_8);
+        assertTrue(health.startsWith("HTTP/1.1 200"));assertFalse(health.contains(PhoneMcpSettings.token(RuntimeEnvironment.getApplication())));
+        assertTrue(new String(request("GET","/status","","",false),StandardCharsets.UTF_8).startsWith("HTTP/1.1 401"));
+        String authorization="Authorization: Bearer "+PhoneMcpSettings.token(RuntimeEnvironment.getApplication())+"\r\n";
+        String status=new String(request("GET","/status","",authorization,false),StandardCharsets.UTF_8);
+        assertTrue(status.startsWith("HTTP/1.1 200"));assertTrue(status.contains("\"public_access_verified\":false"));
+        String initialize="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}";
+        String canonical=new String(request("POST","/mcp",initialize,authorization+"MCP-Protocol-Version: 2025-11-25\r\n",false),StandardCharsets.UTF_8);
+        assertTrue(canonical.startsWith("HTTP/1.1 200"));assertTrue(canonical.contains("2025-11-25"));
+    }
+    @Test public void rejectsUnexpectedTypesAndUnknownArgumentsBeforeQueuingAJob() throws Exception {
+        String call="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"create_model_from_images\",\"arguments\":{\"images\":[5]}}}";
+        String response=new String(request("POST",path,call,"",false),StandardCharsets.UTF_8);
+        assertTrue(response.contains("-32602"));assertEquals(0,store.poll().getJSONArray("local_commands").length());
+        call="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"application_status\",\"arguments\":{\"shell\":\"x\"}}}";
+        assertTrue(new String(request("POST",path,call,"",false),StandardCharsets.UTF_8).contains("-32602"));
+        assertThrows(Exception.class,()->PhoneMcpSettings.validatePublicBase("https://192.168.1.20:8443"));
+        assertThrows(Exception.class,()->PhoneMcpSettings.validatePublicBase("https://[fd01::1]:8443"));
+    }
+    @Test public void migratesExistingTokenWithoutChangingTheUrlAndDetectsTamperedCiphertext() throws Exception {
+        var app=RuntimeEnvironment.getApplication();
+        PhoneMcpSettings.prefs(app).edit().remove("token_encrypted").putString("token","existing-private-token").commit();
+        assertEquals("existing-private-token",PhoneMcpSettings.token(app));
+        assertFalse(PhoneMcpSettings.prefs(app).contains("token"));
+        assertEquals("existing-private-token",PhoneMcpSettings.token(app));
+        byte[] bytes=PhoneSecretStorage.encrypt(app,"private".getBytes(StandardCharsets.UTF_8));bytes[bytes.length-1]^=1;
+        assertThrows(Exception.class,()->PhoneSecretStorage.decrypt(app,bytes));
+        assertArrayEquals(new byte[0],PhoneSecretStorage.decrypt(app,PhoneSecretStorage.encrypt(app,new byte[0])));
+    }
+    @Test public void handlesSimultaneousPingsTimesOutIncompleteHeadersAndRestarts() throws Exception {
+        server.clientTimeoutMs=250;
+        java.util.concurrent.ExecutorService callers=java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
+            java.util.List<java.util.concurrent.Future<String>> replies=new java.util.ArrayList<>();
+            for(int i=0;i<4;i++)replies.add(callers.submit(()->new String(request("POST",path,"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}","",false),StandardCharsets.UTF_8)));
+            for(var reply:replies)assertTrue(reply.get(10,TimeUnit.SECONDS).startsWith("HTTP/1.1 200"));
+            try(Socket slow=new Socket("127.0.0.1",port)) {
+                slow.setSoTimeout(2000);slow.getOutputStream().write("POST /mcp HTTP/1.1\r\n".getBytes(StandardCharsets.US_ASCII));slow.getOutputStream().flush();
+                assertEquals(-1,slow.getInputStream().read());
+            }
+            int previous=port;server.close();server=new PhoneMcpServer(RuntimeEnvironment.getApplication(),store);
+            port=server.listen(new ServerSocket(),previous,false);
+            assertEquals(previous,port);
+            assertTrue(new String(request("GET","/health","","",false),StandardCharsets.UTF_8).startsWith("HTTP/1.1 200"));
+        } finally {callers.shutdownNow();}
+    }
+    @Test public void choosesAFreePersistedLoopbackPortWhenThePreferredPortIsBusy() throws Exception {
+        var app=RuntimeEnvironment.getApplication();
+        try(ServerSocket occupied=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
+            PhoneMcpSettings.prefs(app).edit().putInt("http_port",occupied.getLocalPort()).commit();
+            server.close();server=new PhoneMcpServer(app,store);server.start();port=PhoneMcpSettings.httpPort(app);
+            assertNotEquals(occupied.getLocalPort(),port);
+            assertTrue(PhoneMcpSettings.localUrl(app).startsWith("http://127.0.0.1:"+port+"/mcp/"));
+            assertTrue(new String(request("GET","/health","","",false),StandardCharsets.UTF_8).startsWith("HTTP/1.1 200"));
+        }
     }
     @Test public void fourViewsAreOneOrderedCommandAndBadInputsDoNotLeavePartialJobs() throws Exception {
         String image=image();JSONArray sources=new JSONArray().put(image).put(image).put(image).put(image);
