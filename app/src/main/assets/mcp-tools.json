@@ -1,0 +1,16 @@
+{
+  "application": "Modéliseur 3D",
+  "package": "com.chasmet.modeliseur3d",
+  "slug": "modeliseur3d",
+  "mode": "standalone",
+  "transport": "streamable-http",
+  "route": "/apps/modeliseur3d/mcp",
+  "tools": [
+    {"name":"application_status","description":"État du serveur Android. Sans secret : état non sensible uniquement.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"outputSchema":{"type":"object"},"category":"read","destructive":false,"timeoutMs":10000,"public":true},
+    {"name":"application_capabilities","description":"Moteurs 3D locaux, pipeline et capacités réelles.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"outputSchema":{"type":"object"},"category":"read","destructive":false,"timeoutMs":10000,"public":true},
+    {"name":"list_models_and_images","description":"Liste des modèles et images privés de cette application.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"outputSchema":{"type":"object"},"category":"read","destructive":false,"timeoutMs":10000,"public":false},
+    {"name":"create_model_from_images","description":"Met en file un calcul GLB local avec le pipeline de l’atelier manuel.","inputSchema":{"type":"object","properties":{"images":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":4},"engine":{"type":"string","enum":["auto","triposr","silhouettes"],"default":"auto"},"quality":{"type":"string","enum":["precise","balanced","fast"],"default":"precise"},"smoothing":{"type":"boolean","default":true}},"required":["images"],"additionalProperties":false},"outputSchema":{"type":"object"},"category":"write","destructive":false,"timeoutMs":20000,"public":false},
+    {"name":"model_status","description":"État d’un modèle privé identifié.","inputSchema":{"type":"object","properties":{"model_id":{"type":"string"}},"required":["model_id"],"additionalProperties":false},"outputSchema":{"type":"object"},"category":"read","destructive":false,"timeoutMs":10000,"public":false},
+    {"name":"model_download","description":"Lien secret de téléchargement du GLB sauvegardé.","inputSchema":{"type":"object","properties":{"model_id":{"type":"string"}},"required":["model_id"],"additionalProperties":false},"outputSchema":{"type":"object"},"category":"read","destructive":false,"timeoutMs":10000,"public":false}
+  ]
+}

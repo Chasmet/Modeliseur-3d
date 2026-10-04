@@ -164,7 +164,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.4.1",
+                  "User-Agent": "Modeliseur3D-CI/6.4.2",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -248,10 +248,10 @@ jobs:
           unzip -t "$APK" >/dev/null
           echo "APK validé et tests Android/MCP exécutés avant publication."
 
-      - name: Publier l'APK V6.4.1
+      - name: Publier l'APK V6.4.2
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.4.1-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.4.2-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -280,11 +280,10 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.4.1 : serveur MCP Android avec diagnostic IPv4/IPv6, CGNAT sur le lien, endpoints /health et /status, authentification Bearer sur /mcp, validation stricte des commandes et protocole 2025-11-25. Les liens MCP privés précédents restent compatibles.
-          Jeton MCP et certificat chiffrés avec Android Keystore, migration conservant le jeton existant. Surveillance des changements de réseau, reconnexion progressive, file de calcul et GLB locaux conservés. Un certificat absent ou expiré ne bloque plus le serveur local.
-          Dans Réglages → Serveur MCP du téléphone : activer/désactiver, diagnostic réseau, test MCP local et vérification HTTPS. L’accès depuis Internet est distinct du test effectué depuis le téléphone et reste à vérifier depuis ChatGPT ou un autre réseau.
-          Le mode direct fonctionne sans serveur de calcul externe. Il nécessite encore un certificat HTTPS public et un accès entrant autorisé par la connexion. Émission/renouvellement ACME et ouverture automatique de ports de la box ne sont pas implémentés. NAT/CGNAT amont et double NAT ne sont pas déterminables à partir de l’adresse privée du téléphone seule.
-          Les moteurs 3D, projets et fonctions de mise à jour sont conservés. Même package et même certificat APK que la 6.3.10. Android Keystore matériel, écran éteint, redémarrage physique et accès extérieur restent à tester sur téléphone.
+          V6.4.2 : gestion HTTPS automatique depuis le téléphone, IPv4 publique et passerelle détectées, tentatives PCP/NAT-PMP/UPnP, ACME HTTP-01 et certificats IP Let’s Encrypt shortlived avec renouvellement avant expiration.
+          Activation dans Réglages → Serveur MCP du téléphone → Activer HTTPS automatique. Le diagnostic fournit la seule règle de box manquante si l’ouverture automatique du port externe 80 échoue. Une redirection existante n’est pas une preuve de HTTPS ou de MCP.
+          Connexion HTTPS sans authentification : application_status et application_capabilities uniquement, sans modèles privés ni écriture. Les six outils complets et les anciennes URL privées restent disponibles avec leur secret. Le certificat et le compte ACME sont chiffrés avec Android Keystore.
+          Mêmes moteurs, projets, package et signature APK. Les tests de protocole, CSR OpenSSL, sockets HTTP-01/TLS et compatibilité passent avant publication. Émission sur téléphone réel, accès extérieur, restrictions constructeur et connexion ChatGPT restent à vérifier après installation ; aucun état CHATGPT_CONNECTED n’est inventé.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")

@@ -19,6 +19,9 @@ import java.util.concurrent.*;
 public final class PhoneMcpSettingsActivity extends AppCompatActivity {
     private final ExecutorService files=Executors.newSingleThreadExecutor();
     private TextView state;
+    private TextView automaticState;
+    private final Handler screen=new Handler(Looper.getMainLooper());
+    private final Runnable updateAutomatic=new Runnable() {public void run() {if(!isDestroyed()&&automaticState!=null) {automaticState.setText(PhonePublicConnection.report(PhoneMcpSettingsActivity.this));screen.postDelayed(this,4000);}}};
     private EditText publicAddress,password;
     private CheckBox direct;
     private final ActivityResultLauncher<String[]> certificate=registerForActivityResult(new ActivityResultContracts.OpenDocument(),uri->{
@@ -29,6 +32,7 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
             try(InputStream input=getContentResolver().openInputStream(uri)) {
                 if(input==null)throw new IOException("Certificat introuvable.");
                 PhoneMcpSettings.importCertificate(this,input,secret);
+                PhoneMcpSettings.prefs(this).edit().putBoolean("automatic_https",false).commit();
                 show("Certificat importé. Enregistre la configuration pour redémarrer HTTPS.");
             } catch(Exception error) {show("Certificat refusé : vérifie sa validité et son mot de passe. Le précédent est conservé.");}
         });
@@ -57,17 +61,34 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
         button(layout,"Diagnostic réseau",this::diagnose);
         button(layout,"Tester le serveur local",this::testLocal);
         text(layout,"Accès depuis Internet",22);
-        text(layout,"Une IPv6 globale peut permettre l’accès direct si le pare-feu de la box l’autorise. En IPv4 privée, il faut une adresse publique sur la box et une redirection. La présence d’une adresse ne prouve pas que le port est accessible.",16);
+        text(layout,"HTTPS automatique détecte l’IPv4 publique et la passerelle, tente PCP/NAT-PMP/UPnP et renouvelle le certificat IP Let’s Encrypt avant expiration. Le port externe 80 est nécessaire à la validation du certificat ; le diagnostic affiche la règle précise si la box refuse l’ouverture automatique.",16);
+        button(layout,"Activer HTTPS automatique",()->new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Certificat public Let’s Encrypt")
+                .setMessage("Un certificat gratuit pour ton IP publique sera demandé et renouvelé depuis ce téléphone. En activant, tu acceptes les conditions Let’s Encrypt consultables ci-dessous. La connexion publique sans authentification expose uniquement l’état non sensible et les capacités de l’application. Les 6 outils complets restent sur le lien privé.")
+                .setNeutralButton("Conditions",(dialog,which)->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://letsencrypt.org/repository/"))))
+                .setNegativeButton("Annuler",null).setPositiveButton("Activer",(dialog,which)->{
+                    if(!getSharedPreferences("mcp_background",0).getString("command","").isEmpty()) {state.setText("Termine la commande conservée avant de changer de connexion.");return;}
+                    direct.setChecked(true);PhoneMcpSettings.prefs(this).edit().putBoolean("automatic_https",true).putBoolean("direct",true).commit();
+                    if(McpConnectionService.enabled(this))McpConnectionService.restart(this);else McpConnectionService.setEnabled(this,true);
+                    refresh();
+                }).show());
+        button(layout,"Renouveler le certificat",()->{if(PhoneMcpSettings.prefs(this).getBoolean("automatic_https",false))McpConnectionService.renewCertificate(this);else state.setText("Active d’abord HTTPS automatique.");});
+        button(layout,"Copier l’URL ChatGPT sans authentification",()->{
+            if(PhoneMcpSettings.publicBase(this).isEmpty()||!PhoneMcpSettings.prefs(this).getBoolean("https_running",false))state.setText("URL indisponible tant que la détection publique et le certificat n’ont pas abouti.");
+            else copy(PhoneMcpSettings.connectionUrl(this),"URL copiée · 2 outils de lecture non sensibles. La connexion extérieure reste à vérifier.");
+        });
+        automaticState=new TextView(this);automaticState.setTextIsSelectable(true);layout.addView(automaticState);screen.post(updateAutomatic);
+        text(layout,"Configuration HTTPS manuelle (avancé)",20);
         publicAddress=new EditText(this);publicAddress.setSingleLine(true);
         publicAddress.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
         publicAddress.setHint("https://domaine:8443 ou https://[IPv6]:8443");
         publicAddress.setText(PhoneMcpSettings.publicBase(this));layout.addView(publicAddress);
-        text(layout,"HTTPS : importe un certificat PKCS12 (.p12) valide pour cette adresse, contenant sa chaîne et sa clé privée. Port HTTPS par défaut : 8443 ; le port actif est affiché ci-dessous. Un certificat importé doit être renouvelé avant son expiration.",15);
+        text(layout,"Alternative manuelle : importer un certificat PKCS12 (.p12) pour cette adresse. Cette option désactive la gestion automatique lorsqu’elle est choisie.",15);
         password=new EditText(this);password.setSingleLine(true);
         password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setHint("Mot de passe du fichier .p12");layout.addView(password);
         button(layout,"Importer le certificat HTTPS",()->certificate.launch(new String[]{"*/*"}));
-        button(layout,"Enregistrer la connexion",()->{if(save())refresh();});
+        button(layout,"Utiliser la configuration manuelle",()->{if(save(true))refresh();});
         button(layout,"Tester HTTPS à l’adresse publique",this::testPublic);
         button(layout,"Copier l’URL MCP HTTPS privée",()->{
             String url=PhoneMcpSettings.publicUrl(this);
@@ -94,14 +115,18 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
                 +"\nUne adresse enregistrée ne confirme pas l’accès depuis ChatGPT.");
     }
     private boolean save() {
+        return save(false);
+    }
+    private boolean save(boolean manual) {
         try {
             if(!getSharedPreferences("mcp_background",0).getString("command","").isEmpty()) {
                 state.setText("Termine la commande conservée avant de changer de connexion. Les fichiers sont préservés.");return false;
             }
-            String address=PhoneMcpSettings.validatePublicBase(publicAddress.getText().toString());
+            boolean automatic=!manual&&PhoneMcpSettings.prefs(this).getBoolean("automatic_https",false);
+            String address=automatic?PhoneMcpSettings.publicBase(this):PhoneMcpSettings.validatePublicBase(publicAddress.getText().toString());
             boolean enabled=McpConnectionService.enabled(this);
             // The previous service must be destroyed before its ports/executors are reused.
-            PhoneMcpSettings.prefs(this).edit().putBoolean("direct",direct.isChecked()).putString("public_base",address).remove("external_client").commit();
+            PhoneMcpSettings.prefs(this).edit().putBoolean("direct",direct.isChecked()).putBoolean("automatic_https",automatic).putString("public_base",address).remove("external_client").commit();
             if(enabled)McpConnectionService.restart(this);
             return true;
         } catch(Exception error) {state.setText(error.getMessage()==null?"Configuration invalide.":error.getMessage());return false;}
@@ -113,7 +138,7 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
                 JSONObject snapshot=PhoneNetworkDiagnostics.snapshot(this);
                 String external=PhoneMcpSettings.prefs(this).getLong("external_client",0)>0?"Accès extérieur HTTPS authentifié observé depuis le dernier changement réseau.":"Accès extérieur : non vérifié.";
                 show(PhoneNetworkDiagnostics.summary(snapshot)+"\n"+external
-                        +"\nCertificat automatique et redirection de box : non configurés. Aucun port n’est déclaré ouvert sans essai extérieur.");
+                        +"\n"+PhonePublicConnection.report(this));
             } catch(Exception error) {show("Diagnostic réseau indisponible. Le serveur et les fichiers locaux restent conservés.");}
         });
     }
@@ -130,6 +155,7 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
                 int separator=reply.indexOf("\r\n\r\n");
                 if(!reply.startsWith("HTTP/1.1 200")||separator<0)throw new IOException("Réponse locale invalide.");
                 int tools=new JSONObject(reply.substring(separator+4)).getJSONObject("result").getJSONArray("tools").length();
+                PhoneMcpSettings.prefs(this).edit().putLong("local_test_at",System.currentTimeMillis()).apply();
                 show("Serveur MCP local opérationnel · "+tools+" outils découverts.\nCe test ne vérifie pas l’accès depuis Internet.");
             } catch(Exception error) {show("Serveur local injoignable. Active le serveur du téléphone et vérifie que le port local affiché est libre.");}
         });
@@ -165,5 +191,5 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
         catch(RuntimeException e) {startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
     }
     @Override protected void onResume() {super.onResume();if(state!=null)refresh();}
-    @Override protected void onDestroy() {files.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy() {screen.removeCallbacksAndMessages(null);files.shutdownNow();super.onDestroy();}
 }

@@ -1,57 +1,60 @@
-# Serveur Android direct — 6.4.1
+# Serveur Android direct — 6.4.2
 
-Le serveur et les moteurs 3D s’exécutent sur le téléphone. Aucune clé OpenAI ni aucun serveur de calcul externe n’est nécessaire. GitHub compile et distribue l’APK ; il n’héberge pas ce serveur MCP.
+Modéliseur 3D, package `com.chasmet.modeliseur3d`, Java 17, minSdk 21, targetSdk 34. Le serveur existant est réutilisé en mode autonome : aucun Serveur App Host universel n’est installé par cet APK. GitHub compile et distribue l’APK ; il ne participe pas à l’exécution du serveur. Calculs et GLB restent sur le téléphone.
 
-## Réglages
+## Configuration automatique
 
-Ouvrir **Réglages → Serveur MCP du téléphone → Activer le serveur du téléphone**.
+Installer la mise à jour par-dessus l’application. Dans **Réglages → Serveur MCP du téléphone**, choisir **Activer HTTPS automatique** et accepter les conditions Let’s Encrypt affichées. Aucun champ IP, MAC, port ou URL n’est à remplir.
 
-- **Diagnostic réseau** : type de connexion, adresses du lien actif, IPv6 globale, IPv4 privée/publique et CGNAT observable sur le lien.
-- **Tester le serveur local** : requête HTTP réelle et découverte des six outils sur le téléphone.
-- **Tester HTTPS à l’adresse publique** : contrôle TLS avec les autorités Android habituelles et le nom d’hôte configuré. Aucun certificat n’est accepté en désactivant la vérification.
-- Le test de l’adresse publique depuis le téléphone ne prouve pas l’accès extérieur : la box peut permettre uniquement le réseau local ou, inversement, refuser le retour par sa propre adresse publique.
-- Un accès MCP authentifié reçu en HTTPS depuis une adresse extérieure globale est enregistré séparément. Cette observation est invalidée quand le lien réseau ou la configuration change.
+Un exécuteur indépendant du calcul 3D :
 
-Le bouton d’accueil indique **Activer MCP / Désactiver MCP** : il n’affiche plus « Connecté » uniquement parce que le service est activé.
+1. Lit l’IPv4 et la passerelle du Wi-Fi actif avec ConnectivityManager.
+2. Demande l’adresse WAN via UPnP IGD puis NAT-PMP. Sans adresse publique exploitable, compare deux services HTTPS : api4.ipify.org et checkip.amazonaws.com. Une divergence bloque l’émission.
+3. Tente PCP, NAT-PMP puis UPnP pour TCP public 8443 vers le port TLS réel. Un conflit local choisit un port libre. Une règle visant un autre service n’est pas écrasée.
+4. Lance HTTP-01 sur 8080 ou un port libre et tente une redirection temporaire TCP externe 80. Seul le challenge aléatoire est servi, sans données ni fonctions MCP.
+5. Demande un certificat IP via ACME v2, identifiant `ip`, profil `shortlived`, JWS RS256, nonces et POST-as-GET. Les endpoints restent sur la même autorité HTTPS.
+6. Vérifie clé, validité, SAN IP et chaîne reconnue par Android avant d’enregistrer le PKCS12 chiffré. Recharge le listener TLS sans arrêter les calculs ni les sockets déjà acceptés.
+7. Recalcule l’URL depuis les valeurs mesurées. Contrôle le réseau et renouvelle les règles toutes les cinq minutes. Renouvelle le certificat lorsqu’il reste moins de 48 heures, ou après changement d’IP publique.
 
-## Endpoints et authentification
+Les certificats IP Let’s Encrypt durent 160 heures. Le délai d’échec ACME est persistant, au moins une heure, et respecte Retry-After. Le téléphone doit rester allumé, connecté et autorisé à fonctionner en arrière-plan. Les changements réseau et erreurs Internet ne suppriment ni projets, ni file locale, ni GLB. La validation TLS n’est jamais désactivée.
 
-| Endpoint | Usage | Accès |
+Si le serveur de test Python occupe 8443, l’arrêter libère le port de la règle Livebox existante. Si la box refuse l’ouverture automatique, le diagnostic affiche la règle exacte avec l’adresse locale et les ports mesurés. Le port externe 80 doit rester redirigé vers le port du challenge pour les renouvellements avec une règle manuelle ; le répondeur est fermé hors émission.
+
+Livebox 5 : conserver le bail DHCP statique et le pare-feu **Moyen**. Ne modifier ni Wi-Fi, ni mots de passe, ni autres appareils. Les API Android ordinaires ne permettent pas de changer la MAC aléatoire ou un bail DHCP ; les redirections automatiques suivent les changements d’IPv4 locale. Une redirection acceptée n’est pas une preuve d’accès extérieur.
+
+## Routes
+
+| Route | Accès | Capacités |
 | --- | --- | --- |
-| `GET /health` | État léger, sans données privées | Pas de secret requis |
-| `GET /status` | État détaillé et diagnostic réseau | Bearer |
-| `POST /mcp` | Streamable HTTP | Bearer |
-| `POST /mcp/<jeton>` | Compatibilité avec l’URL privée précédente | Secret dans l’URL |
-| `GET /files/<id>/<secret>` | GLB sauvegardé | Secret de téléchargement propre au modèle |
+| GET /health, /apps/modeliseur3d/health | Aucun secret | Santé légère |
+| GET /status, /apps/modeliseur3d/status en HTTPS sans Bearer | Aucun | État non sensible |
+| POST /apps/modeliseur3d/mcp ou /mcp en HTTPS sans Bearer | Aucun | application_status et application_capabilities |
+| POST /mcp ou route application avec Bearer valide | Jeton | Six outils complets |
+| POST /mcp/&lt;jeton&gt; | Lien privé | Six outils complets précédents |
+| GET /files/&lt;id&gt;/&lt;secret&gt; | Secret par modèle | GLB prêt |
+| HTTP loopback 127.0.0.1:8787 ou port libre | Bearer / lien privé | Diagnostic local uniquement |
 
-Le protocole négocie les versions 2025-03-26, 2025-06-18 et 2025-11-25. Les arguments sont validés strictement avant mise en file. Aucune commande shell ou lecture arbitraire de fichiers n’est exposée.
+Les six outils complets : `application_status`, `application_capabilities`, `list_models_and_images`, `create_model_from_images`, `model_status`, `model_download`. Le manifeste local dans `assets/mcp-tools.json` décrit les schémas et les politiques. Streamable HTTP négocie 2025-03-26, 2025-06-18 ou 2025-11-25.
 
-Outils : `application_status`, `application_capabilities`, `list_models_and_images`, `create_model_from_images`, `model_status`, `model_download`.
+L’endpoint public sans authentification ne donne accès ni aux modèles personnels, ni aux commandes d’écriture, ni aux informations réseau du téléphone. Jetons, clé ACME et PKCS12 sont chiffrés par AES-GCM avec Android Keystore ; Android 21/22 enveloppe la clé AES par RSA. Les anciennes URL privées restent compatibles. Aucun shell, stockage arbitraire ou contrôle d’autres applications.
 
-Les jetons et le PKCS12 sont chiffrés par AES-GCM avec une clé protégée par Android Keystore. Android 21/22 utilise une clé AES enveloppée par une clé RSA du Keystore. La migration conserve le jeton et les liens privés existants. Les secrets ne sont pas sauvegardés dans les sauvegardes Android et ne sont pas journalisés.
+## Validation et plugin
 
-HTTP écoute **127.0.0.1:8787** pour les tests sur le téléphone seulement. Le réseau utilise HTTPS **8443** avec un certificat importé. Si le port est occupé, un port libre est conservé dans les réglages : adapter alors le pare-feu ou la redirection à ce port affiché. Un certificat absent, invalide ou expiré n’empêche pas le serveur local de fonctionner.
+Le panneau sépare les observations : listener actif, test local réussi, TCP extérieur observé, TLS actif et outil MCP appelé depuis l’extérieur. Il ne déclare pas ChatGPT connecté à partir d’un heartbeat.
 
-## Accès direct depuis ChatGPT
+- LOCAL_OK : test réel sur le téléphone.
+- PUBLIC_TCP_OK : handshake extérieur.
+- HTTPS_OK : test extérieur avec certificat et SAN IP vérifiés.
+- MCP_OK : initialize, tools/list et tools/call sur l’URL publique.
+- PLUGIN_READY : connexion ChatGPT préparée pour l’URL vérifiée.
+- CHATGPT_CONNECTED : appel effectif d’un outil depuis ChatGPT.
 
-1. Installer la mise à jour par-dessus l’application existante.
-2. Activer le serveur du téléphone et consulter le diagnostic.
-3. En IPv6 globale, autoriser le port HTTPS entrant dans le pare-feu de la box. En IPv4 privée, vérifier l’adresse WAN de la box puis configurer sa redirection vers le téléphone. Une IP privée ne suffit pas pour déterminer le double NAT ou le CGNAT amont.
-4. Importer un PKCS12 contenant un certificat reconnu publiquement, sa chaîne et sa clé privée, valable pour le domaine ou l’IP configurée. Renouveler ce certificat avant son expiration.
-5. Enregistrer la base HTTPS publique, sans chemin. Le diagnostic refuse les IP locales/réservées comme adresse publique.
-6. Copier l’URL MCP HTTPS privée et l’utiliser dans le connecteur ChatGPT. Ne pas la publier.
-7. Tester depuis ChatGPT ou un réseau extérieur. Le connecteur Render existant ne devient pas automatiquement le connecteur direct : son endpoint doit être remplacé.
+Après MCP_OK : nom **Modéliseur 3D**, description **État et capacités du modeleur 3D Android**, URL fournie par **Copier l’URL ChatGPT sans authentification**, authentification **Aucune**. Le panneau recalcule l’URL après changement d’IP ; l’APK ne peut pas modifier à lui seul le plugin ChatGPT distant.
 
-La simple présence d’une IPv6 globale ne prouve pas que son pare-feu est ouvert. Si aucune adresse entrante n’est exploitable, l’accès Internet direct n’est pas établi ; le service local et les fichiers restent utilisables. Aucun relais payant n’est ajouté automatiquement.
+## Contrôles et limites
 
-## Persistance
+Tests de bureau : signatures JWS, badNonce, identifiant IP, POST-as-GET, profil shortlived, CSR vérifié indépendamment par OpenSSL, PCP/NAT-PMP, répondeur HTTP-01 réel, sockets TLS, outils publics limités, écritures refusées sans secret et rechargement TLS. Tests existants des six outils, file persistante et migration des secrets conservés.
 
-Le ForegroundService conserve les tâches et les GLB dans le stockage privé, reprend les travaux après interruption et surveille les changements de réseau avec ConnectivityManager. Les échecs de démarrage utilisent un délai progressif jusqu’à une minute. Les coupures réseau n’annulent pas l’inférence locale.
+Ces tests ne remplacent pas l’émission Let’s Encrypt sur le téléphone, les essais avec la Livebox réelle, le test extérieur HTTPS/MCP, l’écran éteint, le reboot et l’appel ChatGPT. Les tests Keystore emploient un adaptateur en mémoire ; ils ne prouvent pas la protection matérielle.
 
-Autoriser l’activité en arrière-plan et les notifications. Les restrictions du constructeur peuvent nécessiter d’autoriser aussi le lancement automatique. Un téléphone éteint ou une application arrêtée de force ne reçoit pas de commandes ; rouvrir l’application après un arrêt forcé.
-
-## Limites restantes
-
-L’émission et le renouvellement ACME ainsi que PCP/NAT-PMP/UPnP ne sont pas implémentés. La configuration HTTPS et du réseau entrant reste nécessaire. Aucun test depuis le téléphone physique de l’utilisateur, écran éteint ou depuis Internet n’est revendiqué par les tests de bureau. Les tests cryptographiques de bureau utilisent un adaptateur de Keystore en mémoire ; ils vérifient AES-GCM et la migration, pas la protection matérielle Android.
-
-Le mode relais précédent reste disponible en compatibilité. Les moteurs TripoSR/Silhouettes, les modes existants, les projets et la mise à jour automatique sont conservés. L’application modélise ; elle n’effectue ni rigging ni animation.
+Le relais historique reste disponible si l’utilisateur le choisit. Le mode direct n’en dépend pas. Même package et signature APK, moteurs TripoSR/Silhouettes/IS-Net/Depth Anything V2, projets et mise à jour automatique conservés ; aucun rigging ni animation ajouté.

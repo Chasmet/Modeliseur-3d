@@ -107,6 +107,20 @@ public class PhoneMcpServerTest {
             SSLContext clientTls=SSLContext.getInstance("TLS");clientTls.init(null,tm.getTrustManagers(),null);
             String reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST",path,"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}","",false),StandardCharsets.UTF_8);
             assertTrue(reply+"; transport failure: "+failure.get(),reply.startsWith("HTTP/1.1 200"));assertTrue(reply.contains("create_model_from_images"));
+            reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST","/apps/modeliseur3d/mcp","{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}","",false),StandardCharsets.UTF_8);
+            JSONArray safe=new JSONObject(reply.substring(reply.indexOf("\r\n\r\n")+4)).getJSONObject("result").getJSONArray("tools");
+            assertEquals(2,safe.length());assertFalse(reply.contains("create_model_from_images"));assertFalse(reply.contains("list_models_and_images"));
+            String publicCall="{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"application_status\",\"arguments\":{}}}";
+            reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST","/apps/modeliseur3d/mcp",publicCall,"",false),StandardCharsets.UTF_8);
+            assertTrue(reply.contains("\"isError\":false"));assertFalse(reply.contains("network"));assertFalse(reply.contains("last_client"));assertFalse(reply.contains(PhoneMcpSettings.token(app)));
+            reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST","/mcp",publicCall.replace("application_status","create_model_from_images"),"",false),StandardCharsets.UTF_8);
+            assertTrue(reply.contains("-32602"));assertEquals(0,store.poll().getJSONArray("local_commands").length());
+            reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",port),"POST","/mcp",publicCall,"Authorization: Bearer invalid\r\n",false),StandardCharsets.UTF_8);
+            assertTrue(reply.startsWith("HTTP/1.1 401"));
+            server.pauseTls();assertFalse(server.httpsRunning());
+            PhoneMcpSettings.prefs(app).edit().putInt("https_port",port).commit();server.reloadTls();assertTrue(server.httpsRunning());
+            reply=new String(requestOver(clientTls.getSocketFactory().createSocket("localhost",PhoneMcpSettings.httpsPort(app)),"GET","/health","","",false),StandardCharsets.UTF_8);
+            assertTrue(reply.startsWith("HTTP/1.1 200"));
         } finally {if(keytool.isAlive())keytool.destroyForcibly();generated.delete();log.delete();PhoneMcpSettings.certificate(app).delete();}
     }
     @Test public void healthStatusBearerAndLatestProtocolHaveDistinctAccessRules() throws Exception {

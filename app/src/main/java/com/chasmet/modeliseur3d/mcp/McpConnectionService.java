@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class McpConnectionService extends Service {
     public static final String DISCONNECT = "com.chasmet.modeliseur3d.MCP_DISCONNECT";
     private static final String RECONFIGURE = "com.chasmet.modeliseur3d.MCP_RECONFIGURE";
+    private static final String PUBLIC_SETUP = "com.chasmet.modeliseur3d.MCP_PUBLIC_SETUP";
     private static final String PREFS="mcp_background", CHANNEL="mcp_background";
     private static final int NOTIFICATION=803;
     private final ScheduledExecutorService network=Executors.newSingleThreadScheduledExecutor();
@@ -34,6 +35,7 @@ public class McpConnectionService extends Service {
     private PowerManager.WakeLock connectionPower;
     private long lastNotification;
     private PhoneMcpServer phoneServer;
+    private volatile PhonePublicConnection publicConnection;
     private android.net.wifi.WifiManager.WifiLock wifi;
     private android.net.ConnectivityManager connectivity;
     private android.net.ConnectivityManager.NetworkCallback networkCallback;
@@ -68,9 +70,14 @@ public class McpConnectionService extends Service {
     public static void restart(Context c) {
         ContextCompat.startForegroundService(c,new Intent(c,McpConnectionService.class).setAction(RECONFIGURE));
     }
+    public static void renewCertificate(Context c) {
+        if(!enabled(c))setEnabled(c,true);
+        PhoneMcpSettings.prefs(c).edit().putBoolean("automatic_force_renew",true).apply();
+        ContextCompat.startForegroundService(c,new Intent(c,McpConnectionService.class).setAction(PUBLIC_SETUP));
+    }
     @Override public void onCreate() {
         super.onCreate();
-        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).remove("external_client").apply();
+        PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).remove("external_client").remove("local_test_at").remove("public_mcp_client").apply();
         android.net.wifi.WifiManager manager=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
         if (manager!=null) { wifi=manager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"Modeliseur3D:McpWifi");wifi.setReferenceCounted(false); }
 
@@ -98,6 +105,7 @@ public class McpConnectionService extends Service {
                         SharedPreferences state=PhoneMcpSettings.prefs(McpConnectionService.this);
                         if(!snapshot.equals(state.getString("network_snapshot","")))
                             state.edit().putString("network_snapshot",snapshot).remove("external_client").apply();
+                        if(publicConnection!=null)publicConnection.request();
                     } catch(Exception ignored) { }
                 });} catch(RejectedExecutionException ignored) { }
             }
@@ -113,6 +121,7 @@ public class McpConnectionService extends Service {
             disconnect(); return START_NOT_STICKY;
         }
         startForeground(NOTIFICATION,notification());
+        if(intent!=null&&PUBLIC_SETUP.equals(intent.getAction())&&publicConnection!=null)publicConnection.request();
         if(intent!=null && RECONFIGURE.equals(intent.getAction()) && active) {
             network.execute(()->{closePhoneServer();api=null;retryAt=0;failures=0;});
         }
@@ -134,6 +143,7 @@ public class McpConnectionService extends Service {
         catch(Exception failure) { phoneServer.close();phoneServer=null;throw failure; }
         if(!connected()) { phoneServer.close();phoneServer=null;throw new CancellationException("Connexion arrêtée."); }
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",true).apply();
+        publicConnection=new PhonePublicConnection(this,phoneServer);
         try {if(wifi!=null && !wifi.isHeld())wifi.acquire();}catch(RuntimeException ignored) { }
         progress="En attente de commande · mode Précis + IS-Net";
         return new PhoneMcpApi(store);
@@ -318,6 +328,7 @@ public class McpConnectionService extends Service {
         super.onDestroy();
     }
     private synchronized void closePhoneServer() {
+        if(publicConnection!=null) {publicConnection.close();publicConnection=null;}
         if(phoneServer!=null) {phoneServer.close();phoneServer=null;}
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).apply();
         PhoneMcpSettings.prefs(this).edit().putBoolean("https_running",false).apply();

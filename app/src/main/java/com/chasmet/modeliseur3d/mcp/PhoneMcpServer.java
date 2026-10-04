@@ -17,10 +17,23 @@ public final class PhoneMcpServer implements AutoCloseable {
     private final String token;
     private final Set<Socket> clients=ConcurrentHashMap.newKeySet();
     private final ThreadPoolExecutor requests=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
-    private final List<ServerSocket> listeners=new ArrayList<>();
+    private final List<ServerSocket> listeners=new CopyOnWriteArrayList<>();
+    private ServerSocket tlsListener;
     private volatile boolean closed;
     private volatile boolean httpsRunning;
     public boolean httpsRunning() { return httpsRunning; }
+    public synchronized void pauseTls() {
+        if(tlsListener!=null) {try {tlsListener.close();}catch(IOException ignored) { }listeners.remove(tlsListener);tlsListener=null;}
+        httpsRunning=false;PhoneMcpSettings.prefs(context).edit().putBoolean("https_running",false).apply();
+    }
+    public synchronized void reloadTls() throws Exception {
+        if(closed)throw new IOException("Serveur arrêté.");
+        SSLContext tls=PhoneMcpSettings.tls(context);if(tls==null)throw new IOException("Certificat absent.");
+        pauseTls();int port;
+        try {port=listen(tls.getServerSocketFactory().createServerSocket(),PhoneMcpSettings.httpsPort(context),true);}
+        catch(BindException busy) {port=listen(tls.getServerSocketFactory().createServerSocket(),0,true);}
+        PhoneMcpSettings.prefs(context).edit().putInt("https_port",port).putBoolean("https_running",true).putString("tls_error","").apply();
+    }
     // Optional in-process diagnostics. No access log or private URL is emitted.
     java.util.function.Consumer<Exception> clientErrors=error -> { };
     int clientTimeoutMs=20000;
@@ -52,14 +65,14 @@ public final class PhoneMcpServer implements AutoCloseable {
         try {listener.bind(tls?new InetSocketAddress(port):new InetSocketAddress(InetAddress.getByName("127.0.0.1"),port));}
         catch(IOException failure) {listener.close();throw failure;}
         listeners.add(listener);
-        if(tls)httpsRunning=true;
+        if(tls) {httpsRunning=true;tlsListener=listener;}
         Thread accept=new Thread(()->{
             while(!closed) {
                 try {
                     Socket socket=listener.accept();socket.setSoTimeout(clientTimeoutMs);clients.add(socket);
                     try { requests.execute(()->{try { serve(socket,tls); } catch(Exception error) { clientErrors.accept(error); } finally { clients.remove(socket);try {socket.close();}catch(IOException ignored){} } }); }
                     catch(RejectedExecutionException overload) {clients.remove(socket);socket.close();}
-                } catch(IOException stopped) { if(closed)return; }
+                } catch(IOException stopped) { if(closed||listener.isClosed())return; }
             }
         },"PhoneMcpAccept");accept.setDaemon(true);accept.start();return listener.getLocalPort();
     }
@@ -73,16 +86,19 @@ public final class PhoneMcpServer implements AutoCloseable {
         if(!allowedHost(host) || !allowedOrigin(headers.get("origin"))) { response(output,403,"application/json",new byte[0]);return; }
         InetAddress peer=socket.getInetAddress();
         if(!tls && PhoneNetworkDiagnostics.global(peer)) {response(output,403,"application/json",new byte[0]);return;}
-        if("GET".equals(method) && "/health".equals(path)) {
+        if("GET".equals(method) && ("/health".equals(path)||"/apps/modeliseur3d/health".equals(path))) {
             JSONObject health=new JSONObject().put("status","ok").put("server","android").put("mcp",true)
                     .put("transport","streamable-http").put("https",httpsRunning).put("tools",6);
             response(output,200,"application/json",health.toString().getBytes(StandardCharsets.UTF_8));return;
         }
-        boolean canonical="/mcp".equals(path)||"/status".equals(path);
+        boolean appMcp="/apps/modeliseur3d/mcp".equals(path);
+        boolean appStatus="/apps/modeliseur3d/status".equals(path);
+        boolean canonical="/mcp".equals(path)||"/status".equals(path)||appMcp||appStatus;
         boolean authorized=same(headers.get("authorization"),"Bearer "+token);
-        if(canonical && !authorized) {response(output,401,"application/json",new byte[0]);return;}
-        if("GET".equals(method) && "/status".equals(path)) {
-            response(output,200,"application/json",status().toString().getBytes(StandardCharsets.UTF_8));return;
+        boolean publicReadOnly=tls&&canonical&&!authorized&&!headers.containsKey("authorization");
+        if(canonical && !authorized && !publicReadOnly) {response(output,401,"application/json",new byte[0]);return;}
+        if("GET".equals(method) && ("/status".equals(path)||appStatus)) {
+            response(output,200,"application/json",(publicReadOnly?publicStatus():status()).toString().getBytes(StandardCharsets.UTF_8));return;
         }
         if(path.startsWith("/files/") && "GET".equals(method)) {
             String[] fields=path.split("/");
@@ -93,14 +109,14 @@ public final class PhoneMcpServer implements AutoCloseable {
                 head(output,200,"model/gltf-binary",file.length());try(InputStream bytes=new FileInputStream(file)){com.chasmet.modeliseur3d.cloud.CloudApi.copy(bytes,output);}return;
             } catch(Exception e) {response(output,404,"application/json",new byte[0]);return;}
         }
-        if(!"/mcp".equals(path) && !same(path,"/mcp/"+token)) {response(output,404,"application/json",new byte[0]);return;}
+        if(!"/mcp".equals(path) && !appMcp && !same(path,"/mcp/"+token)) {response(output,404,"application/json",new byte[0]);return;}
         if(!"POST".equals(method)) {response(output,405,"application/json",new byte[0]);return;}
         if(!headers.getOrDefault("content-type","").toLowerCase(Locale.ROOT).startsWith("application/json")) {response(output,415,"application/json",new byte[0]);return;}
         if(headers.containsKey("content-length") && headers.containsKey("transfer-encoding")) {response(output,400,"application/json",new byte[0]);return;}
         String protocol=headers.getOrDefault("mcp-protocol-version","2025-03-26");
         if (!supportedProtocol(protocol)) {response(output,400,"application/json",new byte[0]);return;}
         byte[] body;
-        try { body=body(input,headers); } catch(IOException invalid) {response(output,413,"application/json",new byte[0]);return;}
+        try { body=body(input,headers,publicReadOnly?8192:48*1024*1024); } catch(IOException invalid) {response(output,413,"application/json",new byte[0]);return;}
         JSONObject call;
         try {call=new JSONObject(new String(body,StandardCharsets.UTF_8));}catch(JSONException invalid){response(output,400,"application/json",error(JSONObject.NULL,-32700,"JSON invalide.").toString().getBytes(StandardCharsets.UTF_8));return;}
         if(!"2.0".equals(call.optString("jsonrpc"))||!call.has("method")){response(output,400,"application/json",error(call.opt("id"),-32600,"Requête RPC invalide.").toString().getBytes(StandardCharsets.UTF_8));return;}
@@ -109,7 +125,12 @@ public final class PhoneMcpServer implements AutoCloseable {
         seen.apply();
         if(!call.has("id")) {response(output,202,"application/json",new byte[0]);return;}
         JSONObject reply;
-        try {reply=new JSONObject().put("jsonrpc","2.0").put("id",call.get("id")).put("result",dispatch(call));}
+        try {
+            JSONObject result=publicReadOnly?dispatchPublic(call):dispatch(call);
+            reply=new JSONObject().put("jsonrpc","2.0").put("id",call.get("id")).put("result",result);
+            if(tls&&PhoneNetworkDiagnostics.global(peer)&&"tools/call".equals(call.optString("method"))&&!result.optBoolean("isError"))
+                PhoneMcpSettings.prefs(context).edit().putLong("public_mcp_client",System.currentTimeMillis()).apply();
+        }
         catch(RpcError exception) {reply=error(call.opt("id"),exception.code,exception.getMessage());}
         catch(Exception exception) {reply=error(call.opt("id"),-32602,"Paramètres MCP invalides.");}
         response(output,200,"application/json",reply.toString().getBytes(StandardCharsets.UTF_8));
@@ -159,6 +180,27 @@ public final class PhoneMcpServer implements AutoCloseable {
             String message=failure instanceof IOException?failure.getMessage():"L’outil local n’a pas pu terminer la commande.";
             return new JSONObject().put("content",new JSONArray().put(new JSONObject().put("type","text").put("text",message==null?"Échec de l’outil local.":message))).put("isError",true);
         }
+        return new JSONObject().put("content",new JSONArray().put(new JSONObject().put("type","text").put("text",result.toString()))).put("structuredContent",result).put("isError",false);
+    }
+    private JSONObject publicStatus() throws Exception {
+        return new JSONObject().put("server","android").put("application","Modéliseur 3D").put("online",true)
+                .put("transport","streamable-http").put("generation_runs_on","Android phone").put("public_tools_read_only",true);
+    }
+    private JSONObject dispatchPublic(JSONObject call) throws Exception {
+        String method=call.getString("method");
+        if("initialize".equals(method)||"ping".equals(method))return dispatch(call);
+        if("tools/list".equals(method)) {
+            JSONArray full=tools().getJSONArray("tools"),safe=new JSONArray();
+            for(int i=0;i<full.length();i++) {JSONObject tool=full.getJSONObject(i);if("application_status".equals(tool.getString("name"))||"application_capabilities".equals(tool.getString("name")))safe.put(tool);}
+            return new JSONObject().put("tools",safe);
+        }
+        if(!"tools/call".equals(method))throw new RpcError(-32601,"Méthode MCP inconnue.");
+        JSONObject params=call.optJSONObject("params");String name=params==null?"":params.optString("name");
+        if(!"application_status".equals(name)&&!"application_capabilities".equals(name))throw new RpcError(-32602,"Outil privé indisponible sur la connexion publique sans authentification.");
+        if("application_capabilities".equals(name))return dispatch(call);
+        JSONObject args=params.optJSONObject("arguments");
+        if(args==null&&params.has("arguments"))throw new RpcError(-32602,"Arguments objet requis.");
+        validateArguments(name,args==null?new JSONObject():args);JSONObject result=publicStatus();
         return new JSONObject().put("content",new JSONArray().put(new JSONObject().put("type","text").put("text",result.toString()))).put("structuredContent",result).put("isError",false);
     }
     private static boolean supportedProtocol(String version) {
@@ -212,7 +254,8 @@ public final class PhoneMcpServer implements AutoCloseable {
                     .put("destructiveHint",false)
                     .put("openWorldHint","create_model_from_images".equals(name)||"model_download".equals(name));
             list.put(new JSONObject().put("name",name).put("description",description)
-                    .put("inputSchema",schema).put("annotations",annotations));
+                    .put("inputSchema",schema).put("outputSchema",new JSONObject().put("type","object"))
+                    .put("annotations",annotations));
         }
         return new JSONObject().put("tools",list);
     }
@@ -223,8 +266,7 @@ public final class PhoneMcpServer implements AutoCloseable {
         while((b=input.read())!=-1) {if(b=='\n')return out.toString("US-ASCII").replaceAll("\r$","");if(out.size()>=limit)throw new IOException("Ligne trop longue.");out.write(b);}throw new EOFException();
     }
     private static byte[] exact(InputStream in,int size) throws IOException {byte[] bytes=new byte[size];int offset=0,n;while(offset<size){n=in.read(bytes,offset,size-offset);if(n<0)throw new EOFException();offset+=n;}return bytes;}
-    private static byte[] body(InputStream in,Map<String,String> headers) throws IOException {
-        int max=48*1024*1024;
+    private static byte[] body(InputStream in,Map<String,String> headers,int max) throws IOException {
         if("chunked".equalsIgnoreCase(headers.get("transfer-encoding"))) {
             ByteArrayOutputStream out=new ByteArrayOutputStream();
             while(true) {
@@ -242,5 +284,5 @@ public final class PhoneMcpServer implements AutoCloseable {
         String header="HTTP/1.1 "+status+" Response\r\n"+(status==405?"Allow: POST\r\n":"")+(status==401?"WWW-Authenticate: Bearer\r\n":"")+"Content-Type: "+type+"\r\nContent-Length: "+length+"\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n";out.write(header.getBytes(StandardCharsets.US_ASCII));
     }
     private static void response(OutputStream out,int status,String type,byte[] bytes) throws IOException {head(out,status,type,bytes.length);out.write(bytes);out.flush();}
-    @Override public void close() {closed=true;httpsRunning=false;for(ServerSocket listener:listeners)try{listener.close();}catch(IOException ignored){}for(Socket client:clients)try{client.close();}catch(IOException ignored){}requests.shutdownNow();}
+    @Override public synchronized void close() {closed=true;httpsRunning=false;for(ServerSocket listener:listeners)try{listener.close();}catch(IOException ignored){}for(Socket client:clients)try{client.close();}catch(IOException ignored){}requests.shutdownNow();}
 }

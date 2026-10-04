@@ -121,4 +121,5 @@ public final class PhoneMcpSettings {
     }
     public static String localUrl(Context c) { return "http://127.0.0.1:"+httpPort(c)+"/mcp/"+token(c); }
     public static String publicUrl(Context c) { String base=publicBase(c);return base.isEmpty()?"":base+"/mcp/"+token(c); }
+    public static String connectionUrl(Context c) {String base=publicBase(c);return base.isEmpty()?"non disponible":base+"/apps/modeliseur3d/mcp";}
 }
