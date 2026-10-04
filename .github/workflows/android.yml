@@ -108,14 +108,16 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.3.10
+      - name: Vérifier la version et l’architecture Android
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.3.10" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.3.10'" app/build.gradle
-          grep -q "versionCode 56" app/build.gradle
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' app/build.gradle)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$CODE" -gt 0
+          grep -Fq "Modéliseur 3D V$VERSION" app/src/main/AndroidManifest.xml
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -168,7 +170,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.3.10",
+                  "User-Agent": "Modeliseur3D-CI/6.4.1",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -237,10 +239,10 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
-      - name: Publier l'APK V6.3.10
+      - name: Publier l'APK V6.4.1
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.3.10-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.4.1-259-Assets-Export-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

@@ -97,14 +97,16 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V6.4.1
+      - name: Vérifier la version et l’architecture Android
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V6.4.1" app/src/main/AndroidManifest.xml
-          grep -q "versionName '6.4.1'" app/build.gradle
-          grep -q "versionCode 57" app/build.gradle
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' app/build.gradle)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$CODE" -gt 0
+          grep -Fq "Modéliseur 3D V$VERSION" app/src/main/AndroidManifest.xml
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
