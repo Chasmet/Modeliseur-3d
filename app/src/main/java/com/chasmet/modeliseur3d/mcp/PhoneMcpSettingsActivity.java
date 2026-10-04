@@ -53,42 +53,38 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
         text(layout,"Les images, le calcul 3D et les modèles restent sur ce téléphone. Qualité Précis + IS-Net par défaut, comme dans l’atelier manuel.",16);
         direct=new CheckBox(this);direct.setText("Serveur direct sur ce téléphone · sans relais");
         direct.setChecked(PhoneMcpSettings.direct(this));layout.addView(direct);
-        button(layout,"Activer le serveur du téléphone",()->{
-            direct.setChecked(true);
-            if(save()) {McpConnectionService.setEnabled(this,true);refresh();}
-        });
+        button(layout,"Configurer la connexion automatiquement",this::enableAutomatic);
         button(layout,"Désactiver le MCP",()->{McpConnectionService.setEnabled(this,false);refresh();});
         button(layout,"Diagnostic réseau",this::diagnose);
         button(layout,"Tester le serveur local",this::testLocal);
         text(layout,"Accès depuis Internet",22);
         text(layout,"HTTPS automatique détecte l’IPv4 publique et la passerelle, tente PCP/NAT-PMP/UPnP et renouvelle le certificat IP Let’s Encrypt avant expiration. Le port externe 80 est nécessaire à la validation du certificat ; le diagnostic affiche la règle précise si la box refuse l’ouverture automatique.",16);
-        button(layout,"Activer HTTPS automatique",()->new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Certificat public Let’s Encrypt")
-                .setMessage("Un certificat gratuit pour ton IP publique sera demandé et renouvelé depuis ce téléphone. En activant, tu acceptes les conditions Let’s Encrypt consultables ci-dessous. La connexion publique sans authentification expose uniquement l’état non sensible et les capacités de l’application. Les 6 outils complets restent sur le lien privé.")
-                .setNeutralButton("Conditions",(dialog,which)->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://letsencrypt.org/repository/"))))
-                .setNegativeButton("Annuler",null).setPositiveButton("Activer",(dialog,which)->{
-                    if(!getSharedPreferences("mcp_background",0).getString("command","").isEmpty()) {state.setText("Termine la commande conservée avant de changer de connexion.");return;}
-                    direct.setChecked(true);PhoneMcpSettings.prefs(this).edit().putBoolean("automatic_https",true).putBoolean("direct",true).commit();
-                    if(McpConnectionService.enabled(this))McpConnectionService.restart(this);else McpConnectionService.setEnabled(this,true);
-                    refresh();
-                }).show());
-        button(layout,"Renouveler le certificat",()->{if(PhoneMcpSettings.prefs(this).getBoolean("automatic_https",false))McpConnectionService.renewCertificate(this);else state.setText("Active d’abord HTTPS automatique.");});
+        button(layout,"Activer HTTPS automatique",this::enableAutomatic);
+        button(layout,"Renouveler le certificat",()->{
+            if(PhoneMcpSettings.prefs(this).getBoolean("automatic_https",false)) {
+                McpConnectionService.renewCertificate(this);
+                state.setText("Nouvel essai demandé. Un délai imposé par Let’s Encrypt reste respecté ; le suivi ci-dessous indique l’étape et l’heure.");
+            }else state.setText("Active d’abord HTTPS automatique.");
+        });
         button(layout,"Copier l’URL ChatGPT sans authentification",()->{
             if(PhoneMcpSettings.publicBase(this).isEmpty()||!PhoneMcpSettings.prefs(this).getBoolean("https_running",false))state.setText("URL indisponible tant que la détection publique et le certificat n’ont pas abouti.");
             else copy(PhoneMcpSettings.connectionUrl(this),"URL copiée · 2 outils de lecture non sensibles. La connexion extérieure reste à vérifier.");
         });
         automaticState=new TextView(this);automaticState.setTextIsSelectable(true);layout.addView(automaticState);screen.post(updateAutomatic);
-        text(layout,"Configuration HTTPS manuelle (avancé)",20);
+        Button advanced=new Button(this);advanced.setAllCaps(false);advanced.setText("Afficher la configuration manuelle avancée");layout.addView(advanced);
+        LinearLayout manual=new LinearLayout(this);manual.setOrientation(LinearLayout.VERTICAL);manual.setVisibility(android.view.View.GONE);layout.addView(manual);
+        advanced.setOnClickListener(v->{boolean open=manual.getVisibility()!=android.view.View.VISIBLE;manual.setVisibility(open?android.view.View.VISIBLE:android.view.View.GONE);advanced.setText(open?"Masquer la configuration manuelle avancée":"Afficher la configuration manuelle avancée");});
+        text(manual,"Configuration HTTPS manuelle (avancé)",20);
         publicAddress=new EditText(this);publicAddress.setSingleLine(true);
         publicAddress.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
         publicAddress.setHint("https://domaine:8443 ou https://[IPv6]:8443");
-        publicAddress.setText(PhoneMcpSettings.publicBase(this));layout.addView(publicAddress);
-        text(layout,"Alternative manuelle : importer un certificat PKCS12 (.p12) pour cette adresse. Cette option désactive la gestion automatique lorsqu’elle est choisie.",15);
+        publicAddress.setText(PhoneMcpSettings.publicBase(this));manual.addView(publicAddress);
+        text(manual,"Alternative manuelle : importer un certificat PKCS12 (.p12) pour cette adresse. Cette option désactive la gestion automatique lorsqu’elle est choisie.",15);
         password=new EditText(this);password.setSingleLine(true);
         password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        password.setHint("Mot de passe du fichier .p12");layout.addView(password);
-        button(layout,"Importer le certificat HTTPS",()->certificate.launch(new String[]{"*/*"}));
-        button(layout,"Utiliser la configuration manuelle",()->{if(save(true))refresh();});
+        password.setHint("Mot de passe du fichier .p12");manual.addView(password);
+        button(manual,"Importer le certificat HTTPS",()->certificate.launch(new String[]{"*/*"}));
+        button(manual,"Utiliser la configuration manuelle",()->{if(save(true))refresh();});
         button(layout,"Tester HTTPS à l’adresse publique",this::testPublic);
         button(layout,"Copier l’URL MCP HTTPS privée",()->{
             String url=PhoneMcpSettings.publicUrl(this);
@@ -103,6 +99,18 @@ public final class PhoneMcpSettingsActivity extends AppCompatActivity {
         text(layout,"Outils : état et capacités de l’application, liste des modèles et images, création à partir d’images, suivi et récupération du GLB. L’application modélise ; elle ne crée pas d’animation.",15);
         text(layout,"Après un arrêt forcé, rouvre l’application. Certains téléphones demandent aussi d’autoriser le lancement automatique dans les réglages de batterie.",15);
         refresh();
+    }
+    private void enableAutomatic() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Certificat public Let’s Encrypt")
+                .setMessage("Un certificat gratuit pour ton IP publique sera demandé et renouvelé depuis ce téléphone. En activant, tu acceptes les conditions Let’s Encrypt consultables ci-dessous. La connexion publique sans authentification expose uniquement l’état non sensible et les capacités de l’application. Les 6 outils complets restent sur le lien privé.")
+                .setNeutralButton("Conditions",(dialog,which)->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://letsencrypt.org/repository/"))))
+                .setNegativeButton("Annuler",null).setPositiveButton("Activer",(dialog,which)->{
+                    if(!getSharedPreferences("mcp_background",0).getString("command","").isEmpty()) {state.setText("Termine la commande conservée avant de changer de connexion.");return;}
+                    direct.setChecked(true);PhoneMcpSettings.prefs(this).edit().putBoolean("automatic_https",true).putBoolean("direct",true).commit();
+                    if(McpConnectionService.enabled(this))McpConnectionService.restart(this);else McpConnectionService.setEnabled(this,true);
+                    refresh();
+                }).show();
     }
     private void refresh() {
         PowerManager power=(PowerManager)getSystemService(POWER_SERVICE);

@@ -24,7 +24,6 @@ final class PhonePublicConnection implements AutoCloseable {
     private long leaseRetryAt;
     private final Object mappingGuard=new Object();
     private String link="";
-    private long retryAt;
     private final java.util.concurrent.atomic.AtomicBoolean queued=new java.util.concurrent.atomic.AtomicBoolean();
     PhonePublicConnection(Context c,PhoneMcpServer server) {
         context=c.getApplicationContext();this.server=server;
@@ -43,6 +42,11 @@ final class PhonePublicConnection implements AutoCloseable {
     }
     void request() {if(!closed&&queued.compareAndSet(false,true))try {worker.execute(()->{try {cycle();}finally {queued.set(false);}});}catch(RejectedExecutionException ignored) {queued.set(false);}}
     private SharedPreferences prefs() {return PhoneMcpSettings.prefs(context);}
+    static long nextAttemptAt(Context c) {
+        SharedPreferences p=PhoneMcpSettings.prefs(c);
+        // Preferences are the single source of truth, including retries requested by the UI.
+        return Math.max(p.getLong("acme_retry_at",0),p.getLong("acme_server_retry_at",0));
+    }
     private void state(String message) {if(!closed)prefs().edit().putString("automatic_status",message).apply();}
     private void cycle() {
         if(closed||!prefs().getBoolean("automatic_https",false))return;
@@ -77,8 +81,8 @@ final class PhonePublicConnection implements AutoCloseable {
             prefs().edit().putString("automatic_mapping",mapping).putInt("public_port",external).putLong("public_ip_measured_at",now)
                     .putString("box_wan_ip",wan).apply();
             if(!storedIp.equals(ip)||expires-now<48*3600000L||prefs().getBoolean("automatic_force_renew",false)) {
-                long persisted=prefs().getLong("acme_retry_at",0);
-                if(now<Math.max(retryAt,persisted)) {state("Nouvel essai certificat après le délai ACME. "+prefs().getString("automatic_last_error",""));return;}
+                long due=nextAttemptAt(context);
+                if(now<due) {state("Prochain essai certificat : "+date(due)+". "+prefs().getString("automatic_last_error",""));return;}
                 issue(ip);
                 if(closed)return;
                 server.reloadTls();internal=PhoneMcpSettings.httpsPort(context);
@@ -109,9 +113,9 @@ final class PhonePublicConnection implements AutoCloseable {
             prefs().edit().putString("acme_challenge_mapping",rule).apply();
             state("Validation du certificat IP par Let’s Encrypt. "+rule);
             // Persist backoff before a request, so process death cannot cause an issuance loop.
-            retryAt=System.currentTimeMillis()+3600000L;prefs().edit().putLong("acme_retry_at",retryAt).commit();
+            prefs().edit().putLong("acme_retry_at",System.currentTimeMillis()+3600000L).putLong("acme_attempt_started_at",System.currentTimeMillis()).commit();
             KeyPair account=accountKey(),tls=newKey();
-            String pem=new PhoneAcmeClient(account).issue(InetAddress.getByName(ip),tls,responder);
+            String pem=new PhoneAcmeClient(account,this::state).issue(InetAddress.getByName(ip),tls,responder);
             if(closed)throw new InterruptedException();
             java.util.Collection<? extends java.security.cert.Certificate> parsed=CertificateFactory.getInstance("X.509")
                     .generateCertificates(new ByteArrayInputStream(pem.getBytes(StandardCharsets.US_ASCII)));
@@ -121,10 +125,15 @@ final class PhonePublicConnection implements AutoCloseable {
             keys.setKeyEntry("phone-mcp",tls.getPrivate(),password.toCharArray(),chain);ByteArrayOutputStream out=new ByteArrayOutputStream();keys.store(out,password.toCharArray());
             PhoneMcpSettings.importCertificate(context,new ByteArrayInputStream(out.toByteArray()),password);
             prefs().edit().putString("automatic_certificate_ip",ip).putLong("automatic_certificate_expires",chain[0].getNotAfter().getTime())
-                    .putLong("acme_retry_at",0).putBoolean("automatic_force_renew",false).putString("automatic_last_error","").commit();retryAt=0;
+                    .putLong("acme_retry_at",0).putLong("acme_server_retry_at",0).putBoolean("automatic_force_renew",false).putString("automatic_last_error","").remove("acme_last_error_type").commit();
         }catch(PhoneAcmeClient.Failure failure) {
-            retryAt=System.currentTimeMillis()+failure.retryMs;prefs().edit().putLong("acme_retry_at",retryAt).commit();throw failure;
-        }finally {synchronized(mappingGuard) {temporaryLease.set(null);if(temporary!=null)temporary.close();}}
+            long now=System.currentTimeMillis();prefs().edit().putLong("acme_retry_at",now+failure.retryMs)
+                    .putLong("acme_server_retry_at",failure.serverRetryMs>0?now+failure.serverRetryMs:0)
+                    .putString("acme_last_error_type",failure.type).commit();throw failure;
+        }finally {
+            if(!closed)prefs().edit().putInt("acme_challenge_hits",challenge.hits()).apply();
+            synchronized(mappingGuard) {temporaryLease.set(null);if(temporary!=null)temporary.close();}
+        }
     }
     static void validateChain(X509Certificate[] chain,KeyPair key,String ip) throws Exception {
         if(chain.length==0)throw new IOException("Chaîne du certificat absente.");
@@ -171,10 +180,13 @@ final class PhonePublicConnection implements AutoCloseable {
                 +"\nPasserelle : "+p.getString("automatic_gateway","non mesurée")
                 +"\nNAT/PAT : "+p.getString("automatic_mapping","non testé")
                 +"\nChallenge certificat : "+p.getString("acme_challenge_mapping","non démarré")
+                +"\nRequêtes HTTP-01 reçues (dernier essai) : "+p.getInt("acme_challenge_hits",0)
                 +"\nCertificat expire : "+(p.getLong("automatic_certificate_expires",0)>0?new Date(p.getLong("automatic_certificate_expires",0)).toString():"non obtenu automatiquement")
                 +"\nURL publique (2 outils non sensibles) : "+PhoneMcpSettings.connectionUrl(c)
                 +"\nAutomatisation : "+p.getString("automatic_status","désactivée")
+                +"\nProchain essai : "+(nextAttemptAt(c)>System.currentTimeMillis()?date(nextAttemptAt(c)):"sans délai local")
                 +"\nDernière erreur : "+p.getString("automatic_last_error","");
     }
+    private static String date(long time) {return java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.MEDIUM).format(new Date(time));}
     @Override public void close() {closed=true;leaseWorker.shutdownNow();worker.shutdownNow();/* Main finite mapping expires without deleting a manual router rule. */}
 }

@@ -14,7 +14,8 @@ public class PhoneAcmeClientTest {
     private static final String BASE="https://ca.example/",TOKEN="test-challenge-token-0123456789";
     private static KeyPair key() throws Exception {KeyPairGenerator g=KeyPairGenerator.getInstance("RSA");g.initialize(2048);return g.generateKeyPair();}
     private static final class Fixture implements PhoneAcmeClient.Transport,PhoneAcmeClient.Challenge {
-        final KeyPair account;int accountCalls,nonce=1;boolean accepted,presented,cleared,finalized;String wrongIp="",presentedValue="";boolean badNonce;
+        final KeyPair account;int accountCalls,nonce=1;boolean accepted,presented,cleared,finalized;String wrongIp="",presentedValue="";boolean badNonce,failedChallenge;
+        String failureRoute="",failureType="",failureDetail="",retryAfter="";
         Fixture(KeyPair key) {account=key;}
         PhoneAcmeClient.Reply response(int code,String body,String location) {return new PhoneAcmeClient.Reply(code,body,"nonce-"+(++nonce),location,"");}
         public PhoneAcmeClient.Reply request(String url,String method,String body) throws Exception {
@@ -29,6 +30,8 @@ public class PhoneAcmeClientTest {
             if(route.equals("account")) {accountCalls++;assertTrue(header.has("jwk"));assertTrue(new JSONObject(decoded).getBoolean("termsOfServiceAgreed"));
                 if(badNonce&&accountCalls==1)return response(400,"{\"type\":\"urn:ietf:params:acme:error:badNonce\"}","");return response(201,"{}",BASE+"kid");}
             assertEquals(BASE+"kid",header.getString("kid"));
+            if(route.equals(failureRoute))return new PhoneAcmeClient.Reply(400,new JSONObject().put("type",failureType).put("detail",failureDetail).toString(),"nonce-"+(++nonce),"",retryAfter);
+            if(route.equals("auth")&&accepted&&failedChallenge)return response(200,new JSONObject().put("status","invalid").put("challenges",new JSONArray().put(new JSONObject().put("error",new JSONObject().put("type","urn:ietf:params:acme:error:connection").put("detail","Connection refused on validation port")))).toString(),"");
             switch(route) {
                 case "orders":JSONObject order=new JSONObject(decoded);assertEquals("shortlived",order.getString("profile"));assertEquals("ip",order.getJSONArray("identifiers").getJSONObject(0).getString("type"));
                     return response(201,"{\"authorizations\":[\""+BASE+"auth\"]}",BASE+"order");
@@ -51,6 +54,26 @@ public class PhoneAcmeClientTest {
     @Test public void rejectsWrongAuthorizationIpAndAlwaysClearsChallenge() throws Exception {
         KeyPair account=key();Fixture fixture=new Fixture(account);fixture.wrongIp="1.1.1.1";
         assertThrows(IOException.class,()->new PhoneAcmeClient(account,BASE+"directory",fixture,millis->{}).issue(InetAddress.getByName("8.8.8.8"),key(),fixture));assertTrue(fixture.cleared);assertFalse(fixture.finalized);
+    }
+    @Test public void preservesBadCsrDetailAndReportsEveryIssuanceStage() throws Exception {
+        KeyPair account=key();Fixture fixture=new Fixture(account);fixture.failureRoute="finalize";
+        fixture.failureType="urn:ietf:params:acme:error:badCSR";fixture.failureDetail="CSR must not contain an IP Common Name";
+        List<String> progress=new ArrayList<>();
+        PhoneAcmeClient.Failure failure=assertThrows(PhoneAcmeClient.Failure.class,()->new PhoneAcmeClient(account,BASE+"directory",fixture,millis->{},progress::add).issue(InetAddress.getByName("8.8.8.8"),key(),fixture));
+        assertTrue(failure.getMessage(),failure.getMessage().contains(fixture.failureDetail));assertEquals(fixture.failureType,failure.type);
+        assertEquals(0,failure.serverRetryMs);assertTrue(fixture.cleared);assertEquals(4,progress.size());
+        assertTrue(progress.get(2).contains("HTTP-01"));assertTrue(progress.get(3).contains("CSR"));
+    }
+    @Test public void reportsActualChallengeFailureInsteadOfGenericChallengeFailed() throws Exception {
+        KeyPair account=key();Fixture fixture=new Fixture(account);fixture.failedChallenge=true;
+        PhoneAcmeClient.Failure failure=assertThrows(PhoneAcmeClient.Failure.class,()->new PhoneAcmeClient(account,BASE+"directory",fixture,millis->{}).issue(InetAddress.getByName("8.8.8.8"),key(),fixture));
+        assertEquals("urn:ietf:params:acme:error:connection",failure.type);assertTrue(failure.getMessage().contains("Connection refused"));assertTrue(fixture.cleared);assertFalse(fixture.finalized);
+    }
+    @Test public void separatesServerRetryAfterFromLocalRetryDelay() throws Exception {
+        KeyPair account=key();Fixture fixture=new Fixture(account);fixture.failureRoute="orders";
+        fixture.failureType="urn:ietf:params:acme:error:rateLimited";fixture.failureDetail="Try later";fixture.retryAfter="7200";
+        PhoneAcmeClient.Failure failure=assertThrows(PhoneAcmeClient.Failure.class,()->new PhoneAcmeClient(account,BASE+"directory",fixture,millis->{}).issue(InetAddress.getByName("8.8.8.8"),key(),fixture));
+        assertEquals(7200000L,failure.serverRetryMs);assertEquals(7200000L,failure.retryMs);assertFalse(fixture.presented);
     }
     @Test public void refusesAcmeEndpointOnAnotherHost() throws Exception {
         KeyPair account=key();PhoneAcmeClient.Transport transport=(url,method,body)->new PhoneAcmeClient.Reply(200,"{\"newNonce\":\"https://other.example/nonce\"}","","","");

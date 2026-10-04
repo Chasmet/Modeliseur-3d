@@ -17,30 +17,40 @@ final class PhoneAcmeClient {
     interface Transport {Reply request(String url,String method,String body) throws Exception;}
     interface Challenge {void present(String token,String authorization) throws Exception;void clear();}
     interface Pause {void await(long milliseconds) throws Exception;}
+    interface Progress {void update(String message);}
     static final class Reply {
         final int code;final String body,nonce,location,retryAfter;
         Reply(int c,String b,String n,String l,String r) {code=c;body=b;nonce=n;location=l;retryAfter=r;}
         JSONObject json() throws JSONException {return new JSONObject(body);}
     }
     static final class Failure extends IOException {
-        final String type;final long retryMs;
-        Failure(String type,long delay) {super("Validation ACME refusée : "+type.substring(type.lastIndexOf(':')+1));this.type=type;retryMs=delay;}
+        final String type;final long retryMs,serverRetryMs;
+        Failure(String type,long delay) {this(type,"",delay,0);}
+        Failure(String type,String detail,long delay,long serverDelay) {
+            super("Validation ACME refusée : "+type.substring(type.lastIndexOf(':')+1)+(detail.isEmpty()?"":" · "+detail));
+            this.type=type;retryMs=delay;serverRetryMs=serverDelay;
+        }
     }
     private final KeyPair account;
     private final Transport transport;
     private final Pause pause;
     private final String directory;
+    private final Progress progress;
     private String nonce="",kid="",nonceUrl;
     private long deadline;
-    PhoneAcmeClient(KeyPair account) {this(account,DIRECTORY,PhoneAcmeClient::https,Thread::sleep);}
-    PhoneAcmeClient(KeyPair account,String directory,Transport transport,Pause pause) {this.account=account;this.directory=directory;this.transport=transport;this.pause=pause;}
+    PhoneAcmeClient(KeyPair account) {this(account,message->{});}
+    PhoneAcmeClient(KeyPair account,Progress progress) {this(account,DIRECTORY,PhoneAcmeClient::https,Thread::sleep,progress);}
+    PhoneAcmeClient(KeyPair account,String directory,Transport transport,Pause pause) {this(account,directory,transport,pause,message->{});}
+    PhoneAcmeClient(KeyPair account,String directory,Transport transport,Pause pause,Progress progress) {this.account=account;this.directory=directory;this.transport=transport;this.pause=pause;this.progress=progress;}
     String issue(InetAddress address,KeyPair tls,Challenge responder) throws Exception {
         deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(5);
+        progress.update("Certificat : connexion à Let’s Encrypt…");
         JSONObject dir=transport.request(directory,"GET",null).json();nonceUrl=endpoint(dir.getString("newNonce"));
         JSONObject profiles=dir.getJSONObject("meta").optJSONObject("profiles");
         if(profiles==null||!profiles.has("shortlived"))throw new IOException("Le service ACME ne propose pas de certificat IP court.");
         Reply registered=post(endpoint(dir.getString("newAccount")),new JSONObject().put("termsOfServiceAgreed",true).toString(),true);
         kid=endpoint(registered.location);
+        progress.update("Certificat : demande pour l’IP publique détectée…");
         Reply ordered=post(endpoint(dir.getString("newOrder")),new JSONObject().put("profile","shortlived")
                 .put("identifiers",new JSONArray().put(new JSONObject().put("type","ip").put("value",address.getHostAddress()))).toString(),false);
         String orderUrl=endpoint(ordered.location);JSONObject order=ordered.json();JSONArray authorizations=order.getJSONArray("authorizations");
@@ -54,12 +64,15 @@ final class PhoneAcmeClient {
                 for(int j=0;j<challenges.length();j++)if("http-01".equals(challenges.getJSONObject(j).optString("type")))challenge=challenges.getJSONObject(j);
                 if(challenge==null)throw new IOException("Validation HTTP-01 indisponible.");
                 String token=challenge.getString("token");if(!token.matches("[A-Za-z0-9_-]{16,256}"))throw new IOException("Token ACME invalide.");
+                progress.update("Certificat : validation HTTP-01 depuis Internet…");
                 responder.present(token,token+"."+thumbprint());post(endpoint(challenge.getString("url")),"{}",false);
                 waitState(authUrl,"valid",45);responder.clear();
             }
             order=waitState(orderUrl,"ready",20);
+            progress.update("Certificat : validation du CSR et émission…");
             post(endpoint(order.getString("finalize")),new JSONObject().put("csr",base64(IpCertificateRequest.csr(tls,address))).toString(),false);
             order=waitState(orderUrl,"valid",45);
+            progress.update("Certificat : récupération et vérification de la chaîne HTTPS…");
             return post(endpoint(order.getString("certificate")),"",false).body;
         } finally {responder.clear();}
     }
@@ -68,7 +81,14 @@ final class PhoneAcmeClient {
             checkDeadline();
             Reply reply=post(url,"",false);JSONObject state=reply.json();String status=state.optString("status");
             if(wanted.equals(status))return state;
-            if("invalid".equals(status)||"expired".equals(status)||"revoked".equals(status)||"deactivated".equals(status))throw new Failure("urn:ietf:params:acme:error:challengeFailed",3600000L);
+            if("invalid".equals(status)||"expired".equals(status)||"revoked".equals(status)||"deactivated".equals(status)) {
+                JSONObject error=state.optJSONObject("error");JSONArray challenges=state.optJSONArray("challenges");
+                if(error==null&&challenges!=null)for(int j=0;j<challenges.length();j++) {
+                    JSONObject item=challenges.optJSONObject(j);
+                    if(item!=null&&item.optJSONObject("error")!=null) {error=item.optJSONObject("error");break;}
+                }
+                throw failure(error,reply,"urn:ietf:params:acme:error:challengeFailed");
+            }
             pause.await(Math.max(2000,Math.min(15000,retryDelay(reply.retryAfter,2000))));
         }
         throw new IOException("Validation ACME expirée : accès au port public 80 à vérifier.");
@@ -85,11 +105,20 @@ final class PhoneAcmeClient {
             Reply reply=transport.request(url,"POST",new JSONObject().put("protected",protectedBytes).put("payload",bodyBytes).put("signature",base64(signature.sign())).toString());
             nonce=reply.nonce==null?"":reply.nonce;
             if(reply.code>=200&&reply.code<300)return reply;
-            String type;try {type=reply.json().optString("type","urn:ietf:params:acme:error:unknown");}catch(JSONException bad) {type="urn:ietf:params:acme:error:http";}
+            JSONObject problem;try {problem=reply.json();}catch(JSONException bad) {problem=new JSONObject().put("type","urn:ietf:params:acme:error:http");}
+            String type=problem.optString("type","urn:ietf:params:acme:error:unknown");
             if(type.endsWith(":badNonce")&&attempt<2)continue;
-            throw new Failure(type,Math.max(3600000L,retryDelay(reply.retryAfter,3600000L)));
+            throw failure(problem,reply,"urn:ietf:params:acme:error:unknown");
         }
         throw new IOException("Nonce ACME refusé.");
+    }
+    private static Failure failure(JSONObject problem,Reply reply,String fallback) {
+        String type=problem==null?fallback:problem.optString("type",fallback);
+        String detail=problem==null?"":problem.optString("detail","").replaceAll("[\\p{Cntrl}]"," ");
+        if(detail.length()>400)detail=detail.substring(0,400);
+        long serverDelay=retryDelay(reply.retryAfter,0);
+        if(type.endsWith(":rateLimited")||reply.code==429)serverDelay=Math.max(3600000L,serverDelay);
+        return new Failure(type,detail,Math.max(3600000L,serverDelay),serverDelay);
     }
     private JSONObject jwk() throws Exception {
         RSAPublicKey rsa=(RSAPublicKey)account.getPublic();

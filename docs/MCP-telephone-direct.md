@@ -1,10 +1,14 @@
-# Serveur Android direct — 6.4.2
+# Serveur Android direct — 6.4.4
 
 Modéliseur 3D, package `com.chasmet.modeliseur3d`, Java 17, minSdk 21, targetSdk 34. Le serveur existant est réutilisé en mode autonome : aucun Serveur App Host universel n’est installé par cet APK. GitHub compile et distribue l’APK ; il ne participe pas à l’exécution du serveur. Calculs et GLB restent sur le téléphone.
 
 ## Configuration automatique
 
 Installer la mise à jour par-dessus l’application. Dans **Réglages → Serveur MCP du téléphone**, choisir **Activer HTTPS automatique** et accepter les conditions Let’s Encrypt affichées. Aucun champ IP, MAC, port ou URL n’est à remplir.
+
+Après une mise à jour, un ancien échec `badCSR` de la gestion automatique déclenche une nouvelle demande une seule fois. Une configuration manuelle vide après cet échec est récupérée seulement si le MCP est actif, sans certificat manuel et sans commande conservée. Les modes manuels valides et les arrêts explicites restent respectés.
+
+Le démarrage vérifie réellement `initialize`, `tools/list` et `tools/call` sur la socket loopback avant de marquer `LOCAL_OK`.
 
 Un exécuteur indépendant du calcul 3D :
 
@@ -16,7 +20,7 @@ Un exécuteur indépendant du calcul 3D :
 6. Vérifie clé, validité, SAN IP et chaîne reconnue par Android avant d’enregistrer le PKCS12 chiffré. Recharge le listener TLS sans arrêter les calculs ni les sockets déjà acceptés.
 7. Recalcule l’URL depuis les valeurs mesurées. Contrôle le réseau et renouvelle les règles toutes les cinq minutes. Renouvelle le certificat lorsqu’il reste moins de 48 heures, ou après changement d’IP publique.
 
-Les certificats IP Let’s Encrypt durent 160 heures. Le délai d’échec ACME est persistant, au moins une heure, et respecte Retry-After. Le téléphone doit rester allumé, connecté et autorisé à fonctionner en arrière-plan. Les changements réseau et erreurs Internet ne suppriment ni projets, ni file locale, ni GLB. La validation TLS n’est jamais désactivée.
+Les certificats IP Let’s Encrypt durent 160 heures. Le délai automatique d’échec ACME est persistant et dure au moins une heure. Un clic explicite sur Renouveler peut lever ce délai local une fois toutes les cinq minutes, sans contourner un Retry-After ou une limitation de débit imposés par Let’s Encrypt. Le worker relit les préférences ; aucun second délai en mémoire ne bloque le clic. Le diagnostic expose localement les étapes, l’heure du prochain essai, les requêtes HTTP-01 reçues et les détails d’erreur bornés. Le téléphone doit rester allumé, connecté et autorisé à fonctionner en arrière-plan. Les changements réseau et erreurs Internet ne suppriment ni projets, ni file locale, ni GLB. La validation TLS n’est jamais désactivée.
 
 Si le serveur de test Python occupe 8443, l’arrêter libère le port de la règle Livebox existante. Si la box refuse l’ouverture automatique, le diagnostic affiche la règle exacte avec l’adresse locale et les ports mesurés. Le port externe 80 doit rester redirigé vers le port du challenge pour les renouvellements avec une règle manuelle ; le répondeur est fermé hors émission.
 
@@ -57,4 +61,4 @@ Tests de bureau : signatures JWS, badNonce, identifiant IP, POST-as-GET, profil 
 
 Ces tests ne remplacent pas l’émission Let’s Encrypt sur le téléphone, les essais avec la Livebox réelle, le test extérieur HTTPS/MCP, l’écran éteint, le reboot et l’appel ChatGPT. Les tests Keystore emploient un adaptateur en mémoire ; ils ne prouvent pas la protection matérielle.
 
-Le relais historique reste disponible si l’utilisateur le choisit. Le mode direct n’en dépend pas. Même package et signature APK, moteurs TripoSR/Silhouettes/IS-Net/Depth Anything V2, projets et mise à jour automatique conservés ; aucun rigging ni animation ajouté.
+Le relais historique reste disponible si l’utilisateur le choisit. Sa présence indique « téléphone en ligne · appel ChatGPT à vérifier », pas une connexion ChatGPT validée. Le mode direct n’en dépend pas. Même package et signature APK, moteurs TripoSR/Silhouettes/IS-Net/Depth Anything V2, projets et mise à jour automatique conservés ; aucun rigging ni animation ajouté.

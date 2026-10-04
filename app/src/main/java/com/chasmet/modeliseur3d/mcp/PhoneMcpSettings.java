@@ -15,6 +15,23 @@ public final class PhoneMcpSettings {
     private PhoneMcpSettings() { }
     public static SharedPreferences prefs(Context c) { return c.getSharedPreferences("phone_mcp",Context.MODE_PRIVATE); }
     public static boolean direct(Context c) { return prefs(c).getBoolean("direct",false); }
+    static synchronized boolean recoverSetupAfterUpdate(Context c) {
+        SharedPreferences p=prefs(c),background=c.getSharedPreferences("mcp_background",Context.MODE_PRIVATE);
+        if(p.getInt("automatic_client_revision",0)>=2)return false;
+        boolean badCsr=p.getString("acme_last_error_type","").endsWith(":badCSR")
+                ||p.getString("automatic_last_error","").contains("badCSR");
+        boolean restore=badCsr&&!p.getBoolean("automatic_https",false)&&publicBase(c).isEmpty()
+                &&!hasCertificate(c)&&background.getBoolean("enabled",false);
+        // Finish/upload a saved command on its original transport before restoring direct mode.
+        if(restore&&!background.getString("command","").isEmpty())return false;
+        SharedPreferences.Editor edit=p.edit().putInt("automatic_client_revision",2);
+        if(restore)edit.putBoolean("direct",true).putBoolean("automatic_https",true);
+        if((restore||p.getBoolean("automatic_https",false))&&badCsr) {
+            edit.putLong("acme_retry_at",0).putBoolean("automatic_force_renew",true)
+                    .putString("automatic_status","Correction du CSR installée · nouvelle demande automatique.");
+        }
+        edit.commit();return restore;
+    }
     public static int httpPort(Context c) {return prefs(c).getInt("http_port",HTTP_PORT);}
     public static int httpsPort(Context c) {return prefs(c).getInt("https_port",HTTPS_PORT);}
     public static synchronized String token(Context c) {

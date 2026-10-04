@@ -164,7 +164,7 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/6.4.3",
+                  "User-Agent": "Modeliseur3D-CI/6.4.4",
                   "Authorization": "Bearer " + os.environ["GH_TOKEN"],
                   "Accept": "application/vnd.github+json"
               })
@@ -248,10 +248,10 @@ jobs:
           unzip -t "$APK" >/dev/null
           echo "APK validé et tests Android/MCP exécutés avant publication."
 
-      - name: Publier l'APK V6.4.3
+      - name: Publier l'APK V6.4.4
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.4.3-ACME-IP-fix-debug
+          name: Modeliseur-V6.4.4-automatic-ACME-recovery-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -280,10 +280,12 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.4.3 : correction du certificat HTTPS direct sur IP publique. Le CSR PKCS#10 n’inscrit plus l’adresse IP dans le Common Name : l’IP est uniquement placée dans Subject Alternative Name, conformément aux exigences de l’autorité ACME.
-          Le bouton « Renouveler le certificat » peut désormais relancer immédiatement une tentative après correction du réseau ou du CSR, avec une protection locale de 5 minutes contre les clics répétés.
-          La configuration Livebox reste inchangée : TCP externe 80 vers le port de challenge local (8080 actuellement) et TCP 8443 vers 8443. Le certificat, sa clé et le PKCS#12 restent gérés automatiquement sur le téléphone.
-          Mêmes moteurs, projets, package et identité de signature APK. Les tests CSR OpenSSL, MCP direct, TLS et moteurs locaux sont exécutés avant publication. Après installation, l’émission réelle Let’s Encrypt et l’accès ChatGPT doivent encore être confirmés depuis le téléphone.
+          V6.4.4 : reprise automatique du certificat après l’ancien échec badCSR, sans ressaisie d’IP, de certificat ou de mot de passe. Le CSR IP corrigé en 6.4.3 est conservé.
+          Le renouvellement lit désormais un seul délai persistant : le bouton ne reste plus bloqué par un délai conservé en mémoire. Les limites et Retry-After imposés par Let’s Encrypt restent respectés.
+          Le serveur local est vérifié au démarrage par initialize, tools/list et un vrai tools/call. Le diagnostic affiche les étapes ACME, le motif détaillé des erreurs, les requêtes HTTP-01 reçues et l’heure du prochain essai.
+          La configuration manuelle avancée est repliée pour éviter de désactiver accidentellement HTTPS automatique. Un heartbeat du relais n’est plus présenté comme une connexion ChatGPT validée.
+          Installer par-dessus la version existante et ouvrir l’application. Si le MCP était activé en HTTPS automatique avec badCSR, la demande reprend automatiquement. Une ancienne configuration manuelle vide après badCSR est récupérée lorsque le MCP est actif et aucune commande n’est en cours. Aucun changement du Wi-Fi ou des règles Livebox existantes.
+          Même package, signature, moteurs et projets. Les tests ACME, TLS, reprise de configuration et moteurs sont exécutés avant publication. L’émission effective sur le téléphone, le test HTTPS public et un appel ChatGPT restent à vérifier après installation ; cette APK ne prétend pas avoir déjà obtenu le certificat du téléphone.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")

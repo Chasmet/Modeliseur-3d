@@ -188,6 +188,14 @@ public class PhoneMcpServerTest {
             assertTrue(new String(request("GET","/health","","",false),StandardCharsets.UTF_8).startsWith("HTTP/1.1 200"));
         }
     }
+    @Test public void startupSelfTestUsesRealMcpSocketsAndRemovesEvidenceWhenServerStops() throws Exception {
+        var app=RuntimeEnvironment.getApplication();server.close();server=new PhoneMcpServer(app,store);
+        PhoneMcpSettings.prefs(app).edit().putInt("http_port",0).commit();server.start();server.verifyLocal();
+        assertTrue(PhoneMcpSettings.prefs(app).getLong("local_test_at",0)>0);
+        assertEquals(0,store.poll().getJSONArray("local_commands").length());
+        server.close();assertThrows(Exception.class,server::verifyLocal);
+        assertEquals(0,PhoneMcpSettings.prefs(app).getLong("local_test_at",0));
+    }
     @Test public void fourViewsAreOneOrderedCommandAndBadInputsDoNotLeavePartialJobs() throws Exception {
         String image=image();JSONArray sources=new JSONArray().put(image).put(image).put(image).put(image);
         JSONObject created=tool("create_model_from_images",new JSONObject().put("images",sources));assertEquals(1,created.getInt("count"));assertEquals("triposr_four",store.get(created.getString("primary_model_id")).getString("mode"));

@@ -85,7 +85,8 @@ public class McpBackgroundServiceTest {
                 service.onTaskRemoved(new Intent());
                 assertTrue(McpConnectionService.enabled(service));
                 int before=transport.polls.get(); service.pollOnce();assertTrue(transport.polls.get()>before);
-                assertTrue(McpConnectionService.status(service).contains("connecté"));
+                assertTrue(McpConnectionService.status(service).contains("téléphone en ligne"));
+                assertFalse(McpConnectionService.status(service).contains("ChatGPT MCP : connecté"));
                 assertNotNull(shadowOf(service).getLastForegroundNotification());
                 finish.countDown();assertTrue(transport.uploaded.await(5,TimeUnit.SECONDS));
             }

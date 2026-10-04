@@ -64,6 +64,30 @@ public final class PhoneMcpServer implements AutoCloseable {
             }
         } catch(Exception error) { close();throw error; }
     }
+    void verifyLocal() throws Exception {
+        PhoneMcpSettings.prefs(context).edit().remove("local_test_at").apply();
+        JSONObject initialized=localRpc("initialize",new JSONObject().put("protocolVersion","2025-11-25"));
+        if(!"2025-11-25".equals(initialized.optString("protocolVersion")))throw new IOException("Négociation MCP locale refusée.");
+        if(localRpc("tools/list",new JSONObject()).getJSONArray("tools").length()!=6)throw new IOException("Outils MCP locaux incomplets.");
+        JSONObject call=localRpc("tools/call",new JSONObject().put("name","application_capabilities").put("arguments",new JSONObject()));
+        if(call.optBoolean("isError",true))throw new IOException("Appel MCP local refusé.");
+        PhoneMcpSettings.prefs(context).edit().putLong("local_test_at",System.currentTimeMillis()).apply();
+    }
+    private JSONObject localRpc(String method,JSONObject params) throws Exception {
+        byte[] body=new JSONObject().put("jsonrpc","2.0").put("id",1).put("method",method).put("params",params).toString().getBytes(StandardCharsets.UTF_8);
+        try(Socket socket=new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1",PhoneMcpSettings.httpPort(context)),3000);socket.setSoTimeout(3000);
+            String headers="POST /mcp HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer "+token
+                    +"\r\nContent-Type: application/json\r\nMCP-Protocol-Version: 2025-11-25\r\nContent-Length: "+body.length+"\r\n\r\n";
+            socket.getOutputStream().write(headers.getBytes(StandardCharsets.US_ASCII));socket.getOutputStream().write(body);socket.getOutputStream().flush();
+            InputStream input=socket.getInputStream();String status=PhoneHttp.readLine(input,1024);int count=0,length=-1;
+            while(true) {String header=PhoneHttp.readLine(input,4096);count+=header.length();if(count>8192)throw new IOException("Réponse locale invalide.");if(header.isEmpty())break;
+                if(header.toLowerCase(Locale.ROOT).startsWith("content-length:"))length=Integer.parseInt(header.substring(header.indexOf(':')+1).trim());}
+            if(!status.startsWith("HTTP/1.1 200 "))throw new IOException("Serveur MCP local indisponible.");
+            JSONObject response=new JSONObject(new String(PhoneHttp.body(input,length,false,131072),StandardCharsets.UTF_8));
+            if(response.has("error"))throw new IOException("Test MCP local refusé.");return response.getJSONObject("result");
+        }
+    }
     // Port 0 is useful for real socket integration tests and never changes the app's published ports.
     int listen(ServerSocket listener,int port,boolean tls) throws IOException {
         listener.setReuseAddress(true);

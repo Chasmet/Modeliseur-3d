@@ -51,13 +51,13 @@ public class McpConnectionService extends Service {
         if (PhoneMcpSettings.direct(c)) {
             boolean running=PhoneMcpSettings.prefs(c).getBoolean("running",false);
             return running ? "MCP direct : serveur téléphone actif\n"+p.getString("progress","En attente de commande")
-                    +(PhoneMcpSettings.publicBase(c).isEmpty()?"\nAdresse HTTPS publique à configurer":!PhoneMcpSettings.prefs(c).getBoolean("https_running",false)?"\n"+PhoneMcpSettings.prefs(c).getString("tls_error","HTTPS indisponible")
+                    +(PhoneMcpSettings.publicBase(c).isEmpty()?"\n"+(PhoneMcpSettings.prefs(c).getBoolean("automatic_https",false)?PhoneMcpSettings.prefs(c).getString("automatic_status","Configuration HTTPS automatique en cours…"):"Adresse HTTPS publique à configurer"):!PhoneMcpSettings.prefs(c).getBoolean("https_running",false)?"\n"+PhoneMcpSettings.prefs(c).getString("tls_error","HTTPS indisponible")
                     :PhoneMcpSettings.prefs(c).getLong("external_client",0)>0?"\nAccès HTTPS extérieur observé":"\nAccès Internet non vérifié")
                     : "MCP direct : démarrage en attente";
         }
         long last=p.getLong("heartbeat",0);
         if (last==0 || System.currentTimeMillis()-last>90000) return "ChatGPT MCP : reconnexion…";
-        return "ChatGPT MCP : connecté\n"+p.getString("progress","En attente de commande");
+        return "Relais : téléphone en ligne · appel ChatGPT à vérifier\n"+p.getString("progress","En attente de commande");
     }
     public static void setEnabled(Context c,boolean enabled) {
         prefs(c).edit().putBoolean("enabled",enabled).putLong("heartbeat",0).commit();
@@ -145,7 +145,7 @@ public class McpConnectionService extends Service {
         if (!PhoneMcpSettings.direct(this)) return McpBridgeSession.ensureApi(this);
         PhoneMcpStore store=new PhoneMcpStore(this);
         phoneServer=new PhoneMcpServer(this,store);
-        try { phoneServer.start(); }
+        try { phoneServer.start();phoneServer.verifyLocal(); }
         catch(Exception failure) { phoneServer.close();phoneServer=null;throw failure; }
         if(!connected()) { phoneServer.close();phoneServer=null;throw new CancellationException("Connexion arrêtée."); }
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",true).apply();
@@ -160,6 +160,9 @@ public class McpConnectionService extends Service {
     private boolean connected() { return active && enabled(this); }
     void pollOnce() {
         if (!connected()) return;
+        if(!working.get()&&PhoneMcpSettings.recoverSetupAfterUpdate(this)) {
+            closePhoneServer();api=null;retryAt=0;failures=0;
+        }
         if(api==null && SystemClock.elapsedRealtime()<retryAt)return;
         try {
             if (api==null) api=connect();
