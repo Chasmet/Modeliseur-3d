@@ -95,7 +95,10 @@ public final class TripoSRPhotoTexture {
         int out=0xff000000;for(int shift=0;shift<=16;shift+=8)out|=Math.round(((neural>>>shift)&255)*(1-weight)+((photo>>>shift)&255)*weight)<<shift;return out;
     }
     public static OfflineImageVolume.Result bake(MeshData mesh,TripoSRRefinedField field,Bitmap photo,String method){
-        long heap=Runtime.getRuntime().maxMemory();int cell=heap<192L*1024*1024?512:heap<384L*1024*1024?768:1024;
+        return bake(mesh,field,photo,method,TripoQualityOptions.defaults());
+    }
+    public static OfflineImageVolume.Result bake(MeshData mesh,TripoSRRefinedField field,Bitmap photo,String method,TripoQualityOptions options){
+        int cell=options.effectiveTextureCell();
         Maps maps=new Maps(mesh);Photo source=new Photo(photo);float[] bounds=maps.bounds,p=mesh.getPositions(),n=mesh.getNormals();int[] original=mesh.getIndices();
         float[] outP=new float[original.length*3],outN=new float[outP.length],uv=new float[original.length*2];int[] ids=new int[original.length];int count=0;HashMap<Long,Integer> remap=new HashMap<>();
         for(int t=0;t<original.length;t+=3){
@@ -117,26 +120,30 @@ public final class TripoSRPhotoTexture {
         }
         Bitmap atlas=Bitmap.createBitmap(cell*3,cell*2,Bitmap.Config.ARGB_8888);
         try{
-            int[] row=new int[cell];float[] point=new float[3];
+            int[] row=new int[cell];float[] point=new float[3],surface=new float[2];
             for(int v=0;v<6;v++)for(int y=0;y<cell;y++){
                 check();float vv=clamp((y-2f)/(cell-5));int my=Math.round(vv*(MAP-1));
                 for(int x=0;x<cell;x++){
-                    float uu=clamp((x-2f)/(cell-5));int mx=Math.round(uu*(MAP-1)),index=my*MAP+mx;float dd=maps.depths[v][index];
-                    // Two-pixel dilation fills raster cracks and padded chart edges.
-                    if(!Float.isFinite(dd))for(int dy=-2;dy<=2&&!Float.isFinite(dd);dy++)for(int dx=-2;dx<=2;dx++){
-                        int xx=Math.max(0,Math.min(MAP-1,mx+dx)),yy=Math.max(0,Math.min(MAP-1,my+dy));int nearby=yy*MAP+xx;if(Float.isFinite(maps.depths[v][nearby])){index=nearby;dd=maps.depths[v][nearby];break;}
+                    float uu=clamp((x-2f)/(cell-5));int mx=Math.round(uu*(MAP-1)),index=my*MAP+mx;
+                    float jump=6*(bounds[depthAxis(v)+3]-bounds[depthAxis(v)])/(MAP-1);
+                    boolean sampled=SurfaceDepthSampler.sample(maps.depths[v],maps.normalZ[v],MAP,uu,vv,jump,surface);
+                    // Dilation is restricted to unoccupied gutter pixels; no foreground layer is averaged into another.
+                    if(!sampled)for(int dy=-2;dy<=2&&!sampled;dy++)for(int dx=-2;dx<=2;dx++){
+                        int xx=Math.max(0,Math.min(MAP-1,mx+dx)),yy=Math.max(0,Math.min(MAP-1,my+dy)),nearby=yy*MAP+xx;
+                        if(Float.isFinite(maps.depths[v][nearby])){surface[0]=maps.depths[v][nearby];surface[1]=maps.normalZ[v][nearby];sampled=true;break;}
                     }
-                    if(!Float.isFinite(dd)){row[x]=0xff303030;continue;}
+                    if(!sampled){row[x]=0xff303030;continue;}
+                    float dd=surface[0];
                     int au=axisU(v),av=axisV(v);point[au]=bounds[au]+(flipU(v)?1-uu:uu)*(bounds[au+3]-bounds[au]);point[av]=bounds[av]+(flipV(v)?1-vv:vv)*(bounds[av+3]-bounds[av]);point[depthAxis(v)]=dd*sign(v);
-                    int neural=field.color(point[0],point[1],point[2]);float facing=maps.normalZ[v][index];
+                    int neural=field.color(point[0],point[1],point[2]);float facing=surface[1];
                     if(v==0||maps.visibleFront(point[0],point[1],point[2])){
-                        int colour=source.projected(point[0],point[1],maps);if((colour>>>24)>128){float weight=clamp((facing-.08f)/.47f);weight=weight*weight*(3-2*weight);neural=blend(neural,colour,weight);}
+                        int colour=source.projected(point[0],point[1],maps);if((colour>>>24)>128){float weight=clamp((facing-.08f)/.47f);weight=weight*weight*(3-2*weight);neural=blend(neural,colour,weight*options.photoWeight);}
                     }
                     row[x]=neural;
                 }
                 atlas.setPixels(row,0,cell,(v%3)*cell,(v/3)*cell+y,cell,1);
             }
-            return new OfflineImageVolume.Result(new MeshData(Arrays.copyOf(outP,count*3),Arrays.copyOf(outN,count*3),Arrays.copyOf(uv,count*2),ids),atlas,method+" · photo sur surfaces visibles + couleurs IA cachées · atlas continu "+(cell*3)+" × "+(cell*2));
+            return new OfflineImageVolume.Result(new MeshData(Arrays.copyOf(outP,count*3),Arrays.copyOf(outN,count*3),Arrays.copyOf(uv,count*2),ids),atlas,method+" · profondeur de texture interpolée · photo "+Math.round(options.photoWeight*100)+" % sur surfaces visibles + couleurs IA cachées · atlas continu "+(cell*3)+" × "+(cell*2));
         }catch(RuntimeException|Error e){atlas.recycle();throw e;}
     }
 }

@@ -83,6 +83,8 @@ public class McpConnectionService extends Service {
     }
     @Override public void onCreate() {
         super.onCreate();
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.initialize(this);
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("INFO","Démarrage du service MCP");
         PhoneMcpSettings.prefs(this).edit().putBoolean("running",false).remove("external_client").remove("local_test_at").remove("public_mcp_client").apply();
         android.net.wifi.WifiManager manager=(android.net.wifi.WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
         if (manager!=null) { wifi=manager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,"Modeliseur3D:McpWifi");wifi.setReferenceCounted(false); }
@@ -220,11 +222,12 @@ public class McpConnectionService extends Service {
                 check();
                 try {
                     output=generate(command,new TripoSREngine.Progress() {
-                        public void update(String value) { progress=value; }
+                        public void update(String value) { progress=value;com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("INFO","MCP : "+value); }
                         public void check() { McpConnectionService.this.check(); }
                     });
                 } catch (CancellationException e) { throw e; }
                 catch (Exception | OutOfMemoryError e) {
+                    com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("ERREUR","Calcul MCP",e);
                     check();
                     String message=e instanceof OutOfMemoryError?"Mémoire Android insuffisante.":e.getMessage();
                     if (message==null) message="Échec du calcul local.";
@@ -239,6 +242,7 @@ public class McpConnectionService extends Service {
         } catch (CancellationException ignored) {
             // Keep command, cutouts, neural caches and finished GLB for an explicit reconnect.
         } catch (Exception error) {
+            com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("ERREUR","Transport MCP",error);
             if (error instanceof CloudApi.HttpFailure && ((CloudApi.HttpFailure)error).code==404) {
                 // The free relay may lose its queue on restart. Preserve local files, unblock new commands.
                 clearCommand(); progress="Commande expirée sur le relais · fichiers locaux conservés";

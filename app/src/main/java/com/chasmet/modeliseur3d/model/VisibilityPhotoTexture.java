@@ -8,7 +8,7 @@ import java.util.concurrent.CancellationException;
 /** Four calibrated orthographic photo projections, with CPU depth visibility and seam blending.
  * Kept independent of both original modes and the fast silhouette texture path. */
 public final class VisibilityPhotoTexture {
-    private static final int CELL=1024,DEPTH_SIZE=256;
+    private static final int DEPTH_SIZE=256;
     private VisibilityPhotoTexture(){}
     private static void check(){if(Thread.currentThread().isInterrupted())throw new CancellationException();}
     private static float clamp(float x){return Math.max(0,Math.min(1,x));}
@@ -74,6 +74,10 @@ public final class VisibilityPhotoTexture {
         return photo.sample(sourceU,sourceV,border);
     }
     public static OfflineImageVolume.Result bake(MeshData mesh,Bitmap[] images,float fa,float sa,float scale,FourViewCalibration calibration,String method){
+        return bake(mesh,images,fa,sa,scale,calibration,method,TripoQualityOptions.defaults());
+    }
+    public static OfflineImageVolume.Result bake(MeshData mesh,Bitmap[] images,float fa,float sa,float scale,FourViewCalibration calibration,String method,TripoQualityOptions options){
+        int cell=options.effectiveTextureCell();
         Photo[] photos=new Photo[4];for(int v=0;v<4;v++)photos[v]=new Photo(images[v]);
         DepthMaps maps=new DepthMaps(mesh,DEPTH_SIZE,fa,sa*scale);
         float[] p=mesh.getPositions(),n=mesh.getNormals();int[] original=mesh.getIndices();int max=original.length;
@@ -92,16 +96,16 @@ public final class VisibilityPhotoTexture {
                 if(found!=null){ids[t+k]=found;continue;}
                 int dst=count++;remap.put(key,dst);ids[t+k]=dst;System.arraycopy(p,i,outP,dst*3,3);System.arraycopy(n,i,outN,dst*3,3);
                 float uu=clamp(u(view,p[i],p[i+2],fa,sa*scale)),vv=clamp((1-p[i+1])*.5f);
-                uv[dst*2]=((view%2)*CELL+.5f+uu*(CELL-1))/(CELL*2);uv[dst*2+1]=((view/2)*CELL+.5f+vv*(CELL-1))/(CELL*2);
+                uv[dst*2]=((view%2)*cell+.5f+uu*(cell-1))/(cell*2);uv[dst*2+1]=((view/2)*cell+.5f+vv*(cell-1))/(cell*2);
             }
         }
-        Bitmap atlas=Bitmap.createBitmap(CELL*2,CELL*2,Bitmap.Config.ARGB_8888);
+        Bitmap atlas=Bitmap.createBitmap(cell*2,cell*2,Bitmap.Config.ARGB_8888);
         try{
-            int[] row=new int[CELL];
-            for(int view=0;view<4;view++)for(int py=0;py<CELL;py++){
-                check();float vv=py/(float)(CELL-1);int dy=Math.round(vv*(DEPTH_SIZE-1));
-                for(int px=0;px<CELL;px++){
-                    float uu=px/(float)(CELL-1);int di=dy*DEPTH_SIZE+Math.round(uu*(DEPTH_SIZE-1));
+            int[] row=new int[cell];
+            for(int view=0;view<4;view++)for(int py=0;py<cell;py++){
+                check();float vv=py/(float)(cell-1);int dy=Math.round(vv*(DEPTH_SIZE-1));
+                for(int px=0;px<cell;px++){
+                    float uu=px/(float)(cell-1);int di=dy*DEPTH_SIZE+Math.round(uu*(DEPTH_SIZE-1));
                     int primary=colour(photos[view],view,uu,vv,view<2?fa:sa,calibration,true);float dd=maps.depth[view][di];
                     if(!Float.isFinite(dd)){row[px]=primary;continue;}
                     float x=view==0?(2*uu-1)*fa:view==1?(1-2*uu)*fa:view==2?dd:-dd;
@@ -115,9 +119,9 @@ public final class VisibilityPhotoTexture {
                     }
                     row[px]=weights>1e-6f?0xff000000|(Math.round(red/weights)<<16)|(Math.round(green/weights)<<8)|Math.round(blue/weights):primary;
                 }
-                atlas.setPixels(row,0,CELL,(view%2)*CELL,(view/2)*CELL+py,CELL,1);
+                atlas.setPixels(row,0,cell,(view%2)*cell,(view/2)*cell+py,cell,1);
             }
-            return new OfflineImageVolume.Result(new MeshData(Arrays.copyOf(outP,count*3),Arrays.copyOf(outN,count*3),Arrays.copyOf(uv,count*2),ids),atlas,method+" · projections visibles + raccords pondérés · atlas 2048²");
+            return new OfflineImageVolume.Result(new MeshData(Arrays.copyOf(outP,count*3),Arrays.copyOf(outN,count*3),Arrays.copyOf(uv,count*2),ids),atlas,method+" · projections visibles + raccords pondérés · atlas "+(cell*2)+"²");
         }catch(RuntimeException|Error e){atlas.recycle();throw e;}
     }
 }

@@ -24,6 +24,8 @@ public final class HomeActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.initialize(this);
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("INFO","Ouverture de l’application "+UpdateManager.currentVersion(this));
         setContentView(R.layout.activity_home);
         ((TextView)findViewById(R.id.homeVersion)).setText("Modéliseur 3D V"+UpdateManager.currentVersion(this));
 

@@ -5,6 +5,11 @@ set -euo pipefail
 VERSION="$1"
 TARGET_FILE="$2"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+# The existing release workflow calls this before publication. Keep its permissions
+# unchanged while publishing notes for the actual version, rather than old CI text.
+if [ -f "release-notes/$VERSION.md" ]; then
+  cp "release-notes/$VERSION.md" /tmp/modeliseur-release.md
+fi
 DEFAULT_BRANCH=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.default_branch')
 git fetch --no-tags --depth=1 origin "$DEFAULT_BRANCH"
 MAIN_SHA=$(git rev-parse FETCH_HEAD)

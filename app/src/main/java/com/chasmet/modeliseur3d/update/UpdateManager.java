@@ -46,15 +46,19 @@ public final class UpdateManager {
         }
     }
     public static synchronized ReleaseInfo check(Context c) throws Exception {
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.initialize(c);
         HttpURLConnection conn=connection(new URL(LATEST)); conn.setRequestProperty("Accept","application/vnd.github+json");
         try {
             int code=conn.getResponseCode();
-            if(code==404) { prefs(c).edit().putString("pending","").putLong("checked",System.currentTimeMillis()).apply();return null; }
+            if(code==404) throw new IOException("Aucune Release publique disponible. Impossible de confirmer que l’application est à jour.");
             if(code!=200) throw new IOException(code==403 || code==429 ? "Limite GitHub atteinte. Réessaye plus tard." : "Vérification indisponible (HTTP "+code+").");
             ReleaseInfo info=parse(new JSONObject(new String(body(conn.getInputStream(),1024*1024),StandardCharsets.UTF_8)),currentVersion(c));
             prefs(c).edit().putString("pending",info==null?"":info.version).putLong("checked",System.currentTimeMillis()).apply();
+            String state=info==null?"Application à jour":"Nouvelle version "+info.version;
+            prefs(c).edit().putString("check_status",state).apply();
+            com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("OK","GitHub Releases : "+state);
             return info;
-        } finally { conn.disconnect(); }
+        } catch(Exception error){prefs(c).edit().putString("check_status",com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.sanitize(error.getMessage())).apply();com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("ERREUR","Vérification GitHub Releases",error);throw error;} finally { conn.disconnect(); }
     }
     public static ReleaseInfo parse(JSONObject release,String local) throws Exception {
         if(release.optBoolean("draft") || release.optBoolean("prerelease")) return null;

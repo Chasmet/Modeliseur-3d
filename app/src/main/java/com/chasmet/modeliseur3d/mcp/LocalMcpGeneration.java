@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 public final class LocalMcpGeneration {
     private LocalMcpGeneration() { }
     public static File generate(Context context, JSONObject command, TripoSREngine.Progress progress) throws Exception {
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.initialize(context);
+        com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("INFO","Début de reconstruction MCP locale");
         String id = CloudApi.id(command.getString("id"));
         String mode = command.getString("mode");
         if (!mode.matches("(triposr|silhouettes)_(single|four)")) throw new IOException("Moteur MCP local inconnu.");
@@ -103,6 +105,11 @@ public final class LocalMcpGeneration {
                     .put("projectName","ChatGPT "+id.substring(0,8)).put("generatedAt",System.currentTimeMillis())
                     .put("reconstructionMode",four?"four-view":"single-image").put("hiddenSurfacesEstimated",!four)
                     .put("textureMode",learned&&!four?"visible-photo-neural-hidden":"existing");
+            MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
+            String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
+            metadata.put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight());
+            context.getSharedPreferences("offline_workshop",Context.MODE_PRIVATE).edit().putString("lastQualityReport",measured).apply();
+            com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("OK",measured);
             ExternalViewerGlbExporter.write(part,result.mesh,result.texture,metadata);
             if (part.length()>64L*1024*1024) throw new IOException("GLB supérieur à 64 Mo.");
             progress.check(); if (!part.renameTo(output)) throw new IOException("GLB non enregistré.");
@@ -111,6 +118,7 @@ public final class LocalMcpGeneration {
             } catch (IOException ignored) { }
             context.getSharedPreferences("offline_workshop",Context.MODE_PRIVATE).edit().putString("last",id).apply();
             return output;
+        } catch(Exception error){com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("ERREUR","Reconstruction MCP locale",error);throw error;
         } finally {
             part.delete(); for (Bitmap image : images) if (image!=null) image.recycle();
             if (result!=null) result.texture.recycle();

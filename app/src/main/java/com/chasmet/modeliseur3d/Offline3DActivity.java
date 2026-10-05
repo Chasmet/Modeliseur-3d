@@ -13,6 +13,7 @@ import com.chasmet.modeliseur3d.model.*;
 import com.chasmet.modeliseur3d.util.OfflineImageImporter;
 import com.chasmet.modeliseur3d.performance.ProcessingPowerLock;
 import com.chasmet.modeliseur3d.update.UpdateManager;
+import com.chasmet.modeliseur3d.diagnostics.DiagnosticLog;
 import com.chasmet.modeliseur3d.mcp.McpBridgeSession;
 import java.io.*;
 import java.util.*;
@@ -27,6 +28,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     public static final String EXTRA_MCP_QUALITY="mcp_quality";
     public static final String EXTRA_MCP_SMOOTHING="mcp_smoothing";
     private TextView modeHelp,status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
+    private Spinner textureQuality;private SeekBar photoFidelity;private TextView photoFidelityLabel;private CheckBox fineDetail;private Button photoCheck;
     private Spinner quality,shape,engine;private Button inspect,compare,cancel;private CheckBox ai,depthAi,smoothing;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
     private final Button[] choices=new Button[4],rotations=new Button[4];
@@ -57,7 +59,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }message("GLB exporté hors connexion.");});
     });
     private void ui(Runnable action){runOnUiThread(()->{if(!isDestroyed())action.run();});}
-    private void message(String value){ui(()->status.setText(value));}
+    private void message(String value){DiagnosticLog.record("INFO",value);ui(()->status.setText(value));}
     private interface Task{void run()throws Exception;}
     private void reportMcpFailure(String value){
         if(mcpGenerating&&isMcp()){
@@ -74,9 +76,11 @@ public final class Offline3DActivity extends AppCompatActivity {
                 reportMcpFailure("Calcul local arrêté sur le téléphone.");
                 message("Opération arrêtée. Les modèles précédents sont conservés.");
             }catch(OutOfMemoryError e){
+                DiagnosticLog.record("ERREUR","Mémoire insuffisante dans l’atelier",e);
                 reportMcpFailure("Mémoire Android insuffisante pendant la reconstruction locale.");
                 message("Mémoire de l’application insuffisante. Choisis le moteur Silhouettes et le détail Rapide pour un calcul plus léger.");
             }catch(Exception e){
+                DiagnosticLog.record("ERREUR","Opération atelier",e);
                 String value=e.getMessage()==null?"Opération locale impossible.":e.getMessage();
                 reportMcpFailure(value);
                 message(value);
@@ -91,7 +95,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     private Button button(LinearLayout p,String value,Runnable action){Button b=new Button(this);b.setText(value);b.setAllCaps(false);p.addView(b);b.setOnClickListener(v->action.run());return b;}
     private Spinner spinner(LinearLayout p,String... choices){Spinner s=new Spinner(this);s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices));p.addView(s);return s;}
     @Override protected void onCreate(Bundle state){
-        super.onCreate(state);
+        super.onCreate(state);DiagnosticLog.initialize(this);
         String incoming=getIntent().getStringExtra(EXTRA_MCP_COMMAND_ID);
         if(incoming!=null&&incoming.matches("[a-f0-9]{32}")){
             mcpCommandId=incoming;
@@ -146,6 +150,14 @@ public final class Offline3DActivity extends AppCompatActivity {
         text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
         smoothing=new CheckBox(this);smoothing.setText("Lissage léger du maillage IA");smoothing.setChecked(isMcp()?mcpSmoothing:prefs().getBoolean("smoothing",true));p.addView(smoothing);
         text(p,"Le lissage réduit les bosses de la grille sans assembler des morceaux séparés. Il réutilise les formes IA en cache. Désactive-le pour garder toute la rugosité du champ appris.",14);
+        text(p,"Finition TripoSR",20);
+        textureQuality=spinner(p,"Texture légère · 512 pixels par face","Texture HD · 768 pixels par face","Texture maximale · 1 024 pixels par face");textureQuality.setSelection(Math.max(0,Math.min(2,prefs().getInt("textureQuality",2))));
+        fineDetail=new CheckBox(this);fineDetail.setText("Préserver le détail fin · TripoSR 1 image");fineDetail.setChecked(prefs().getBoolean("fineDetail",true));p.addView(fineDetail);
+        text(p,"Le détail fin augmente le budget de triangles si Android dispose d’assez de mémoire. La texture est adaptée à la mémoire de l’application. Ces réglages réutilisent les calculs IA en cache.",14);
+        photoFidelityLabel=text(p,"Fidélité de la photo visible : "+prefs().getInt("photoFidelity",100)+" %",16);
+        photoFidelity=new SeekBar(this);photoFidelity.setMax(100);photoFidelity.setProgress(Math.max(0,Math.min(100,prefs().getInt("photoFidelity",100))));p.addView(photoFidelity);
+        photoFidelity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int value,boolean user){photoFidelityLabel.setText("Fidélité de la photo visible : "+value+" % · une image");}public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}});
+        photoCheck=button(p,"Diagnostiquer mes images avant calcul",this::diagnosePhotos);
         compare=button(p,"Comparer les silhouettes des quatre vues",this::compareSilhouettes);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
         generate=button(p,"Générer sur ce téléphone",this::generate);
@@ -154,6 +166,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         open=button(p,"Ouvrir mon modèle",()->openModel(lastId));export=button(p,"Exporter mon GLB",()->exporter.launch("volume-local-"+lastId.substring(0,8)+".glb"));
         gallery=button(p,"Mes modèles conservés hors connexion",this::gallery);
         button(p,"Libérer les calculs en cache",this::clearDerivedCaches);
+        button(p,"Réglages · diagnostic et logs copiables",()->startActivity(new Intent(this,SettingsActivity.class)));
         if(prefs().getBoolean("interruptedWork",false))status.setText("Le calcul précédent a été interrompu. Tes photos et GLB sont conservés. Générer reprend les vues IA déjà calculées.");
         lastId=prefs().getString("last","");buttons();
         fourViews.setOnCheckedChangeListener((b,checked)->{if(!isMcp()&&engine.getSelectedItemPosition()==1)prefs().edit().putBoolean("fourViews",checked).apply();buttons();});
@@ -194,6 +207,8 @@ public final class Offline3DActivity extends AppCompatActivity {
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
         depth.setVisibility(single?View.GONE:View.VISIBLE);depthLabel.setVisibility(single?View.GONE:View.VISIBLE);
         depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
+        textureQuality.setEnabled(!busy&&!managed&&learned);fineDetail.setEnabled(!busy&&!managed&&single);
+        photoFidelity.setEnabled(!busy&&!managed&&single);photoFidelityLabel.setVisibility(single?View.VISIBLE:View.GONE);photoFidelity.setVisibility(single?View.VISIBLE:View.GONE);fineDetail.setVisibility(single?View.VISIBLE:View.GONE);photoCheck.setEnabled(!busy&&!managed);
         tolerance.setEnabled(!busy&&!managed);quality.setEnabled(!busy&&!managed);shape.setEnabled(!busy&&!managed&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
         ai.setEnabled(!busy&&!managed);engine.setEnabled(!busy&&!managed);fourViews.setEnabled(!busy&&!managed&&!learned);fourViews.setVisibility(single?View.GONE:View.VISIBLE);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
         projectName.setEnabled(!busy&&!managed);compare.setEnabled(!busy&&!managed&&multiple);compare.setVisibility(single?View.GONE:View.VISIBLE);smoothing.setEnabled(!busy&&!managed&&learned);smoothing.setVisibility(learned?View.VISIBLE:View.GONE);
@@ -256,6 +271,21 @@ public final class Offline3DActivity extends AppCompatActivity {
             }finally{for(Bitmap image:images)if(image!=null)image.recycle();}
         });
     }
+    private void diagnosePhotos(){
+        int limit=engine.getSelectedItemPosition()==2?1:(fourViews.isChecked()?4:1);
+        work(()->{
+            StringBuilder report=new StringBuilder("Diagnostic des images sources\n");
+            for(int slot=0;slot<limit;slot++){
+                checkpoint();report.append("\n").append(VIEWS[slot]).append(" : ");
+                if(!source(slot).isFile()){report.append("image manquante\n");continue;}
+                Bitmap bitmap=BitmapFactory.decodeFile(source(slot).getPath());
+                if(bitmap==null){report.append("image illisible\n");continue;}
+                try{report.append(InputPhotoDiagnostics.inspect(bitmap)).append("\n");}finally{bitmap.recycle();}
+            }
+            report.append("\nCes indications ne garantissent pas la fidélité 3D. Vérifie la même pose et le sujet entier sur chaque vue.");
+            message(report.toString());
+        });
+    }
     private void inspectCutout(){
         int t=tolerance.getProgress()+8,limit=fourViews.isChecked()?4:1;boolean useAi=ai.isChecked();
         message("Vérification locale des détourages…");work(()->{
@@ -309,9 +339,11 @@ public final class Offline3DActivity extends AppCompatActivity {
     private void generate(){
         int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean single=engine.getSelectedItemPosition()==2,learned=engine.getSelectedItemPosition()!=1,multiple=!single&&fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
         boolean smooth=smoothing.isChecked();
+        TripoQualityOptions finishOptions=isMcp()?TripoQualityOptions.defaults():new TripoQualityOptions(new int[]{512,768,1024}[textureQuality.getSelectedItemPosition()],photoFidelity.getProgress()/100f,fineDetail.isChecked());
+        DiagnosticLog.record("INFO","Reconstruction : "+(single?"TripoSR 1 image":learned?"TripoSR 4 images":"Silhouettes")+" · détail "+selected+" · texture demandée "+finishOptions.textureCell+" / effective "+finishOptions.effectiveTextureCell()+" · budget "+finishOptions.triangleBudget());
         String project=projectName.getText().toString().trim();if(project.length()>80)project=project.substring(0,80);final String savedProject=project;
         if(!isMcp()){
-            prefs().edit().putBoolean("smoothing",smooth).putString("projectName",savedProject)
+            prefs().edit().putBoolean("smoothing",smooth).putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putString("projectName",savedProject)
                     .putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind)
                     .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress())
                     .putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
@@ -336,14 +368,14 @@ public final class Offline3DActivity extends AppCompatActivity {
                     TripoSRRefinedField learnedField=TripoSREngine.reconstructSingleDetailed(this,bitmaps[0],learnedCache(0),TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",0),""),neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
                     });checkpoint();message("Maillage détaillé et texture photo sur les surfaces visibles…");
-                    result=TripoSRSingleViewVolume.buildDetailed(learnedField,bitmaps[0],smooth);
+                    result=TripoSRSingleViewVolume.buildDetailed(learnedField,bitmaps[0],smooth,finishOptions);
                 }else if(learned){
                     File[] caches=new File[4];String[] keys=new String[4];for(int slot=0;slot<4;slot++){caches[slot]=learnedCache(slot);keys[slot]=TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",slot),"");}
                     int neuralDetail=new int[]{64,88,112}[selected];
                     TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,bitmaps,caches,keys,neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
                     });checkpoint();message("Fusion multivue "+neuralDetail+"³ et construction du maillage texturé HD…");
-                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale,smooth);
+                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale,smooth,finishOptions);
                 }else{
                 message("Construction locale du maillage et des textures…");
                 result=multiple?OfflineFourViewVolume.build(bitmaps,new int[]{64,88,112}[selected],profileScale,fields)
@@ -355,6 +387,10 @@ public final class Offline3DActivity extends AppCompatActivity {
                     .put("engine",learned?"TripoSR":multiple?"Silhouettes":"Volume local").put("method",result.method)
                     .put("projectName",savedProject).put("localOnly",true).put("inputViews",bitmaps.length)
                     .put("textureMode",single?"visible-photo-neural-hidden":"existing").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
+                MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
+                String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
+                provenance.put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight()).put("photoFidelity",finishOptions.photoWeight).put("fineDetail",finishOptions.preserveFineDetail);
+                prefs().edit().putString("lastQualityReport",measured).apply();DiagnosticLog.record("OK",measured);
                 ExternalViewerGlbExporter.write(part,result.mesh,result.texture,provenance);
                 if(part.length()>64L*1024*1024)throw new IOException("Le modèle dépasse la limite mobile de 64 Mo.");
                 checkpoint();if(!part.renameTo(output))throw new IOException("Modèle non enregistré.");
@@ -389,7 +425,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(!isMcp()){
             prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
                     .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",engine.getSelectedItemPosition()==1?fourViews.isChecked():prefs().getBoolean("fourViews",true)).apply();
-            prefs().edit().putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
+            prefs().edit().putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
         }
         super.onPause();
     }

@@ -90,6 +90,9 @@ public final class TripoSRFourViewVolume {
         return build(images,fields,requested,profileScale,true);
     }
     public static OfflineImageVolume.Result build(Bitmap[] images,TripoSRField[] fields,int requested,float profileScale,boolean smoothing)throws Exception{
+        return build(images,fields,requested,profileScale,smoothing,TripoQualityOptions.defaults());
+    }
+    public static OfflineImageVolume.Result build(Bitmap[] images,TripoSRField[] fields,int requested,float profileScale,boolean smoothing,TripoQualityOptions options)throws Exception{
         if(images==null||images.length!=4||fields==null||fields.length!=4)throw new IllegalArgumentException("Ajoute les quatre vues du même objet.");
         for(int i=0;i<4;i++)if(images[i]==null||images[i].isRecycled()||fields[i]==null)throw new IllegalArgumentException("Une forme IA est absente.");
         float fa=Math.max(images[0].getWidth()/(float)images[0].getHeight(),images[1].getWidth()/(float)images[1].getHeight())*1.08f;
@@ -138,6 +141,6 @@ public final class TripoSRFourViewVolume {
         OfflineMeshFinisher.Result finished=OfflineMeshFinisher.finish(mesh,smoothing,.8f/(h-1));
         mesh=finished.mesh;
         return VisibilityPhotoTexture.bake(mesh,images,fa,sa,scale,calibration,
-            "TripoSR IA 3D · 4 vues recalées · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s)");
+            "TripoSR IA 3D · 4 vues recalées · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
     }
 }

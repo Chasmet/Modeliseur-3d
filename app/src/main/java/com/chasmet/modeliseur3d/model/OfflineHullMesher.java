@@ -71,6 +71,10 @@ public final class OfflineHullMesher {
     }
     /** Object-centred grids are bounded separately from the legacy full-cube path. */
     public static MeshData buildDetailedField(float[] values,int w,int h,int d){long heap=Runtime.getRuntime().maxMemory();return buildField(values,w,h,d,256,heap<192L*1024*1024?60000:heap<384L*1024*1024?100000:180000);}
+    public static MeshData buildDetailedField(float[] values,int w,int h,int d,int triangleBudget){
+        if(triangleBudget<60000||triangleBudget>320000)throw new IllegalArgumentException("Budget de maillage invalide.");
+        return buildField(values,w,h,d,256,triangleBudget);
+    }
     private static MeshData buildField(float[] values,int w,int h,int d,int limit,int triangleLimit){
         if(w<4||h<4||d<4||w>limit||h>limit||d>limit||values==null||values.length!=w*h*d)throw new IllegalArgumentException("Champ mobile invalide.");
         float[] f=values.clone();
