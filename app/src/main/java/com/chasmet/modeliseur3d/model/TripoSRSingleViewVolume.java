@@ -14,6 +14,9 @@ public final class TripoSRSingleViewVolume {
         return buildDetailed(field,photo,smoothing,TripoQualityOptions.defaults());
     }
     public static OfflineImageVolume.Result buildDetailed(TripoSRRefinedField field,Bitmap photo,boolean smoothing,TripoQualityOptions options){
+        return buildDetailed(field,photo,smoothing,options,null,null,0);
+    }
+    public static OfflineImageVolume.Result buildDetailed(TripoSRRefinedField field,Bitmap photo,boolean smoothing,TripoQualityOptions options,TripoDetailRegion region,OfflineDepthField detailDepth,float detailStrength){
         if(field==null||photo==null||photo.isRecycled())throw new IllegalArgumentException("Image et champ détaillé requis.");
         int w=field.ny,h=field.nz,d=field.nx;MeshData mesh=null;float[] b=field.bounds;
         for(int attempt=0;attempt<4;attempt++){
@@ -29,7 +32,9 @@ public final class TripoSRSingleViewVolume {
         float[] p=mesh.getPositions();for(int i=0;i<p.length;i+=3){p[i]=b[1]+(p[i]*h/w+1)*.5f*(b[4]-b[1]);p[i+1]=b[2]+(p[i+1]+1)*.5f*(b[5]-b[2]);p[i+2]=b[0]+(p[i+2]*h/d+1)*.5f*(b[3]-b[0]);}
         mesh=TripoSRFourViewVolume.removeTinyComponents(mesh);
         OfflineMeshFinisher.Result finished=OfflineMeshFinisher.finish(mesh,smoothing,.4f*(b[5]-b[2])/(h-1));
-        return TripoSRPhotoTexture.bake(finished.mesh,field,photo,"TripoSR IA 3D · 1 image · grille centrée "+field.nx+" × "+field.ny+" × "+field.nz+" · maillage "+w+" × "+h+" × "+d+" · budget "+options.triangleBudget()+" triangles"+((w<field.ny||h<field.nz||d<field.nx)?" · détail réduit pour respecter la mémoire":" · détail intégral")+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
+        MeshData detailed=finished.mesh;String detailMethod="";
+        if(region!=null&&detailDepth!=null){TripoDetailRefiner.Result refinement=TripoDetailRefiner.refine(detailed,photo,region,detailDepth,detailStrength,options.triangleBudget());detailed=refinement.mesh;detailMethod=" · "+refinement.summary();}
+        return TripoSRPhotoTexture.bake(detailed,field,photo,"TripoSR IA 3D · 1 image · grille centrée "+field.nx+" × "+field.ny+" × "+field.nz+" · maillage "+w+" × "+h+" × "+d+" · budget "+options.triangleBudget()+" triangles"+((w<field.ny||h<field.nz||d<field.nx)?" · détail réduit pour respecter la mémoire":" · détail intégral")+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts"+detailMethod,options,region);
     }
 
     public static OfflineImageVolume.Result build(TripoSRField field,boolean smoothing){

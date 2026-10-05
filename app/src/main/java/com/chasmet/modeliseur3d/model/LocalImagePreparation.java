@@ -12,7 +12,7 @@ public final class LocalImagePreparation {
         AnimeSegmentationEngine.Mask mask=null;
         if (useAi && !OfflineImageVolume.hasUsefulTransparency(image)) {
             progress.update("Détourage IS-Net embarqué · calcul CPU local…");
-            try (AnimeSegmentationEngine engine=new AnimeSegmentationEngine(context,2)) {
+            try (AnimeSegmentationEngine engine=new AnimeSegmentationEngine(context,TripoComputePolicy.threads(context))) {
                 mask=engine.segment(image);
             }
         }

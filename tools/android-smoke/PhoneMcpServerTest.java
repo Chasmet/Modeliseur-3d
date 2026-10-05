@@ -57,6 +57,15 @@ public class PhoneMcpServerTest {
         Bitmap bitmap=Bitmap.createBitmap(40,60,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(bitmap);Paint p=new Paint();p.setColor(Color.RED);canvas.drawRect(10,5,30,55,p);
         ByteArrayOutputStream out=new ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,out);bitmap.recycle();return "data:image/png;base64,"+Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP);
     }
+    @Test public void closeupOptionsArePersistedAndInvalidRegionsNeverEnqueueAJob()throws Exception{
+        JSONArray region=new JSONArray().put(.25).put(.15).put(.75).put(.45);
+        JSONObject created=tool("create_model_from_images",new JSONObject().put("images",new JSONArray().put(image())).put("detail_region",region).put("detail_strength",.65));
+        JSONObject options=store.get(created.getString("primary_model_id")).getJSONObject("options");assertEquals(region.toString(),options.getJSONArray("detail_region").toString());assertEquals(.65,options.getDouble("detail_strength"),1e-6);
+        int before=store.listing().getJSONArray("commands").length();
+        JSONObject args=new JSONObject().put("images",new JSONArray().put(image())).put("detail_region",new JSONArray().put(.8).put(.2).put(.3).put(.5));
+        String call=new JSONObject().put("jsonrpc","2.0").put("id",1).put("method","tools/call").put("params",new JSONObject().put("name","create_model_from_images").put("arguments",args)).toString();
+        assertTrue(new String(request("POST",path,call,"",false),StandardCharsets.UTF_8).contains("-32602"));assertEquals(before,store.listing().getJSONArray("commands").length());
+    }
     @Test public void localMcpDefaultsToTheManualPrecisePipelineAndKeepsPngAlpha() throws Exception {
         assertEquals("2025-06-18",rpc("initialize",new JSONObject().put("protocolVersion","2025-06-18")).getString("protocolVersion"));
         assertTrue(tool("application_status",new JSONObject()).getBoolean("phone_online"));

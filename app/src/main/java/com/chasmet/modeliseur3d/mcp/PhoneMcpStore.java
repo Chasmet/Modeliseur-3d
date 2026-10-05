@@ -64,9 +64,15 @@ public final class PhoneMcpStore {
         throw new IOException("Image MCP introuvable.");
     }
     public JSONObject create(JSONArray sources,String engine,String quality,boolean smoothing) throws Exception {
-        synchronized(creation) { return createSerial(sources,engine,quality,smoothing); }
+        return create(sources,engine,quality,smoothing,null,.7f);
     }
-    private JSONObject createSerial(JSONArray sources,String engine,String quality,boolean smoothing) throws Exception {
+    public JSONObject create(JSONArray sources,String engine,String quality,boolean smoothing,JSONArray detailRegion,float strength)throws Exception{
+        com.chasmet.modeliseur3d.model.TripoDetailRegion region=com.chasmet.modeliseur3d.model.TripoDetailRegion.fromJson(detailRegion);
+        if(!Float.isFinite(strength)||strength<0||strength>1)throw new IOException("Force du détail invalide.");
+        if(region!=null&&(sources==null||sources.length()!=1||"silhouettes".equals(engine)))throw new IOException("Le gros plan utilise une image TripoSR.");
+        synchronized(creation){return createSerial(sources,engine,quality,smoothing,region,strength);}
+    }
+    private JSONObject createSerial(JSONArray sources,String engine,String quality,boolean smoothing,com.chasmet.modeliseur3d.model.TripoDetailRegion detailRegion,float strength) throws Exception {
         if(sources==null || sources.length()<1 || sources.length()>4)throw new IOException("Fournis entre 1 et 4 images.");
         if(!engine.matches("auto|triposr|silhouettes") || !quality.matches("fast|balanced|precise"))throw new IOException("Moteur ou qualité invalide.");
         int count=sources.length()==4?1:sources.length(),pending=0;
@@ -84,6 +90,7 @@ public final class PhoneMcpStore {
                 JSONObject command=new JSONObject().put("id",commandId).put("mode",("silhouettes".equals(engine)?"silhouettes":"triposr")+(views==4?"_four":"_single"))
                         .put("references",references).put("options",new JSONObject().put("quality",quality).put("smoothing",smoothing).put("pipeline","manual-workshop-v1").put("segmentation","isnet"))
                         .put("status","pending").put("message","En attente du moteur local Android.").put("created",System.currentTimeMillis()).put("updated",System.currentTimeMillis()).put("download_token",id());
+                if(detailRegion!=null)command.getJSONObject("options").put("detail_region",detailRegion.json()).put("detail_strength",strength);
                 JSONObject safe=new JSONObject(command.toString());safe.remove("download_token");jobs.put(safe);
             }
             synchronized(this) {
@@ -121,7 +128,7 @@ public final class PhoneMcpStore {
         File original=new File(target.getPath()+".source");Bitmap image=null;
         try {
             try(OutputStream out=new FileOutputStream(original)) { out.write(raw); }
-            image=OfflineImageImporter.decode(context.getContentResolver(),Uri.fromFile(original));
+            image=OfflineImageImporter.decode(context.getContentResolver(),Uri.fromFile(original),com.chasmet.modeliseur3d.model.TripoComputePolicy.imageLimit());
             if(image==null)throw new IOException("Image illisible.");
             try(OutputStream out=new FileOutputStream(target)) { if(!image.compress(Bitmap.CompressFormat.PNG,100,out))throw new IOException("PNG non enregistré."); }
         } finally { original.delete();if(image!=null)image.recycle(); }

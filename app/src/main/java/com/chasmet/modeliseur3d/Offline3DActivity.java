@@ -28,6 +28,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     public static final String EXTRA_MCP_QUALITY="mcp_quality";
     public static final String EXTRA_MCP_SMOOTHING="mcp_smoothing";
     private TextView modeHelp,status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
+    private Button selectDetail;private CheckBox assistDetail;private SeekBar detailStrength;private TextView detailLabel;private TripoDetailRegion detailRegion;
     private Spinner textureQuality;private SeekBar photoFidelity;private TextView photoFidelityLabel;private CheckBox fineDetail;private Button photoCheck;
     private Spinner quality,shape,engine;private Button inspect,compare,cancel;private CheckBox ai,depthAi,smoothing;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
@@ -157,6 +158,14 @@ public final class Offline3DActivity extends AppCompatActivity {
         photoFidelityLabel=text(p,"Fidélité de la photo visible : "+prefs().getInt("photoFidelity",100)+" %",16);
         photoFidelity=new SeekBar(this);photoFidelity.setMax(100);photoFidelity.setProgress(Math.max(0,Math.min(100,prefs().getInt("photoFidelity",100))));p.addView(photoFidelity);
         photoFidelity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int value,boolean user){photoFidelityLabel.setText("Fidélité de la photo visible : "+value+" % · une image");}public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}});
+        selectDetail=button(p,"Améliorer un visage / détail",this::selectDetail);
+        assistDetail=new CheckBox(this);assistDetail.setText("Assistant gros plan · TripoSR + Depth Anything");assistDetail.setChecked(prefs().getBoolean("assistDetail",false));p.addView(assistDetail);
+        try{String saved=prefs().getString("detailRegion","");if(!saved.isEmpty())detailRegion=TripoDetailRegion.fromJson(new org.json.JSONArray(saved));}catch(Exception ignored){assistDetail.setChecked(false);}
+        detailLabel=text(p,"Relief du détail : "+prefs().getInt("detailStrength",70)+" %",16);
+        detailStrength=new SeekBar(this);detailStrength.setMax(100);detailStrength.setProgress(prefs().getInt("detailStrength",70));p.addView(detailStrength);
+        detailStrength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int value,boolean user){detailLabel.setText("Relief du détail : "+value+" % · 0 % conserve uniquement la texture du gros plan");}public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}});
+        text(p,"Une image : encadre les yeux, le nez et la bouche, ou un autre détail. Le gros plan réserve sa propre texture et ajoute un relief local borné avec Depth Anything. Une zone de départ est proposée ; ajuste-la au sujet. Il ne détecte pas automatiquement les visages. Réimporte une photo HD pour garder jusqu’à 2 048 pixels selon la mémoire.",14);
+        text(p,"Puissance disponible : "+TripoComputePolicy.summary(this),14);
         photoCheck=button(p,"Diagnostiquer mes images avant calcul",this::diagnosePhotos);
         compare=button(p,"Comparer les silhouettes des quatre vues",this::compareSilhouettes);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
@@ -207,6 +216,8 @@ public final class Offline3DActivity extends AppCompatActivity {
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
         depth.setVisibility(single?View.GONE:View.VISIBLE);depthLabel.setVisibility(single?View.GONE:View.VISIBLE);
         depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
+        selectDetail.setVisibility(single?View.VISIBLE:View.GONE);assistDetail.setVisibility(single?View.VISIBLE:View.GONE);detailLabel.setVisibility(single?View.VISIBLE:View.GONE);detailStrength.setVisibility(single?View.VISIBLE:View.GONE);
+        selectDetail.setEnabled(!busy&&!managed&&single&&source().isFile());assistDetail.setEnabled(!busy&&!managed&&single&&detailRegion!=null);detailStrength.setEnabled(!busy&&!managed&&single&&detailRegion!=null);
         textureQuality.setEnabled(!busy&&!managed&&learned);fineDetail.setEnabled(!busy&&!managed&&single);
         photoFidelity.setEnabled(!busy&&!managed&&single);photoFidelityLabel.setVisibility(single?View.VISIBLE:View.GONE);photoFidelity.setVisibility(single?View.VISIBLE:View.GONE);fineDetail.setVisibility(single?View.VISIBLE:View.GONE);photoCheck.setEnabled(!busy&&!managed);
         tolerance.setEnabled(!busy&&!managed);quality.setEnabled(!busy&&!managed);shape.setEnabled(!busy&&!managed&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
@@ -220,15 +231,19 @@ public final class Offline3DActivity extends AppCompatActivity {
         }finally{part.delete();}
     }
     private void saveImage(Bitmap bitmap,int slot)throws IOException{
-        saveBitmap(bitmap,source(slot));TripoSREngine.clearDetailedCache(learnedCache(slot));cutout(slot).delete();depthCache(slot).delete();TripoSREngine.clearDetailedCache(learnedCache(slot));learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
+        saveBitmap(bitmap,source(slot));
+        if(slot==0){new File(getFilesDir(),"offline-workshop-detail-depth.bin").delete();prefs().edit().remove("detailRegion").remove("detailCutoutKey").putBoolean("assistDetail",false).apply();ui(()->{detailRegion=null;assistDetail.setChecked(false);});}
+        TripoSREngine.clearDetailedCache(learnedCache(slot));cutout(slot).delete();depthCache(slot).delete();TripoSREngine.clearDetailedCache(learnedCache(slot));learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}prefs().edit().remove(key("cutoutKey",slot)).remove(key("depthKey",slot)).apply();
         ui(()->{previews[slot].setImageURI(null);previews[slot].setImageURI(Uri.fromFile(source(slot)));});
     }
     private File prepareCutout(int tolerance,boolean useAi)throws Exception{return prepareCutout(0,tolerance,useAi);}
     private File prepareCutout(int slot,int tolerance,boolean useAi)throws Exception{
-        String cache="v2-soft-alpha:"+source(slot).lastModified()+":"+source(slot).length()+":"+tolerance+":"+useAi;
+        String cache="v3-soft-alpha:"+(engine.getSelectedItemPosition()==2?TripoComputePolicy.imageLimit():1024)+":"+source(slot).lastModified()+":"+source(slot).length()+":"+tolerance+":"+useAi;
         if(cutout(slot).isFile()&&cache.equals(prefs().getString(key("cutoutKey",slot),"")))return cutout(slot);
         checkpoint();Bitmap bitmap=BitmapFactory.decodeFile(source(slot).getAbsolutePath());
         if(bitmap==null)throw new IOException("Photo "+VIEWS[slot]+" illisible.");
+        if(engine.getSelectedItemPosition()!=2&&Math.max(bitmap.getWidth(),bitmap.getHeight())>1024){int max=Math.max(bitmap.getWidth(),bitmap.getHeight());Bitmap scaled=Bitmap.createScaledBitmap(bitmap,Math.max(3,bitmap.getWidth()*1024/max),Math.max(3,bitmap.getHeight()*1024/max),true);if(scaled!=bitmap){bitmap.recycle();bitmap=scaled;}}
+
         try{
             try(OfflineImageVolume.Prepared prepared=LocalImagePreparation.prepare(this,bitmap,tolerance,useAi,new TripoSREngine.Progress(){
                 public void update(String value){message(VIEWS[slot]+" : "+value);}public void check(){checkpoint();}
@@ -269,6 +284,28 @@ public final class Offline3DActivity extends AppCompatActivity {
                 });
                 message(agreement+(Math.min(calibration.frontAgreement,calibration.profileAgreement)<.65f?" · Écarts importants : vérifie les photos avant de lancer l’IA.":" · Comparaison disponible sans lancer TripoSR."));
             }finally{for(Bitmap image:images)if(image!=null)image.recycle();}
+        });
+    }
+    private void selectDetail(){
+        if(busy||!source().isFile())return;
+        int t=tolerance.getProgress()+8;boolean useAi=ai.isChecked();
+        work(()->{
+            File ready=prepareCutout(t,useAi);checkpoint();Bitmap image=BitmapFactory.decodeFile(ready.getPath());if(image==null)throw new IOException("Détourage illisible.");
+            String selectedKey=prefs().getString(key("cutoutKey",0),"");
+            ui(()->{
+                if(isFinishing()){image.recycle();return;}
+                LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);int pad=Math.round(16*getResources().getDisplayMetrics().density);content.setPadding(pad,0,pad,0);
+                text(content,"Glisse le cadre ou ses coins autour du visage. Garde les yeux, le nez et la bouche dans le cadre. Tu peux aussi choisir une main ou un détail d’objet.",15);
+                TripoDetailSelector selector=new TripoDetailSelector(this,image,selectedKey.equals(prefs().getString("detailCutoutKey",""))?detailRegion:null);
+                int height=Math.min(Math.round(getResources().getDisplayMetrics().heightPixels*.52f),pad*28);content.addView(selector,new LinearLayout.LayoutParams(-1,height));
+                var dialog=new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Gros plan à améliorer").setView(content).setPositiveButton("Appliquer le mode visage",null).setNegativeButton("Annuler",null).create();dialog.setOnDismissListener(d->image.recycle());dialog.show();
+                dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener(v->{
+                    try{detailRegion=selector.region();prefs().edit().putString("detailRegion",detailRegion.json().toString()).putString("detailCutoutKey",selectedKey).putBoolean("assistDetail",true).apply();
+                        quality.setSelection(2);textureQuality.setSelection(2);fineDetail.setChecked(true);photoFidelity.setProgress(100);assistDetail.setChecked(true);buttons();
+                        status.setText("Gros plan prêt · qualité Précis · texture dédiée · "+TripoComputePolicy.summary(this)+". Appuie sur Générer sur ce téléphone.");dialog.dismiss();
+                    }catch(IllegalArgumentException e){Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();}
+                });
+            });
         });
     }
     private void diagnosePhotos(){
@@ -313,8 +350,8 @@ public final class Offline3DActivity extends AppCompatActivity {
             prefs().edit().putString(key("depthKey",slot),cache).apply();return field;
         }finally{part.delete();}
     }
-    private void importImage(Uri uri){if(uri==null)return;final int slot=selectedSlot;message("Lecture et réduction de l'image à 1 024 pixels…");work(()->{
-        Bitmap bitmap=OfflineImageImporter.decode(getContentResolver(),uri);try{saveImage(bitmap,slot);}finally{bitmap.recycle();}message("Orientation corrigée. Image copiée sur le téléphone ; prête hors connexion.");
+    private void importImage(Uri uri){if(uri==null)return;final int slot=selectedSlot;message("Lecture de l’image HD et correction de l’orientation…");final int limit=engine.getSelectedItemPosition()==2?TripoComputePolicy.imageLimit():1024;work(()->{
+        Bitmap bitmap=OfflineImageImporter.decode(getContentResolver(),uri,limit);try{saveImage(bitmap,slot);}finally{bitmap.recycle();}message("Orientation corrigée. Image copiée sur le téléphone ; prête hors connexion.");
     });}
     private void rotateImage(){rotateImage(0);}
     private void rotateImage(int slot){work(()->{Bitmap bitmap=BitmapFactory.decodeFile(source(slot).getAbsolutePath());if(bitmap==null)throw new IOException("Image illisible.");Bitmap turned=null;
@@ -330,6 +367,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         new androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Libérer les calculs en cache ?")
             .setMessage("Les quatre photos, les modèles GLB et les poids IA restent conservés. Le prochain calcul IA sera plus long.")
             .setPositiveButton("Libérer",(dialog,which)->work(()->{
+                new File(getFilesDir(),"offline-workshop-detail-depth.bin").delete();new File(getFilesDir(),"offline-workshop-detail-depth.bin.key").delete();
                 for(int slot=0;slot<4;slot++){
                     depthCache(slot).delete();TripoSREngine.clearDetailedCache(learnedCache(slot));learnedCache(slot).delete();new File(learnedCache(slot).getPath()+".key").delete();
                     for(int side:new int[]{64,88,112}){new File(learnedCache(slot).getPath()+".field-"+side).delete();new File(learnedCache(slot).getPath()+".field-"+side+"-rgb").delete();}
@@ -339,8 +377,9 @@ public final class Offline3DActivity extends AppCompatActivity {
     private void generate(){
         int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean single=engine.getSelectedItemPosition()==2,learned=engine.getSelectedItemPosition()!=1,multiple=!single&&fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
         boolean smooth=smoothing.isChecked();
+        final TripoDetailRegion requestedRegion=single&&assistDetail.isChecked()?detailRegion:null;final float requestedStrength=detailStrength.getProgress()/100f;
         TripoQualityOptions finishOptions=isMcp()?TripoQualityOptions.defaults():new TripoQualityOptions(new int[]{512,768,1024}[textureQuality.getSelectedItemPosition()],photoFidelity.getProgress()/100f,fineDetail.isChecked());
-        DiagnosticLog.record("INFO","Reconstruction : "+(single?"TripoSR 1 image":learned?"TripoSR 4 images":"Silhouettes")+" · détail "+selected+" · texture demandée "+finishOptions.textureCell+" / effective "+finishOptions.effectiveTextureCell()+" · budget "+finishOptions.triangleBudget());
+        DiagnosticLog.record("INFO","Reconstruction : "+(single?"TripoSR 1 image":learned?"TripoSR 4 images":"Silhouettes")+" · détail "+selected+" · texture demandée "+finishOptions.textureCell+" / effective "+finishOptions.effectiveTextureCell()+" · budget "+finishOptions.triangleBudget()+" · "+TripoComputePolicy.summary(this));
         String project=projectName.getText().toString().trim();if(project.length()>80)project=project.substring(0,80);final String savedProject=project;
         if(!isMcp()){
             prefs().edit().putBoolean("smoothing",smooth).putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putString("projectName",savedProject)
@@ -354,6 +393,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         message(isMcp()?"Commande ChatGPT : création du modèle avec le moteur local…":"Création du volume local…");work(()->{
             long started=android.os.SystemClock.elapsedRealtime();
             Bitmap[] bitmaps=new Bitmap[multiple?4:1];OfflineImageVolume.Result result=null;
+            TripoDetailRegion appliedRegion=null;
             String id=UUID.randomUUID().toString().replace("-","");File output=model(id),part=new File(output.getPath()+".part");
             try{
                 OfflineDepthField[] fields=useDepth?new OfflineDepthField[bitmaps.length]:null;
@@ -368,7 +408,15 @@ public final class Offline3DActivity extends AppCompatActivity {
                     TripoSRRefinedField learnedField=TripoSREngine.reconstructSingleDetailed(this,bitmaps[0],learnedCache(0),TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",0),""),neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
                     });checkpoint();message("Maillage détaillé et texture photo sur les surfaces visibles…");
-                    result=TripoSRSingleViewVolume.buildDetailed(learnedField,bitmaps[0],smooth,finishOptions);
+                    OfflineDepthField detailDepth=null;
+                    if(requestedRegion!=null){
+                        if(prefs().getString("detailCutoutKey","").equals(prefs().getString(key("cutoutKey",0),""))){
+                            appliedRegion=requestedRegion;
+                            if(requestedStrength>0)detailDepth=TripoDetailDepth.estimate(this,bitmaps[0],appliedRegion,new File(getFilesDir(),"offline-workshop-detail-depth.bin"),prefs().getString(key("cutoutKey",0),""),new TripoSREngine.Progress(){public void update(String value){message(value);}public void check(){checkpoint();}});
+                        }else message("Le détourage a changé : sélectionne à nouveau le gros plan. Génération TripoSR standard pour cette image.");
+                    }
+                    checkpoint();message("Affinage du détail et texture dédiée…");
+                    result=TripoSRSingleViewVolume.buildDetailed(learnedField,bitmaps[0],smooth,finishOptions,appliedRegion,detailDepth,requestedStrength);
                 }else if(learned){
                     File[] caches=new File[4];String[] keys=new String[4];for(int slot=0;slot<4;slot++){caches[slot]=learnedCache(slot);keys[slot]=TripoSREngine.CACHE_VERSION+":"+prefs().getString(key("cutoutKey",slot),"");}
                     int neuralDetail=new int[]{64,88,112}[selected];
@@ -389,7 +437,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                     .put("textureMode",single?"visible-photo-neural-hidden":"existing").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
                 MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
                 String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
-                provenance.put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight()).put("photoFidelity",finishOptions.photoWeight).put("fineDetail",finishOptions.preserveFineDetail);
+                provenance.put("detailRegion",appliedRegion==null?org.json.JSONObject.NULL:appliedRegion.json()).put("detailStrength",requestedStrength).put("computeThreads",TripoComputePolicy.threads(this)).put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight()).put("photoFidelity",finishOptions.photoWeight).put("fineDetail",finishOptions.preserveFineDetail);
                 prefs().edit().putString("lastQualityReport",measured).apply();DiagnosticLog.record("OK",measured);
                 ExternalViewerGlbExporter.write(part,result.mesh,result.texture,provenance);
                 if(part.length()>64L*1024*1024)throw new IOException("Le modèle dépasse la limite mobile de 64 Mo.");
@@ -425,7 +473,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(!isMcp()){
             prefs().edit().putInt("engine",engine.getSelectedItemPosition()).putInt("quality",quality.getSelectedItemPosition()).putInt("shape",shape.getSelectedItemPosition())
                     .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress()).putBoolean("ai",ai.isChecked()).putBoolean("depthAi",depthAi.isChecked()).putBoolean("fourViews",engine.getSelectedItemPosition()==1?fourViews.isChecked():prefs().getBoolean("fourViews",true)).apply();
-            prefs().edit().putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
+            prefs().edit().putBoolean("assistDetail",assistDetail.isChecked()).putInt("detailStrength",detailStrength.getProgress()).putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putString("projectName",projectName.getText().toString()).putBoolean("smoothing",smoothing.isChecked()).apply();
         }
         super.onPause();
     }

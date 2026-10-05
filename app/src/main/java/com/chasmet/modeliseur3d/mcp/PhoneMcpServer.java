@@ -193,9 +193,9 @@ public final class PhoneMcpServer implements AutoCloseable {
         validateArguments(name,args);JSONObject result;
         try { switch(name) {
             case "application_status":result=status();break;
-            case "application_capabilities":result=new JSONObject().put("engines",new JSONArray().put("TripoSR local").put("Silhouettes local").put("IS-Net local").put("Depth Anything V2 local")).put("default_quality","precise").put("pipeline","manual-workshop-v1").put("animation",false).put("skinning",false);break;
+            case "application_capabilities":result=new JSONObject().put("engines",new JSONArray().put("TripoSR local").put("Silhouettes local").put("IS-Net local").put("Depth Anything V2 local")).put("default_quality","precise").put("pipeline","manual-workshop-v1").put("detail_closeup",true).put("detail_coordinates","normalized foreground cutout").put("animation",false).put("skinning",false);break;
             case "list_models_and_images":result=store.listing();break;
-            case "create_model_from_images":result=store.create(args.getJSONArray("images"),args.optString("engine","auto"),args.optString("quality","precise"),args.optBoolean("smoothing",true));break;
+            case "create_model_from_images":result=store.create(args.getJSONArray("images"),args.optString("engine","auto"),args.optString("quality","precise"),args.optBoolean("smoothing",true),args.optJSONArray("detail_region"),(float)args.optDouble("detail_strength",.7));break;
             case "model_status":result=store.get(args.getString("model_id"));result.remove("download_token");break;
             case "model_download":
                 JSONObject job=store.get(args.getString("model_id"));result=new JSONObject().put("status",job.getString("status")).put("message",job.optString("message"));
@@ -241,7 +241,7 @@ public final class PhoneMcpServer implements AutoCloseable {
     }
     private static void validateArguments(String name,JSONObject args) throws Exception {
         Set<String> allowed;
-        if("create_model_from_images".equals(name)) allowed=new HashSet<>(Arrays.asList("images","engine","quality","smoothing"));
+        if("create_model_from_images".equals(name)) allowed=new HashSet<>(Arrays.asList("images","engine","quality","smoothing","detail_region","detail_strength"));
         else if("model_status".equals(name)||"model_download".equals(name)) allowed=Collections.singleton("model_id");
         else if(Arrays.asList("application_status","application_capabilities","list_models_and_images").contains(name)) allowed=Collections.emptySet();
         else throw new RpcError(-32602,"Outil MCP inconnu.");
@@ -254,6 +254,11 @@ public final class PhoneMcpServer implements AutoCloseable {
             if(args.has("engine")&&(!(args.opt("engine") instanceof String)||!args.getString("engine").matches("auto|triposr|silhouettes")))throw new RpcError(-32602,"Moteur invalide.");
             if(args.has("quality")&&(!(args.opt("quality") instanceof String)||!args.getString("quality").matches("precise|balanced|fast")))throw new RpcError(-32602,"Qualité invalide.");
             if(args.has("smoothing")&&!(args.opt("smoothing") instanceof Boolean))throw new RpcError(-32602,"Lissage booléen requis.");
+            if(args.has("detail_region")){
+                if(!(args.opt("detail_region") instanceof JSONArray)||images.length()!=1||"silhouettes".equals(args.optString("engine")))throw new RpcError(-32602,"Zone de détail : une image TripoSR requise.");
+                try{com.chasmet.modeliseur3d.model.TripoDetailRegion.fromJson(args.getJSONArray("detail_region"));}catch(Exception e){throw new RpcError(-32602,"Zone de détail invalide.");}
+            }
+            if(args.has("detail_strength")&&(!(args.opt("detail_strength") instanceof Number)||!Double.isFinite(args.getDouble("detail_strength"))||args.getDouble("detail_strength")<0||args.getDouble("detail_strength")>1))throw new RpcError(-32602,"Force du détail : nombre entre 0 et 1 requis.");
         }
     }
     private JSONObject status() throws Exception {
@@ -274,6 +279,8 @@ public final class PhoneMcpServer implements AutoCloseable {
                     properties.put("engine",new JSONObject().put("type","string").put("enum",new JSONArray().put("auto").put("triposr").put("silhouettes")).put("default","auto"));
                     properties.put("quality",new JSONObject().put("type","string").put("enum",new JSONArray().put("precise").put("balanced").put("fast")).put("default","precise"));
                     properties.put("smoothing",new JSONObject().put("type","boolean").put("default",true));schema.put("required",new JSONArray().put("images"));
+                    properties.put("detail_region",new JSONObject().put("type","array").put("items",new JSONObject().put("type","number").put("minimum",0).put("maximum",1)).put("minItems",4).put("maxItems",4).put("description","Optional single-image close-up [left,top,right,bottom], normalized in the foreground cutout. Adds a dedicated photo texture and bounded Depth Anything relief."));
+                    properties.put("detail_strength",new JSONObject().put("type","number").put("minimum",0).put("maximum",1).put("default",.7));
                     description="Create GLB locally using the manual workshop pipeline. Default: TripoSR precise + IS-Net cutout. One image: front. Four: front, back, right, left. Input: HTTPS direct image or base64 PNG. No animation or rigging.";break;
                 case "model_status":case "model_download":properties.put("model_id",new JSONObject().put("type","string"));schema.put("required",new JSONArray().put("model_id"));description="Read model status or retrieve the saved GLB from the phone.";break;
                 default:description="Read the local Android application state and actual modeling capabilities.";

@@ -12,11 +12,15 @@ import java.io.InputStream;
 public final class OfflineImageImporter {
     private OfflineImageImporter(){}
     public static Bitmap decode(ContentResolver resolver,Uri uri)throws IOException{
+        return decode(resolver,uri,1024);
+    }
+    public static Bitmap decode(ContentResolver resolver,Uri uri,int limit)throws IOException{
+        if(limit!=1024&&limit!=2048)throw new IOException("Résolution d’import invalide.");
         int orientation=ExifInterface.ORIENTATION_NORMAL;
         try(InputStream in=resolver.openInputStream(uri)){
             if(in!=null)orientation=new ExifInterface(in).getAttributeInt(ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_NORMAL);
         }catch(IOException ignored){/* Formats without EXIF still decode normally. */}
-        Bitmap bitmap=BitmapUtils.decodeBitmapFromUri(resolver,uri,1024);
+        Bitmap bitmap=BitmapUtils.decodeBitmapFromUri(resolver,uri,limit);
         return orient(bitmap,orientation);
     }
     public static Bitmap orient(Bitmap bitmap,int orientation){

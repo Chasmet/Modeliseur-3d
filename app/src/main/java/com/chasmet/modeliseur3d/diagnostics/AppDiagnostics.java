@@ -18,6 +18,7 @@ public final class AppDiagnostics {
         DiagnosticLog.initialize(c);StringBuilder out=new StringBuilder("DIAGNOSTIC MODÉLISEUR 3D\n");
         out.append("Version : ").append(UpdateManager.currentVersion(c)).append(" · Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
         out.append("Appareil : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append("\n");
+        out.append("Calcul TripoSR : ").append(com.chasmet.modeliseur3d.model.TripoComputePolicy.summary(c)).append("\n");
         Runtime runtime=Runtime.getRuntime();out.append(String.format(Locale.FRANCE,"Mémoire application : %.0f / %.0f Mio · espace libre : %.0f Mio\n",(runtime.totalMemory()-runtime.freeMemory())/1048576.0,runtime.maxMemory()/1048576.0,c.getFilesDir().getUsableSpace()/1048576.0));
         ActivityManager manager=(ActivityManager)c.getSystemService(Context.ACTIVITY_SERVICE);
         if(manager!=null){ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo();manager.getMemoryInfo(info);out.append("Pression mémoire Android : ").append(info.lowMemory?"ÉLEVÉE":"normale").append("\n");}

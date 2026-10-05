@@ -23,7 +23,7 @@ public final class OfflineImageVolume {
     /** The reusable cutout is independent of detail, thickness and shape. */
     public static Prepared prepare(Bitmap source,int tolerance,AnimeSegmentationEngine.Mask ai) {
         int w=source.getWidth(),h=source.getHeight();
-        if(w>1024||h>1024||w<3||h<3)throw new IllegalArgumentException("Image locale limitée à 1 024 pixels par côté.");
+        if(w>2048||h>2048||w<3||h<3)throw new IllegalArgumentException("Image locale limitée à 2 048 pixels par côté.");
         int[] pixels=new int[w*h];source.getPixels(pixels,0,w,0,0,w,h);
         boolean transparent=hasUsefulTransparency(source);
         boolean[] mask=new boolean[pixels.length];String method;

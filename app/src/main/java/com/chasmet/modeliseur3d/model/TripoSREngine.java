@@ -47,9 +47,9 @@ public final class TripoSREngine {
         return folder;
     }
 
-    private static OrtSession.SessionOptions options()throws OrtException{
+    private static OrtSession.SessionOptions options(Context context)throws OrtException{
         OrtSession.SessionOptions options=new OrtSession.SessionOptions();
-        options.setIntraOpNumThreads(2);options.setInterOpNumThreads(1);
+        options.setIntraOpNumThreads(TripoComputePolicy.threads(context));options.setInterOpNumThreads(1);
         options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.EXTENDED_OPT);
         options.setCPUArenaAllocator(false);options.setMemoryPatternOptimization(false);
         return options;
@@ -114,7 +114,7 @@ public final class TripoSREngine {
         // Rectangular dense sampling is much cheaper than evaluating a 256³ empty cube.
         int nx=dimensions[0],ny=dimensions[1],nz=dimensions[2],total=nx*ny*nz;
         float[] density=new float[total];int[] colors=new int[total];float[] scene=readScene(cache);File folder=unpack(context,progress);OrtEnvironment env=OrtEnvironment.getEnvironment();
-        try(OrtSession.SessionOptions options=options();OrtSession decoder=env.createSession(new File(folder,ASSETS[2]).getPath(),options)){
+        try(OrtSession.SessionOptions options=options(context);OrtSession decoder=env.createSession(new File(folder,ASSETS[2]).getPath(),options)){
             for(int start=0;start<total;start+=BATCH){
                 check(progress);if(start%(BATCH*32)==0)progress.update("Détails du sujet · grille "+nx+" × "+ny+" × "+nz+" · "+(100L*start/total)+" %…");
                 int count=Math.min(BATCH,total-start);float[] features=new float[count*120];
@@ -176,7 +176,7 @@ public final class TripoSREngine {
         String[] labels={"Face","Dos","Profil droit","Profil gauche"};
 
         if(needsEncoder){
-            try(OrtSession.SessionOptions options=options();
+            try(OrtSession.SessionOptions options=options(context);
                 OrtSession encoder=environment.createSession(new File(folder,ASSETS[0]).getPath(),options)){
                 for(int i=0;i<count;i++)if(fields[i]==null&&scenes[i]==null){
                     check(progress);
@@ -184,7 +184,7 @@ public final class TripoSREngine {
                     if(caches[i].isFile()&&marker.isFile()&&readKey(marker).equals(keys[i])){
                         try{scenes[i]=readScene(caches[i]);continue;}catch(IOException ignored){}
                     }
-                    progress.update((count==1?"Image unique":labels[i])+" · TripoSR IA 3D · "+(i+1)+" / "+count+" · encodage CPU local…");
+                    progress.update((count==1?"Image unique":labels[i])+" · TripoSR IA 3D · "+(i+1)+" / "+count+" · encodage CPU local · "+TripoComputePolicy.threads(context)+" threads…");
                     try(OnnxTensor input=OnnxTensor.createTensor(environment,FloatBuffer.wrap(prepareInput(images[i])),new long[]{1,3,SIZE,SIZE});
                         OrtSession.Result result=encoder.run(Collections.singletonMap("input_image",input))){
                         FloatBuffer out=((OnnxTensor)result.get(0)).getFloatBuffer();
@@ -202,7 +202,7 @@ public final class TripoSREngine {
 
         // Encoder is closed before the decoder is opened: lower peak RAM on Android.
         if(needsDecoder){
-            try(OrtSession.SessionOptions options=options();
+            try(OrtSession.SessionOptions options=options(context);
                 OrtSession decoder=environment.createSession(new File(folder,ASSETS[2]).getPath(),options)){
                 for(int i=0;i<count;i++)if(fields[i]==null){
                     check(progress);

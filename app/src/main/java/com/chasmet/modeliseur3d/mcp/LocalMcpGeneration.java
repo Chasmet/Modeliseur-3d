@@ -25,6 +25,10 @@ public final class LocalMcpGeneration {
         int detail = "fast".equals(quality) ? 0 : "precise".equals(quality) ? 2 : 1;
         if (!quality.matches("fast|balanced|precise")) throw new IOException("Qualité MCP invalide.");
         boolean smooth = options == null || options.optBoolean("smoothing", true);
+        TripoDetailRegion region=options==null?null:TripoDetailRegion.fromJson(options.optJSONArray("detail_region"));
+        float strength=options==null?.7f:(float)options.optDouble("detail_strength",.7);
+        if(!Float.isFinite(strength)||strength<0||strength>1)throw new IOException("Force du détail invalide.");
+        if(region!=null&&(!learned||four))throw new IOException("Le gros plan utilise TripoSR avec une image.");
         File folder = new File(context.getFilesDir(), "mcp_inputs/" + id);
         File output = new File(context.getFilesDir(), "cloud_models/" + id + ".glb");
         // A finished model survives network failures and is uploaded without another inference.
@@ -36,15 +40,16 @@ public final class LocalMcpGeneration {
             OfflineDepthField[] depths = learned ? null : new OfflineDepthField[images.length];
             for (int i = 0; i < images.length; i++) {
                 progress.check(); progress.update("Détourage local · image " + (i + 1) + " / " + images.length);
-                File cutout = new File(folder, "service-manual-cutout-" + i + ".png");
+                File cutout = new File(folder, "service-hd-cutout-" + i + ".png");
                 if (!cutout.isFile()) {
                     Bitmap source = BitmapFactory.decodeFile(new File(folder, "image-" + i + ".png").getPath());
                     if (source == null) throw new IOException("Image MCP illisible.");
                     try {
                         int max = Math.max(source.getWidth(), source.getHeight());
-                        if (max > 1024) {
-                            Bitmap scaled = Bitmap.createScaledBitmap(source, Math.max(3, source.getWidth()*1024/max),
-                                    Math.max(3, source.getHeight()*1024/max), true);
+                        int limit=learned&&!four?TripoComputePolicy.imageLimit():1024;
+                        if (max > limit) {
+                            Bitmap scaled = Bitmap.createScaledBitmap(source, Math.max(3, source.getWidth()*limit/max),
+                                    Math.max(3, source.getHeight()*limit/max), true);
                             if (scaled != source) { source.recycle(); source = scaled; }
                         }
                         try (OfflineImageVolume.Prepared ready = LocalImagePreparation.prepare(context,source,43,true,progress)) {
@@ -85,7 +90,8 @@ public final class LocalMcpGeneration {
                         new File(folder,"service-manual-triposr-0.bin"),TripoSREngine.CACHE_VERSION+":"+id+":0",
                         new int[]{128,192,256}[detail],progress);
                 progress.check(); progress.update("Maillage détaillé et texture…");
-                result = TripoSRSingleViewVolume.buildDetailed(field,images[0],smooth);
+                OfflineDepthField detailDepth=region==null||strength==0?null:TripoDetailDepth.estimate(context,images[0],region,new File(folder,"service-detail-depth.bin"),id+":hd",progress);
+                progress.check();result = TripoSRSingleViewVolume.buildDetailed(field,images[0],smooth,TripoQualityOptions.defaults(),region,detailDepth,strength);
             } else if (learned) {
                 File[] caches = new File[4]; String[] keys = new String[4];
                 for (int i=0;i<4;i++) { caches[i]=new File(folder,"service-manual-triposr-"+i+".bin"); keys[i]=TripoSREngine.CACHE_VERSION+":"+id+":"+i; }
@@ -107,7 +113,7 @@ public final class LocalMcpGeneration {
                     .put("textureMode",learned&&!four?"visible-photo-neural-hidden":"existing");
             MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
             String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
-            metadata.put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight());
+            metadata.put("detailRegion",region==null?JSONObject.NULL:region.json()).put("detailStrength",strength).put("computeThreads",TripoComputePolicy.threads(context)).put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight());
             context.getSharedPreferences("offline_workshop",Context.MODE_PRIVATE).edit().putString("lastQualityReport",measured).apply();
             com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("OK",measured);
             ExternalViewerGlbExporter.write(part,result.mesh,result.texture,metadata);
