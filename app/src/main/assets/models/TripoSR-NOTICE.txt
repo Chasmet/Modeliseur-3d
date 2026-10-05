@@ -1,0 +1,12 @@
+TripoSR : VAST-AI-Research / Tripo AI et Stability AI, licence MIT.
+Code et architecture : https://github.com/VAST-AI-Research/TripoSR
+Poids d’origine : https://huggingface.co/stabilityai/TripoSR
+Conversion ONNX (licence MIT) : https://huggingface.co/jc-builds/triposr-ios
+Révision f0c7507db372e147d97f7d3e502d67b022a0c751.
+Encodeur quantifié avec ONNX Runtime 1.20.0 : MatMulNBits 4 bits,
+blocs 128, symétrique, accuracy_level=4 ; autres opérations float32.
+Décodeur NeRF float32, plans XY/XZ/YZ, 40 canaux chacun.
+Les quatre images sont inférées successivement, puis les volumes estimés sont
+alignés et combinés avec les quatre silhouettes et textures. Cette combinaison
+est propre à cette application ; TripoSR est entraîné sur une image à la fois.
+Les erreurs de forme restent possibles. Cette APK n’embarque pas TRELLIS complet.
