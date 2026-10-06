@@ -56,6 +56,10 @@ public final class OfflineMeshFinisher {
             for(int i=0;i<adjacent.length;i++)if(adjacent[i]<0){pinned[ids[i]]=true;pinned[ids[i/3*3+(i%3+1)%3]]=true;}
             for(int i=0;i<vertices;i++)for(int axis=0;axis<3;axis++)if(Math.abs(p[i*3+axis]-min[axis])<1e-6||Math.abs(p[i*3+axis]-max[axis])<1e-6)pinned[i]=true;
             float[] next=new float[p.length];
+            int[] offsets=new int[vertices+1];for(int id:ids)offsets[id+1]++;
+            for(int i=1;i<offsets.length;i++)offsets[i]+=offsets[i-1];
+            int[] cursor=offsets.clone(),incident=new int[ids.length];
+            for(int t=0;t<ids.length;t+=3)for(int k=0;k<3;k++)incident[cursor[ids[t+k]]++]=t;
             for(int pass=0;pass<4;pass++){
                 float factor=pass%2==0?.25f:-.26f;
                 for(int i=0;i<vertices;i++){
@@ -65,7 +69,7 @@ public final class OfflineMeshFinisher {
                     float dx=next[at]-original[at],dy=next[at+1]-original[at+1],dz=next[at+2]-original[at+2],length=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
                     if(length>maximumMove)for(int axis=0;axis<3;axis++)next[at+axis]=original[at+axis]+(next[at+axis]-original[at+axis])*maximumMove/length;
                 }
-                if(preserveFaces(original,p,next,ids)){float[] swap=p;p=next;next=swap;}
+                preserveFaces(original,p,next,ids,offsets,incident);
             }
         }
         float[] n=new float[p.length];
@@ -85,23 +89,32 @@ public final class OfflineMeshFinisher {
         for(int i=0;i<n.length;i+=3){float length=(float)Math.sqrt(n[i]*n[i]+n[i+1]*n[i+1]+n[i+2]*n[i+2]);if(length>1e-12f){n[i]/=length;n[i+1]/=length;n[i+2]/=length;}else{n[i]=0;n[i+1]=0;n[i+2]=1;}}
         return new Result(new MeshData(p,n,source.getTexCoords().clone(),ids),components,boundaries,repaired);
     }
-    /** Reject local triangle inversions; rollback a whole pass if neighbouring rollbacks conflict. */
-    private static boolean preserveFaces(float[] before,float[] current,float[] after,int[] ids){
-        boolean[] pinned=new boolean[before.length/3];
-        for(int attempt=0;attempt<4;attempt++){
-            boolean good=true;Arrays.fill(pinned,false);
-            for(int t=0;t<ids.length;t+=3){
-                if((t&8191)==0)check();int a=ids[t]*3,b=ids[t+1]*3,c=ids[t+2]*3;
-                float ux=before[b]-before[a],uy=before[b+1]-before[a+1],uz=before[b+2]-before[a+2],vx=before[c]-before[a],vy=before[c+1]-before[a+1],vz=before[c+2]-before[a+2];
-                float nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
-                ux=after[b]-after[a];uy=after[b+1]-after[a+1];uz=after[b+2]-after[a+2];vx=after[c]-after[a];vy=after[c+1]-after[a+1];vz=after[c+2]-after[a+2];
-                float xx=uy*vz-uz*vy,yy=uz*vx-ux*vz,zz=ux*vy-uy*vx;
-                double dot=(double)nx*xx+(double)ny*yy+(double)nz*zz,area=(double)nx*nx+(double)ny*ny+(double)nz*nz;
-                if(dot<=area*.05){good=false;pinned[a/3]=pinned[b/3]=pinned[c/3]=true;}
+    /** Validate each proposed vertex against all its faces. Tiny or difficult faces
+     * constrain their own neighbourhood without cancelling smoothing elsewhere. */
+    private static void preserveFaces(float[] before,float[] current,float[] proposed,int[] ids,int[] offsets,int[] incident){
+        for(int vertex=0;vertex<offsets.length-1;vertex++){
+            if((vertex&2047)==0)check();int at=vertex*3;
+            float x=current[at],y=current[at+1],z=current[at+2];
+            float dx=proposed[at]-x,dy=proposed[at+1]-y,dz=proposed[at+2]-z;
+            if(dx==0&&dy==0&&dz==0)continue;
+            current[at]=x+dx;current[at+1]=y+dy;current[at+2]=z+dz;
+            for(int attempt=0;attempt<12&&!safe(vertex,before,current,ids,offsets,incident);attempt++){
+                dx*=.5f;dy*=.5f;dz*=.5f;current[at]=x+dx;current[at+1]=y+dy;current[at+2]=z+dz;
             }
-            if(good)return true;if(attempt==3)return false;
-            for(int i=0;i<pinned.length;i++)if(pinned[i])System.arraycopy(current,i*3,after,i*3,3);
+            if(!safe(vertex,before,current,ids,offsets,incident)){current[at]=x;current[at+1]=y;current[at+2]=z;}
         }
-        return false;
+    }
+    private static boolean safe(int vertex,float[] before,float[] after,int[] ids,int[] offsets,int[] incident){
+        for(int at=offsets[vertex];at<offsets[vertex+1];at++){
+            int t=incident[at],a=ids[t]*3,b=ids[t+1]*3,c=ids[t+2]*3;
+            double ux=(double)before[b]-before[a],uy=(double)before[b+1]-before[a+1],uz=(double)before[b+2]-before[a+2];
+            double vx=(double)before[c]-before[a],vy=(double)before[c+1]-before[a+1],vz=(double)before[c+2]-before[a+2];
+            double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,area=nx*nx+ny*ny+nz*nz;
+            if(area==0)continue;
+            ux=(double)after[b]-after[a];uy=(double)after[b+1]-after[a+1];uz=(double)after[b+2]-after[a+2];
+            vx=(double)after[c]-after[a];vy=(double)after[c+1]-after[a+1];vz=(double)after[c+2]-after[a+2];
+            if(nx*(uy*vz-uz*vy)+ny*(uz*vx-ux*vz)+nz*(ux*vy-uy*vx)<.05*area)return false;
+        }
+        return true;
     }
 }

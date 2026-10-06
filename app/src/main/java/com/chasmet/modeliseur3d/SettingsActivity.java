@@ -51,10 +51,25 @@ public final class SettingsActivity extends AppCompatActivity {
     private void check(){
         ready=null;available=null;install.setText("Télécharger et installer");check.setEnabled(false);install.setEnabled(false);status.setText("Vérification en cours…");
         UpdateManager.executor.execute(()->{
-            try{ReleaseInfo found=UpdateManager.check(this);ui(()->{available=found;status.setText(found==null?"Application à jour.":"Nouvelle version disponible : "+found.version);install.setEnabled(found!=null);timestamp();});}
-            catch(Exception e){ui(()->status.setText(e.getMessage()));}
+            File saved=null;
+            try{saved=UpdateManager.readyDownload(this);}catch(Exception e){DiagnosticLog.record("INFO","APK enregistré non réutilisable",e);}
+            final File recovered=saved;
+            if(recovered!=null)ui(()->showReady(recovered));
+            try{ReleaseInfo found=UpdateManager.check(this);ui(()->{
+                available=found;
+                if(recovered!=null&&(found==null||!ReleaseInfo.newer(found.version,UpdateManager.prefs(this).getString("ready_version",""))))showReady(recovered);
+                else{ready=null;install.setText("Télécharger et installer");status.setText(found==null?"Application à jour.":"Nouvelle version disponible : "+found.version);install.setEnabled(found!=null);}
+                timestamp();
+            });}
+            catch(Exception e){ui(()->{if(recovered!=null)showReady(recovered);else status.setText(e.getMessage());});}
             finally{ui(()->check.setEnabled(true));}
         });
+    }
+    private void showReady(File file){
+        ready=file;install.setText("Installer la mise à jour");install.setEnabled(true);
+        status.setText("Mise à jour "+UpdateManager.prefs(this).getString("ready_version","")+" prête à être installée.");
+        if(UpdateManager.prefs(this).getBoolean("install_permission_pending",false)&&
+                (Build.VERSION.SDK_INT<26||getPackageManager().canRequestPackageInstalls()))installReady();
     }
     private void download(){
         ReleaseInfo chosen=available;if(chosen==null)return;check.setEnabled(false);install.setEnabled(false);
@@ -69,14 +84,15 @@ public final class SettingsActivity extends AppCompatActivity {
     private void installReady(){
         if(ready==null||!ready.isFile())return;
         if(Build.VERSION.SDK_INT>=26&&!getPackageManager().canRequestPackageInstalls()){
-            waitingPermission=true;status.setText("Autorise les installations pour Modéliseur 3D, puis reviens ici.");
+            waitingPermission=true;UpdateManager.prefs(this).edit().putBoolean("install_permission_pending",true).apply();status.setText("Autorise les installations pour Modéliseur 3D, puis reviens ici.");
             startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));return;
         }
+        UpdateManager.prefs(this).edit().putBoolean("install_permission_pending",false).apply();
         Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",ready);
         Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setClipData(ClipData.newRawUri("Mise à jour APK",uri));
-        try{startActivity(intent);DiagnosticLog.record("INFO","Installateur Android ouvert ; confirmation requise.");}catch(ActivityNotFoundException e){status.setText("Installateur Android indisponible.");DiagnosticLog.record("ERREUR","Installateur Android",e);}
+        try{startActivity(intent);DiagnosticLog.record("INFO","Installateur Android ouvert ; confirmation requise.");}catch(ActivityNotFoundException|SecurityException e){status.setText("L’installation n’a pas pu s’ouvrir. Réessaie avec Installer la mise à jour.");DiagnosticLog.record("ERREUR","Installateur Android",e);}
     }
     private void refreshDiagnostics(boolean verify){
         refreshLogs.setEnabled(false);verifyModels.setEnabled(false);copyLogs.setEnabled(false);logText.setText(verify?"Vérification des empreintes des moteurs IA…":"Lecture du diagnostic…");

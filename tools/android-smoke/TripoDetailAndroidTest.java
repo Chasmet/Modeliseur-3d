@@ -110,6 +110,26 @@ public final class TripoDetailAndroidTest {
             assertTrue(projection.source(.1f,.1f,a));assertTrue(projection.source(.1f,.2f,b));assertEquals(a[0],b[0],1e-5f);
         }finally{image.recycle();}
     }
+    @Test public void visibleObliqueCheekKeepsSourcePhotoAcrossFrontAndDetailCharts(){
+        // The cheek faces the source camera, but its normal is oblique enough that
+        // the old nz=.55 fade replaced almost half the red photo with blue neural RGB.
+        float[] p={-.4f,-.4f,.4f,.4f,-.4f,.4f,.4f,.4f,.4f,-.4f,.4f,.4f,
+                -.1f,-.1f,.41f,.1f,-.1f,.41f,.1f,.1f,.41f,-.1f,.1f,.41f};
+        float[] n=new float[p.length];for(int i=0;i<n.length;i+=3){n[i]=(float)Math.sqrt(.91);n[i+2]=.3f;}
+        MeshData cheek=new MeshData(p,n,new float[16],new int[]{0,1,2,0,2,3,4,5,6,4,6,7});
+        Bitmap image=Bitmap.createBitmap(256,256,Bitmap.Config.ARGB_8888);image.eraseColor(Color.RED);
+        OfflineImageVolume.Result result=null;
+        try{
+            result=TripoSRPhotoTexture.bake(cheek,field(),image,"cheek",new TripoQualityOptions(512,1,true),new TripoDetailRegion(.2f,.2f,.8f,.8f));
+            float[] uv=result.mesh.getTexCoords();int[] ids=result.mesh.getIndices();boolean front=false,detail=false;
+            for(int t=0;t<ids.length;t+=3){float u=0,v=0;for(int k=0;k<3;k++){u+=uv[ids[t+k]*2]/3;v+=uv[ids[t+k]*2+1]/3;}
+                int colour=result.texture.getPixel((int)(u*result.texture.getWidth()),(int)(v*result.texture.getHeight()));
+                assertTrue("Visible cheek changed from source red into a neural colour patch",Color.red(colour)>245&&Color.blue(colour)<10);
+                if(v<.5f)front=true;else detail=true;
+            }
+            assertTrue(front);assertTrue(detail);
+        }finally{image.recycle();if(result!=null)result.texture.recycle();}
+    }
     @Test public void actualEmbeddedDepthSeesTheCropAndReusesOnlyTheMatchingCache()throws Exception{
         Bitmap image=photo();File cache=new File(RuntimeEnvironment.getApplication().getCacheDir(),"detail-depth-test.bin");List<String> messages=new ArrayList<>();
         TripoSREngine.Progress progress=new TripoSREngine.Progress(){public void update(String value){messages.add(value);}public void check(){}};

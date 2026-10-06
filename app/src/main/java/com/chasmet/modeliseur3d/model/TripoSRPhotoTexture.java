@@ -11,6 +11,10 @@ public final class TripoSRPhotoTexture {
     private TripoSRPhotoTexture(){}
     private static void check(){if(Thread.currentThread().isInterrupted())throw new CancellationException();}
     private static float clamp(float v){return Math.max(0,Math.min(1,v));}
+    // A visible cheek is still observed in the source photo. The former fade up
+    // to nz=.55 replaced it with neural colour in patches around fine relief.
+    // Fade only at grazing incidence; hidden surfaces remain entirely neural.
+    private static float photoFacing(float nz){float weight=clamp((nz-.02f)/.10f);return weight*weight*(3-2*weight);}
     private static int axisU(int view){return view<2||view>=4?0:2;}
     private static int axisV(int view){return view<4?1:2;}
     private static boolean flipU(int view){return view==1||view==2;}
@@ -185,7 +189,7 @@ public final class TripoSRPhotoTexture {
                         float mu=coordinate(point[0],0,false,bounds),mv=coordinate(point[1],1,true,bounds);
                         if(!SurfaceDepthSampler.sample(maps.depths[0],maps.normalZ[0],MAP,mu,mv,6*(bounds[5]-bounds[2])/(MAP-1),surface)){row[x]=0xff303030;continue;}
                         point[2]=surface[0];int neural=field.color(point[0],point[1],point[2]),colour=source.sample(pu*(source.w-1),pv*(source.h-1));
-                        float facing=clamp((surface[1]-.08f)/.47f);facing=facing*facing*(3-2*facing);
+                        float facing=photoFacing(surface[1]);
                         row[x]=(colour>>>24)>128?blend(neural,colour,facing*options.photoWeight):neural;continue;
                     }
                     float jump=6*(bounds[depthAxis(v)+3]-bounds[depthAxis(v)])/(MAP-1);
@@ -200,7 +204,7 @@ public final class TripoSRPhotoTexture {
                     int au=axisU(v),av=axisV(v);point[au]=bounds[au]+(flipU(v)?1-uu:uu)*(bounds[au+3]-bounds[au]);point[av]=bounds[av]+(flipV(v)?1-vv:vv)*(bounds[av+3]-bounds[av]);point[depthAxis(v)]=dd*sign(v);
                     int neural=field.color(point[0],point[1],point[2]);float facing=surface[1];
                     if(v==0||maps.visibleFront(point[0],point[1],point[2])){
-                        int colour=source.projected(point[0],point[1],maps,projected,transform);if((colour>>>24)>128){float weight=clamp((facing-.08f)/.47f);weight=weight*weight*(3-2*weight);neural=blend(neural,colour,weight*options.photoWeight);}
+                        int colour=source.projected(point[0],point[1],maps,projected,transform);if((colour>>>24)>128)neural=blend(neural,colour,photoFacing(facing)*options.photoWeight);
                     }
                     row[x]=neural;
                 }

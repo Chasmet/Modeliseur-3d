@@ -58,6 +58,21 @@ public final class OfflineMeshFinisherTest {
         OfflineMeshFinisher.Result result=OfflineMeshFinisher.finish(mesh,true,.3f);
         assertEquals(2,result.components);assertEquals(6,result.boundaryEdges);assertArrayEquals(mesh.getIndices(),result.mesh.getIndices());assertArrayEquals(mesh.getPositions(),result.mesh.getPositions(),0);
     }
+    @Test public void oneDegenerateFaceDoesNotCancelSmoothingOnTheRestOfTheModel(){
+        MeshData sphere=sphere();float[] base=sphere.getPositions().clone();Random random=new Random(2381);
+        for(int i=0;i<base.length;i+=3){float scale=1+(random.nextFloat()-.5f)*.012f;for(int a=0;a<3;a++)base[i+a]*=scale;}
+        int count=base.length/3;float[] p=Arrays.copyOf(base,base.length+9);
+        for(int k=0;k<3;k++){p[base.length+k*3]=2+k;p[base.length+k*3+1]=2;p[base.length+k*3+2]=2;}
+        int[] ids=Arrays.copyOf(sphere.getIndices(),sphere.getIndices().length+3);
+        ids[ids.length-3]=count;ids[ids.length-2]=count+1;ids[ids.length-1]=count+2;
+        MeshData source=new MeshData(p,new float[p.length],new float[p.length/3*2],ids);
+        OfflineMeshFinisher.Result result=OfflineMeshFinisher.finish(source,true,.012f);
+        float[] after=result.mesh.getPositions();
+        assertTrue("An unrelated difficult face cancelled all smoothing",radialError(Arrays.copyOf(after,base.length))<radialError(base));
+        assertEquals(3,result.boundaryEdges);assertEquals(source.getTriangleCount(),result.mesh.getTriangleCount());
+        assertArrayEquals(Arrays.copyOfRange(p,base.length,p.length),Arrays.copyOfRange(after,base.length,after.length),0);
+        for(int i=0;i<base.length;i+=3){double move=0;for(int a=0;a<3;a++)move+=Math.pow(after[i+a]-base[i+a],2);assertTrue(Math.sqrt(move)<=.012001);}
+    }
     @Test public void rejectsNonManifoldEdgesWithoutExportingACorruptMesh(){
         MeshData mesh=new MeshData(new float[15],new float[15],new float[10],new int[]{0,1,2,1,0,3,0,1,4});
         assertThrows(IllegalArgumentException.class,()->OfflineMeshFinisher.finish(mesh,false,0));

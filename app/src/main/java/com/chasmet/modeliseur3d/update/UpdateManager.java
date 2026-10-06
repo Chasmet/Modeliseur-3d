@@ -107,8 +107,26 @@ public final class UpdateManager {
             if(count!=info.bytes || !hex(digest.digest()).equals(info.sha256)) throw new IOException("APK incomplet ou empreinte incorrecte.");
             validateArchive(context,part);
             if(target.exists()&&!target.delete()) throw new IOException("Ancien téléchargement occupé.");
-            if(!part.renameTo(target)) throw new IOException("Enregistrement APK impossible.");return target;
+            if(!part.renameTo(target)) throw new IOException("Enregistrement APK impossible.");
+            // Android may recreate Settings while granting the installation permission.
+            // Keep the verified download addressable across that activity/process change.
+            prefs(context).edit().putString("ready_version",info.version).putString("ready_sha256",info.sha256)
+                    .putLong("ready_bytes",info.bytes).commit();
+            return target;
         } finally {if(conn!=null)conn.disconnect();part.delete();}
+    }
+    public static File readyDownload(Context context) throws Exception {
+        File file=new File(new File(context.getCacheDir(),"updates"),"modeliseur-update.apk");
+        long bytes=prefs(context).getLong("ready_bytes",0);
+        String hash=prefs(context).getString("ready_sha256","");
+        if(bytes<=0||bytes>MAX_APK||!file.isFile()||file.length()!=bytes||!hash.matches("[a-f0-9]{64}"))return null;
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        try(InputStream input=new FileInputStream(file)){
+            byte[] buffer=new byte[64*1024];int n;while((n=input.read(buffer))!=-1)digest.update(buffer,0,n);
+        }
+        if(!hex(digest.digest()).equals(hash))throw new IOException("APK enregistré corrompu : télécharge de nouveau la mise à jour.");
+        validateArchive(context,file);
+        return file;
     }
     private static String hex(byte[] bytes) {StringBuilder b=new StringBuilder();for(byte v:bytes)b.append(String.format(Locale.ROOT,"%02x",v&255));return b.toString();}
     @SuppressWarnings("deprecation")
