@@ -93,8 +93,8 @@ android {
         applicationId 'com.chasmet.modeliseur3d'
         minSdk 21
         targetSdk 34
-        versionCode 35
-        versionName '5.9.10'
+        versionCode 64
+        versionName '6.6.2'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
@@ -134,8 +134,38 @@ android {
     }
 }
 
+def viewerNpm = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+tasks.register('installMobileViewer', Exec) {
+    workingDir rootProject.projectDir
+    commandLine viewerNpm, 'ci', '--prefix', 'tools/viewer', '--ignore-scripts'
+    inputs.files(rootProject.file('tools/viewer/package.json'), rootProject.file('tools/viewer/package-lock.json'))
+    outputs.dir(rootProject.file('tools/viewer/node_modules'))
+}
+tasks.register('buildMobileViewer', Exec) {
+    dependsOn tasks.named('installMobileViewer')
+    workingDir rootProject.projectDir
+    commandLine viewerNpm, 'run', 'build', '--prefix', 'tools/viewer'
+    inputs.file(rootProject.file('tools/viewer/viewer.js'))
+    outputs.file(file('src/main/assets/viewer/viewer.js'))
+}
+tasks.register('downloadOfflineDepthModel', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'python3', 'tools/offline-models/fetch_depth.py'
+    outputs.file(file('src/main/assets/models/depth_anything_v2_small_fp32.onnx'))
+    // Also verify cached bytes each build; no model URL is referenced by Android code.
+    outputs.upToDateWhen { false }
+}
+tasks.register('downloadOfflineTripoSRModels', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'python3', 'tools/offline-models/fetch_triposr.py'
+    outputs.files(file('src/main/assets/models/triposr_encoder_int4.onnx'),file('src/main/assets/models/triposr_encoder_int4.onnx.data'),file('src/main/assets/models/triposr_decoder.onnx'),file('src/main/assets/models/triposr_decoder.onnx.data'))
+    outputs.upToDateWhen { false }
+}
 tasks.named('preBuild').configure {
+    dependsOn tasks.named('downloadOfflineTripoSRModels')
+    dependsOn tasks.named('buildMobileViewer')
     dependsOn tasks.named('downloadAnimeSegmentationModel')
+    dependsOn tasks.named('downloadOfflineDepthModel')
 }
 
 configurations.configureEach {
@@ -147,5 +177,29 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.exifinterface:exifinterface:1.4.2'
+    implementation 'androidx.work:work-runtime:2.9.1'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+}
+
+// Optional desktop integration checks; no test runtime or fixture enters the APK.
+if (providers.gradleProperty('offlineSmoke').isPresent()) {
+    android {
+        sourceSets.test.java.srcDir(rootProject.file('tools/android-smoke'))
+        testOptions {
+            unitTests.includeAndroidResources = true
+            unitTests.all {
+                maxHeapSize = '3g'; maxParallelForks = 1
+                // Desktop Conscrypt uses InetAddress reflection on Java 17. This affects tests only.
+                jvmArgs '--add-opens=java.base/java.net=ALL-UNNAMED'
+                testLogging { exceptionFormat = 'full' }
+            }
+        }
+    }
+    dependencies {
+        testImplementation 'org.robolectric:robolectric:4.14.1'
+        testRuntimeOnly 'com.microsoft.onnxruntime:onnxruntime:1.20.0'
+    }
 }
