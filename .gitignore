@@ -21,6 +21,7 @@ tools/viewer/node_modules/
 app/src/main/assets/viewer/viewer.js
 
 .ci-signing/
+.training-venv/
 *.keystore
 *.jks
 signing-encrypted.json

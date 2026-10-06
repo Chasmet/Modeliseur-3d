@@ -1,0 +1,56 @@
+name: Vérifier l’entraînement expérimental TripoSR
+
+on:
+  push:
+    branches: [agent/triposr-decoder-training]
+    paths: ['tools/training/**', '.github/workflows/training.yml']
+  pull_request:
+    paths: ['tools/training/**', '.github/workflows/training.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-training-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            tools/training/requirements.txt
+            tools/training/requirements-mesh.txt
+      - run: python -m pip install -r tools/training/requirements-mesh.txt
+      - name: Préparer seulement le petit décodeur source fixé
+        run: |
+          python - <<'PY'
+          import sys,urllib.request
+          sys.path.insert(0, 'tools/offline-models')
+          from fetch_triposr import BASE,ASSETS,FINAL,valid
+          ASSETS.mkdir(parents=True,exist_ok=True)
+          for name,expected in FINAL.items():
+              if 'decoder' not in name:continue
+              path=ASSETS/name
+              urllib.request.urlretrieve(BASE+name+'?download=true',path)
+              if not valid(path,expected):raise RuntimeError('Empreinte incorrecte : '+name)
+          PY
+      - name: Vérifier gradients, export ONNX, volumes GLB et rendus texturés
+        env:
+          OPENBLAS_NUM_THREADS: '2'
+        run: python -m unittest discover -s tools/training -p 'test_*training.py'
+      - name: Vérifier que l’expérience n’active pas de poids Android
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('tools/training/experiments/cpu-001')
+          report=root/'report.json'
+          if report.is_file():
+              data=json.loads(report.read_text())
+              assert data['production_approved'] is False
+              assert data['objects']=={'train':6,'validation':3,'test':3}
+              assert data['views_per_object']==4
+              assert data['onnx_numpy_max_difference']<2e-4
+          PY
