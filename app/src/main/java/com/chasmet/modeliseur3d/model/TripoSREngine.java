@@ -98,7 +98,7 @@ public final class TripoSREngine {
     /** Sample the actual decoder at a finer spacing inside a padded coarse object bound.
      * The original encoder and all four-view caches remain compatible. */
     public static TripoSRRefinedField reconstructSingleDetailed(Context context,Bitmap image,File cache,String key,int requestedSide,Progress progress)throws Exception{
-        int target=requestedSide>=256?256:requestedSide>=192?192:128;
+        int target=requestedSide>=320&&TripoComputePolicy.maximumPower(context)?320:requestedSide>=256?256:requestedSide>=192?192:128;
         if(Runtime.getRuntime().maxMemory()<384L*1024*1024)target=Math.min(target,192);
         if(Runtime.getRuntime().maxMemory()<192L*1024*1024)target=96;
         File refined=new File(cache.getPath()+".surface-v1-"+target),marker=new File(cache.getPath()+".key");
@@ -112,6 +112,10 @@ public final class TripoSREngine {
         for(int a=0;a<3;a++){bounds[a]=Math.max(-1,bounds[a]-padding);bounds[a+3]=Math.min(1,bounds[a+3]+padding);span=Math.max(span,bounds[a+3]-bounds[a]);}
         int[] dimensions=new int[3];for(int a=0;a<3;a++)dimensions[a]=Math.max(8,Math.min(target,1+(int)Math.ceil((bounds[a+3]-bounds[a])/span*(target-1))));
         // Rectangular dense sampling is much cheaper than evaluating a 256³ empty cube.
+        // Bound native-grid storage as well as the triangle budget: physical RAM is not the Java heap.
+        if(target==320){long maximum=Runtime.getRuntime().maxMemory()>=768L*1024*1024?12000000:8000000;
+            while((long)dimensions[0]*dimensions[1]*dimensions[2]>maximum)for(int a=0;a<3;a++)dimensions[a]=Math.max(8,dimensions[a]-1);
+        }
         int nx=dimensions[0],ny=dimensions[1],nz=dimensions[2],total=nx*ny*nz;
         float[] density=new float[total];int[] colors=new int[total];float[] scene=readScene(cache);File folder=unpack(context,progress);OrtEnvironment env=OrtEnvironment.getEnvironment();
         try(OrtSession.SessionOptions options=options(context);OrtSession decoder=env.createSession(new File(folder,ASSETS[2]).getPath(),options)){
@@ -223,7 +227,7 @@ public final class TripoSREngine {
 
     private static File fieldCache(File scene,int side,boolean colors){return new File(scene.getPath()+".field-"+side+(colors?"-rgb":""));}
     private static void deleteDerived(File scene){for(int side:FIELD_SIDES){fieldCache(scene,side,false).delete();fieldCache(scene,side,true).delete();}clearDetailedCache(scene);}
-    public static void clearDetailedCache(File scene){for(int side:new int[]{96,128,192,256})new File(scene.getPath()+".surface-v1-"+side).delete();}
+    public static void clearDetailedCache(File scene){for(int side:new int[]{96,128,192,256,320})new File(scene.getPath()+".surface-v1-"+side).delete();}
 
     private static String readKey(File file)throws IOException{
         if(file.length()>512)return "";

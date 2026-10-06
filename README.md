@@ -1,4 +1,4 @@
-# Modéliseur 3D V6.3.10 — IA locale et MCP téléphone
+# Modéliseur 3D V6.6.1 — puissance maximale et détails locaux
 
 Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.
 Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troisième onglet ouvre uniquement l’atelier local et le lecteur GLB embarqué. Aucun compte, serveur ou téléchargement à la première utilisation.
@@ -6,6 +6,12 @@ Les moteurs locaux, exports et données existants ne sont pas modifiés. Le troi
 Les commandes ChatGPT utilisent **TripoSR Précis + IS-Net** par défaut, avec le même import EXIF et le même détourage que l’atelier manuel. La reconstruction reste exécutée sur Android. Les surfaces cachées d’une photo sont estimées ; le nombre de triangles ne suffit pas à mesurer la fidélité.
 
 Le nouveau **serveur MCP direct du téléphone** reçoit les images, garde sa file en stockage privé et sert les GLB sans relais Render. Il nécessite une adresse HTTPS publique et une configuration de la box. Voir [la configuration directe](docs/MCP-telephone-direct.md). Le [relais existant](backend/README.md) reste optionnel, pour conserver la connexion actuelle avant cette configuration. Aucune création de squelette ou d’animation n’est annoncée par les moteurs de modélisation.
+
+## Puissance maximale · TripoSR 1 image
+
+Dans l’atelier **TripoSR 1 image**, choisir **Précis**, **Préserver le détail fin** et **Puissance maximale**. Ce dernier est activé par défaut, mais son budget supérieur exige au moins 8 Go de RAM physique, 2 Go disponibles, un heap Android de 512 Mo et aucun signal de mémoire faible. Le calcul peut alors utiliser jusqu’à 7 threads sur un CPU 8 cœurs, une grille centrée jusqu’à 320 points sur l’axe le plus long et 384 000 triangles (480 000 à partir de 768 Mo de heap). Les volumes de grille restent bornés à 8 ou 12 millions d’échantillons. Sous pression mémoire, le budget habituel s’applique.
+
+**Améliorer un visage / détail** permet de choisir le gros plan. Il réserve 20 % du budget de triangles quand la profondeur locale est active, ajoute progressivement les arêtes prioritaires et vérifie le relief sur chaque face concernée. La surface reste fermée, les coordonnées X/Y et l’arrière restent conservés. Les tables primitives réduisent la mémoire utilisée pour générer le maillage, le lisser et créer ses coutures UV. Les poids TripoSR restent identiques : plus de calcul peut mieux échantillonner la forme et affiner un détail visible, sans garantir la fidélité des surfaces cachées.
 
 ## Mise à jour automatique
 

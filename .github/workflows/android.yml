@@ -239,10 +239,24 @@ jobs:
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
           test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
 
-      - name: Publier l'APK V6.4.1
+      - name: Identifier la version de l’APK
+        id: apk-version
+        run: echo "version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)" >> "$GITHUB_OUTPUT"
+
+      - name: Préparer le fichier APK avec son vrai numéro de version
+        shell: bash
+        env:
+          APK_VERSION: ${{ steps.apk-version.outputs.version }}
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk "artifact/Modeliseur-3D-$APK_VERSION.apk"
+          cd artifact
+          sha256sum "Modeliseur-3D-$APK_VERSION.apk" > "Modeliseur-3D-$APK_VERSION.apk.sha256"
+
+      - name: Publier l’APK signé ${{ steps.apk-version.outputs.version }}
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.4.1-259-Assets-Export-GLB-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Modeliseur-3D-${{ steps.apk-version.outputs.version }}-APK-signe
+          path: artifact/Modeliseur-3D-*.apk*
           if-no-files-found: error
           retention-days: 30

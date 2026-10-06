@@ -2,7 +2,6 @@ package com.chasmet.modeliseur3d.model;
 
 import android.graphics.Bitmap;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.concurrent.CancellationException;
 
 /** Six continuous planar UV islands. Source detail is projected only on visible front
@@ -148,7 +147,7 @@ public final class TripoSRPhotoTexture {
     public static OfflineImageVolume.Result bake(MeshData mesh,TripoSRRefinedField field,Bitmap photo,String method,TripoQualityOptions options,TripoDetailRegion region){
         int cell=options.effectiveTextureCell(),columns=region==null?3:4;
         Maps maps=new Maps(mesh);Photo source=new Photo(photo,maps,region);source.register(maps);float[] bounds=maps.bounds,p=mesh.getPositions(),n=mesh.getNormals();int[] original=mesh.getIndices();
-        float[] outP=new float[original.length*3],outN=new float[outP.length],uv=new float[original.length*2];int[] ids=new int[original.length];int count=0;HashMap<Long,Integer> remap=new HashMap<>();
+        float[] outP=new float[original.length*3],outN=new float[outP.length],uv=new float[original.length*2];int[] ids=new int[original.length];int count=0;MeshEdgeMap remap=new MeshEdgeMap();
         float[] projected=new float[2],transform=new float[5];
         for(int t=0;t<original.length;t+=3){
             if((t&3071)==0)check();float nx=0,ny=0,nz=0,x=0,y=0,z=0;for(int k=0;k<3;k++){int at=original[t+k]*3;nx+=n[at];ny+=n[at+1];nz+=n[at+2];x+=p[at]/3;y+=p[at+1]/3;z+=p[at+2]/3;}int v=view(nx,ny,nz);
@@ -166,8 +165,8 @@ public final class TripoSRPhotoTexture {
                 if(inside)v=6;
             }
             for(int k=0;k<3;k++){
-                int index=original[t+k],at=index*3;long key=((long)index<<3)|v;Integer cached=remap.get(key);if(cached!=null){ids[t+k]=cached;continue;}
-                int dst=count++;remap.put(key,dst);ids[t+k]=dst;System.arraycopy(p,at,outP,dst*3,3);System.arraycopy(n,at,outN,dst*3,3);
+                int index=original[t+k],at=index*3;long key=1+(((long)index<<3)|v);int cached=remap.get(key);if(cached>=0){ids[t+k]=cached;continue;}
+                int dst=count++;remap.putIfAbsent(key,dst);ids[t+k]=dst;System.arraycopy(p,at,outP,dst*3,3);System.arraycopy(n,at,outN,dst*3,3);
                 float u=clamp(coordinate(p[at+axisU(v)],axisU(v),flipU(v),bounds)),vv=clamp(coordinate(p[at+axisV(v)],axisV(v),flipV(v),bounds));
                 if(v==6){source.project(p[at],p[at+1],maps,projected,transform);u=clamp((projected[0]-region.left)/(region.right-region.left));vv=clamp((projected[1]-region.top)/(region.bottom-region.top));}
                 uv[dst*2]=((v%columns)*cell+2.5f+u*(cell-5))/(cell*columns);uv[dst*2+1]=((v/columns)*cell+2.5f+vv*(cell-5))/(cell*2);

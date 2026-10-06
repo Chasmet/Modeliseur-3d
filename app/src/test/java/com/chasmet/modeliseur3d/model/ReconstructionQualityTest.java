@@ -20,6 +20,19 @@ public final class ReconstructionQualityTest {
         return result;
     }
     private static float iou(boolean[] a,boolean[] b){int union=0,intersection=0;for(int i=0;i<a.length;i++){if(a[i]||b[i])union++;if(a[i]&&b[i])intersection++;}return intersection/(float)union;}
+    @Test public void maximumGridRemainsClosedAndCacheRoundTripPreservesItsDimensions()throws Exception{
+        int nx=320,ny=12,nz=16;float[] density=new float[nx*ny*nz];int[] colors=new int[density.length];
+        for(int x=0;x<nx;x++)for(int y=0;y<ny;y++)for(int z=0;z<nz;z++){
+            float xx=2f*x/(nx-1)-1,yy=2f*y/(ny-1)-1,zz=2f*z/(nz-1)-1;int i=(x*ny+y)*nz+z;
+            density[i]=TripoSRField.ISO+20*(.7f-(float)Math.sqrt(xx*xx+yy*yy+zz*zz));colors[i]=0xff2040e0;
+        }
+        TripoSRRefinedField field=new TripoSRRefinedField(nx,ny,nz,new float[]{-1,-1,-1,1,1,1},density,colors);
+        java.io.File cache=java.io.File.createTempFile("maximum-grid", ".bin");
+        try{field.write(cache);TripoSRRefinedField loaded=TripoSRRefinedField.read(cache);assertEquals(320,loaded.nx);assertEquals(field.probability(0,0,0),loaded.probability(0,0,0),0);}
+        finally{cache.delete();}
+        float[] values=new float[nx*ny*nz];for(int y=0;y<ny;y++)for(int x=0;x<nx;x++)for(int z=0;z<nz;z++)values[(y*nx+x)*nz+z]=field.probability(2f*y/(ny-1)-1,2f*z/(nz-1)-1,2f*x/(nx-1)-1);
+        MeshData mesh=OfflineHullMesher.buildDetailedField(values,nx,ny,nz,384000);assertTrue(mesh.getTriangleCount()>24);assertEquals(0,OfflineMeshFinisher.finish(mesh,false,0).boundaryEdges);
+    }
     @Test public void smallOppositeViewMisalignmentImprovesSilhouetteIouWithoutInventingTheLegGap(){
         int s=64;boolean[] face=character(s,0,0,false),back=character(s,3,-2,true);
         FourViewCalibration calibration=new FourViewCalibration(new boolean[][]{face,back,face,back},s);

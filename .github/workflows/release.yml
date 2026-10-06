@@ -1,4 +1,5 @@
 name: Publier APK signé avec mise à jour automatique
+run-name: ${{ github.event.head_commit.message || 'Modéliseur 3D — APK signé' }}
 
 on:
   push:
@@ -248,11 +249,25 @@ jobs:
           unzip -t "$APK" >/dev/null
           echo "APK validé et tests Android/MCP exécutés avant publication."
 
-      - name: Publier l'APK V6.4.4
+      - name: Identifier la version de l’APK
+        id: apk-version
+        run: echo "version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)" >> "$GITHUB_OUTPUT"
+
+      - name: Préparer le fichier APK avec son vrai numéro de version
+        shell: bash
+        env:
+          APK_VERSION: ${{ steps.apk-version.outputs.version }}
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk "artifact/Modeliseur-3D-$APK_VERSION.apk"
+          cd artifact
+          sha256sum "Modeliseur-3D-$APK_VERSION.apk" > "Modeliseur-3D-$APK_VERSION.apk.sha256"
+
+      - name: Publier l’APK signé ${{ steps.apk-version.outputs.version }}
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V6.4.4-automatic-ACME-recovery-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Modeliseur-3D-${{ steps.apk-version.outputs.version }}-APK-signe
+          path: artifact/Modeliseur-3D-*.apk*
           if-no-files-found: error
           retention-days: 30
 
@@ -280,12 +295,11 @@ jobs:
             RESUME_DRAFT=true
           fi
           cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.4.4 : reprise automatique du certificat après l’ancien échec badCSR, sans ressaisie d’IP, de certificat ou de mot de passe. Le CSR IP corrigé en 6.4.3 est conservé.
-          Le renouvellement lit désormais un seul délai persistant : le bouton ne reste plus bloqué par un délai conservé en mémoire. Les limites et Retry-After imposés par Let’s Encrypt restent respectés.
-          Le serveur local est vérifié au démarrage par initialize, tools/list et un vrai tools/call. Le diagnostic affiche les étapes ACME, le motif détaillé des erreurs, les requêtes HTTP-01 reçues et l’heure du prochain essai.
-          La configuration manuelle avancée est repliée pour éviter de désactiver accidentellement HTTPS automatique. Un heartbeat du relais n’est plus présenté comme une connexion ChatGPT validée.
-          Installer par-dessus la version existante et ouvrir l’application. Si le MCP était activé en HTTPS automatique avec badCSR, la demande reprend automatiquement. Une ancienne configuration manuelle vide après badCSR est récupérée lorsque le MCP est actif et aucune commande n’est en cours. Aucun changement du Wi-Fi ou des règles Livebox existantes.
-          Même package, signature, moteurs et projets. Les tests ACME, TLS, reprise de configuration et moteurs sont exécutés avant publication. L’émission effective sur le téléphone, le test HTTPS public et un appel ChatGPT restent à vérifier après installation ; cette APK ne prétend pas avoir déjà obtenu le certificat du téléphone.
+          V6.6.1 : mode Puissance maximale pour TripoSR 1 image sur les téléphones disposant d’assez de mémoire. En qualité Précis : grille jusqu’à 320 pixels sur l’axe le plus long, budget jusqu’à 384 000 ou 480 000 triangles selon la mémoire Android et jusqu’à 7 threads sur un CPU 8 cœurs.
+          Le gros plan réserve une partie du budget pour le visage ou le détail sélectionné. La subdivision utilise le budget restant progressivement, au lieu d’annuler toute l’étape quand le plafond est atteint. Le relief est validé localement : un triangle difficile ne supprime plus tous les détails.
+          Les tables d’arêtes utilisent des tableaux primitifs pour réduire la mémoire de génération, de lissage et de texture. Sous pression mémoire, l’application conserve les limites habituelles. La RAM physique ne remplace pas la limite mémoire de l’application.
+          Dans TripoSR 1 image, sélectionner Précis et garder Puissance maximale activée. Le calcul est plus long. Pour un visage, utiliser Améliorer un visage / détail et sélectionner la zone sur une photo HD. Les surfaces cachées restent estimées par le modèle ; davantage de calcul ne garantit pas leur exactitude.
+          Installer par-dessus l’application existante. Même package et même signature Android, projets et réglages conservés. Mise à jour publique dans Réglages > Mise à jour automatique, sans clé API ni PAT. Compilation, tests unitaires, tests Android et signature vérifiés avant publication.
           NOTES
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")

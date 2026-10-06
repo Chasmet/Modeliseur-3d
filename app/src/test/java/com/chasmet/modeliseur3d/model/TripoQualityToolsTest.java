@@ -28,6 +28,15 @@ public final class TripoQualityToolsTest {
         assertEquals(240000,options.triangleBudget(512L*1024*1024));assertEquals(320000,options.triangleBudget(1024L*1024*1024));
         assertEquals(180000,new TripoQualityOptions(512,.5f,false).triangleBudget(1024L*1024*1024));
     }
+    @Test public void maximumModeKeepsLowHeapSafeAndReservesRoomForTheFace(){
+        long mb=1024L*1024;TripoQualityOptions maximum=new TripoQualityOptions(1024,1,true,true);
+        assertEquals(60000,maximum.triangleBudget(128*mb));assertEquals(100000,maximum.triangleBudget(256*mb));
+        assertEquals(384000,maximum.triangleBudget(512*mb));assertEquals(480000,maximum.triangleBudget(1024*mb));
+        assertTrue(maximum.baseTriangleBudget(true,512*mb)<maximum.triangleBudget(512*mb));assertEquals(60000,maximum.baseTriangleBudget(true,128*mb));
+        assertEquals(320,maximum.neuralResolution(2));assertEquals(192,maximum.neuralResolution(1));
+        assertEquals(256,TripoQualityOptions.defaults().neuralResolution(2));
+        assertEquals(180000,new TripoQualityOptions(1024,1,false,true).triangleBudget(1024*mb));
+    }
     @Test public void meshValidationRejectsInvalidExportAndReportsDegenerateFaces(){
         float[] p={0,0,0,1,0,0,0,1,0};float[] n={0,0,1,0,0,1,0,0,1};float[] uv={0,0,1,0,0,1};
         MeshQualityReport report=MeshQualityReport.inspect(new MeshData(p,n,uv,new int[]{0,1,2,0,0,1}));

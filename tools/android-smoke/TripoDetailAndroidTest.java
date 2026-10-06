@@ -59,6 +59,35 @@ public final class TripoDetailAndroidTest {
             TripoDetailRefiner.Result zero=TripoDetailRefiner.refine(original,image,region,new OfflineDepthField(samples,64,64),0,60000);assertSame(original,zero.mesh);assertEquals(0,zero.movedVertices);
         }finally{image.recycle();}
     }
+    @Test public void almostFullBudgetStillSubdividesLocallyWithoutOpeningTheMesh(){
+        MeshData original=sphere();Bitmap image=photo();TripoDetailRegion region=new TripoDetailRegion(.25f,.2f,.75f,.6f);
+        float[] samples=new float[64*64];for(int y=0;y<64;y++)for(int x=0;x<64;x++){float dx=x/63f-.5f,dy=y/63f-.5f;samples[y*64+x]=(float)Math.exp(-(dx*dx+dy*dy)*90);}
+        try{
+            int budget=original.getTriangleCount()+80;
+            TripoDetailRefiner.Result detail=TripoDetailRefiner.refine(original,image,region,new OfflineDepthField(samples,64,64),.7f,budget);
+            assertTrue("A small remaining budget must not discard all crop edges",detail.addedTriangles>0);
+            assertTrue(detail.mesh.getTriangleCount()<=budget);assertTrue(detail.movedVertices>0);
+            assertEquals(0,OfflineMeshFinisher.finish(detail.mesh,false,0).boundaryEdges);
+            assertEquals(0,MeshQualityReport.inspect(detail.mesh).degenerateTriangles);
+            float[] before=original.getPositions(),after=detail.mesh.getPositions();for(int i=0;i<before.length;i+=3)if(before[i+2]<0)assertEquals(before[i+2],after[i+2],0);
+        }finally{image.recycle();}
+    }
+    @Test public void strongReliefPreservesEveryFaceEvenWhenTheSubdivisionBudgetIsFull(){
+        MeshData original=sphere();Bitmap image=photo();float[] samples=new float[64*64];
+        for(int y=0;y<64;y++)for(int x=0;x<64;x++)samples[y*64+x]=.5f+.5f*(float)(Math.sin(x*.7)*Math.cos(y*.7));
+        try{
+            TripoDetailRefiner.Result detail=TripoDetailRefiner.refine(original,image,new TripoDetailRegion(.25f,.2f,.75f,.6f),new OfflineDepthField(samples,64,64),1,original.getTriangleCount());
+            assertEquals(0,detail.addedTriangles);assertTrue(detail.movedVertices>0);
+            float[] before=original.getPositions(),after=detail.mesh.getPositions();int[] ids=original.getIndices();
+            for(int t=0;t<ids.length;t+=3){int a=ids[t]*3,b=ids[t+1]*3,c=ids[t+2]*3;
+                double ux=before[b]-before[a],uy=before[b+1]-before[a+1],uz=before[b+2]-before[a+2],vx=before[c]-before[a],vy=before[c+1]-before[a+1],vz=before[c+2]-before[a+2];
+                double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,area=nx*nx+ny*ny+nz*nz;
+                uz=after[b+2]-after[a+2];vz=after[c+2]-after[a+2];
+                assertTrue(nx*(uy*vz-uz*vy)+ny*(uz*vx-ux*vz)+nz*nz>=.1*area-1e-18);
+            }
+            assertEquals(0,OfflineMeshFinisher.finish(detail.mesh,false,0).boundaryEdges);
+        }finally{image.recycle();}
+    }
     @Test public void closeupUsesItsOwnPhotoChartAndTheHiddenBackRemainsNeural(){
         Bitmap image=photo();TripoDetailRegion region=new TripoDetailRegion(.25f,.2f,.75f,.6f);OfflineImageVolume.Result result=null;
         try{
@@ -110,6 +139,8 @@ public final class TripoDetailAndroidTest {
     @Test public void powerfulPhoneGetsMoreCpuThreadsButMemoryPressureKeepsTheSafeBudget(){
         long gb=1024L*1024*1024,mb=1024L*1024;
         assertEquals(6,TripoComputePolicy.threads(8,12*gb,6*gb,512*mb,false));assertEquals(2,TripoComputePolicy.threads(8,12*gb,512*mb,512*mb,false));assertEquals(2,TripoComputePolicy.threads(8,12*gb,6*gb,128*mb,false));assertEquals(1,TripoComputePolicy.threads(1,12*gb,6*gb,512*mb,false));
+        assertTrue(TripoComputePolicy.supportsMaximum(12*gb,6*gb,512*mb,false));assertFalse(TripoComputePolicy.supportsMaximum(12*gb,gb,512*mb,false));assertFalse(TripoComputePolicy.supportsMaximum(12*gb,6*gb,256*mb,false));assertFalse(TripoComputePolicy.supportsMaximum(12*gb,6*gb,512*mb,true));
+        assertEquals(7,TripoComputePolicy.threads(8,12*gb,6*gb,512*mb,false,true));assertEquals(2,TripoComputePolicy.threads(8,12*gb,512*mb,512*mb,false,true));
         assertThrows(IllegalArgumentException.class,()->new TripoDetailRegion(.5f,0,.4f,1));assertThrows(IllegalArgumentException.class,()->new TripoDetailRegion(0,0,Float.NaN,1));
     }
 }

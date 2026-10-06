@@ -20,8 +20,12 @@ public final class TripoDetailRefiner {
         if(strength==0)return new Result(original,0,0,0);
         TripoSRPhotoTexture.FrontProjection projection=TripoSRPhotoTexture.frontProjection(original,photo,region);
         MeshData mesh=original;
-        for(int pass=0;pass<2;pass++){check();MeshData next=subdivide(mesh,projection,region,triangleBudget);if(next==mesh)break;mesh=next;}
+        int spacing=triangleBudget>=384000?96:48;
+        for(int pass=0;pass<(spacing==96?3:2);pass++){check();MeshData next=subdivide(mesh,projection,region,triangleBudget,spacing);if(next==mesh)break;mesh=next;}
         float[] before=mesh.getPositions(),positions=before.clone(),normals=mesh.getNormals(),uv=new float[2];
+        int[] ids=mesh.getIndices();int vertices=before.length/3;int[] offsets=new int[vertices+1];
+        for(int id:ids)offsets[id+1]++;for(int i=1;i<offsets.length;i++)offsets[i]+=offsets[i-1];
+        int[] cursor=offsets.clone(),incident=new int[ids.length];for(int t=0;t<ids.length;t+=3)for(int k=0;k<3;k++)incident[cursor[ids[t+k]]++]=t;
         float limit=projection.height()*(region.bottom-region.top)*.04f*strength;
         for(int i=0;i<positions.length;i+=3){
             if((i&4095)==0)check();
@@ -33,31 +37,32 @@ public final class TripoDetailRefiner {
             float residual=depth.sample(u,v)-low/weight;
             float facing=Math.max(0,Math.min(1,(normals[i+2]-.2f)/.4f));
             float movement=Math.max(-limit,Math.min(limit,residual*limit*3))*region.feather(uv[0],uv[1])*facing;
-            positions[i+2]+=movement;
-        }
-        // Reject triangle reversals rather than allowing a crop inference to damage topology.
-        boolean[] rollback=new boolean[positions.length/3];int[] ids=mesh.getIndices();
-        for(int pass=0;pass<4;pass++){
-            Arrays.fill(rollback,false);boolean good=true;
-            for(int t=0;t<ids.length;t+=3){
-                if((t&8191)==0)check();int a=ids[t]*3,b=ids[t+1]*3,c=ids[t+2]*3;
-                float ux=before[b]-before[a],uy=before[b+1]-before[a+1],uz=before[b+2]-before[a+2],vx=before[c]-before[a],vy=before[c+1]-before[a+1],vz=before[c+2]-before[a+2];
-                float nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
-                uz=positions[b+2]-positions[a+2];vz=positions[c+2]-positions[a+2];
-                float xx=uy*vz-uz*vy,yy=uz*vx-ux*vz;
-                if((double)nx*xx+(double)ny*yy+(double)nz*nz<.1*((double)nx*nx+(double)ny*ny+(double)nz*nz)){good=false;rollback[a/3]=rollback[b/3]=rollback[c/3]=true;}
+            float current=positions[i+2];positions[i+2]=current+movement;
+            // Each accepted vertex respects all its incident faces. A difficult triangle never
+            // cancels successful detail elsewhere, unlike the previous four-pass global rollback.
+            for(int attempt=0;attempt<12&&!safeVertex(i/3,offsets,incident,ids,before,positions);attempt++){
+                movement*=.5f;positions[i+2]=current+movement;
             }
-            if(good)break;
-            if(pass==3){System.arraycopy(before,0,positions,0,before.length);break;}
-            for(int i=0;i<rollback.length;i++)if(rollback[i])positions[i*3+2]=before[i*3+2];
+            if(!safeVertex(i/3,offsets,incident,ids,before,positions))positions[i+2]=current;
         }
         int moved=0;float maximum=0;
         for(int i=2;i<positions.length;i+=3){float move=Math.abs(positions[i]-before[i]);if(move>1e-7f)moved++;maximum=Math.max(maximum,move);}
         MeshData finished=OfflineMeshFinisher.finish(new MeshData(positions,mesh.getNormals(),mesh.getTexCoords(),ids),false,0).mesh;
         return new Result(finished,finished.getTriangleCount()-original.getTriangleCount(),moved,maximum);
     }
-    private static MeshData subdivide(MeshData mesh,TripoSRPhotoTexture.FrontProjection projection,TripoDetailRegion region,int budget){
-        float[] p=mesh.getPositions(),n=mesh.getNormals();int[] ids=mesh.getIndices();Map<Long,Integer> midpoints=new HashMap<>();
+    private static boolean safeVertex(int vertex,int[] offsets,int[] incident,int[] ids,float[] before,float[] after){
+        for(int at=offsets[vertex];at<offsets[vertex+1];at++){
+            int t=incident[at],a=ids[t]*3,b=ids[t+1]*3,c=ids[t+2]*3;
+            double ux=before[b]-before[a],uy=before[b+1]-before[a+1],uz=before[b+2]-before[a+2],vx=before[c]-before[a],vy=before[c+1]-before[a+1],vz=before[c+2]-before[a+2];
+            double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,area=nx*nx+ny*ny+nz*nz;
+            uz=after[b+2]-after[a+2];vz=after[c+2]-after[a+2];
+            if(nx*(uy*vz-uz*vy)+ny*(uz*vx-ux*vz)+nz*nz<.1*area)return false;
+        }
+        return true;
+    }
+    private static MeshData subdivide(MeshData mesh,TripoSRPhotoTexture.FrontProjection projection,TripoDetailRegion region,int budget,int spacing){
+        float[] p=mesh.getPositions(),n=mesh.getNormals();int[] ids=mesh.getIndices();Map<Long,Integer> midpoints=new LinkedHashMap<>();Map<Long,Float> candidates=new HashMap<>();
+        int remaining=budget-mesh.getTriangleCount();if(remaining<=0)return mesh;
         float[] point=new float[2],u=new float[3],v=new float[3];
         for(int t=0;t<ids.length;t+=3){
             if((t&8191)==0)check();boolean selected=true;float cx=0,cy=0,cz=0,nz=0;
@@ -67,13 +72,19 @@ public final class TripoDetailRefiner {
             }
             if(!selected||nz<.3f||!projection.visible(cx,cy,cz))continue;
             float longest=0;for(int k=0;k<3;k++){int j=(k+1)%3;float dx=u[k]-u[j],dy=v[k]-v[j];longest=Math.max(longest,dx*dx+dy*dy);}
-            if(longest<1f/(48*48))continue;
-            for(int k=0;k<3;k++)midpoints.put(edge(ids[t+k],ids[t+(k+1)%3]),0);
+            if(longest<1f/(spacing*spacing))continue;
+            for(int k=0;k<3;k++){int j=(k+1)%3;float dx=u[k]-u[j],dy=v[k]-v[j];long key=edge(ids[t+k],ids[t+j]);float priority=dx*dx+dy*dy;
+                Float previous=candidates.get(key);if(previous==null||priority>previous)candidates.put(key,priority);
+            }
         }
+        if(candidates.isEmpty())return mesh;
+        // Splitting a shared edge adds one triangle for every incident face, including outside
+        // the crop. Admit the largest projected edges first, accounting for that exact cost.
+        Map<Long,Integer> costs=new HashMap<>();
+        for(int t=0;t<ids.length;t+=3){if((t&8191)==0)check();for(int k=0;k<3;k++){long key=edge(ids[t+k],ids[t+(k+1)%3]);if(candidates.containsKey(key))costs.put(key,costs.getOrDefault(key,0)+1);}}
+        List<Long> ranked=new ArrayList<>(candidates.keySet());ranked.sort((a,b)->{int order=Float.compare(candidates.get(b),candidates.get(a));return order!=0?order:Long.compare(a,b);});
+        long triangles=mesh.getTriangleCount();for(long key:ranked){int cost=costs.get(key);if(cost<=remaining){midpoints.put(key,0);remaining-=cost;triangles+=cost;}}
         if(midpoints.isEmpty())return mesh;
-        long triangles=mesh.getTriangleCount();
-        for(int t=0;t<ids.length;t+=3)for(int k=0;k<3;k++)if(midpoints.containsKey(edge(ids[t+k],ids[t+(k+1)%3])))triangles++;
-        if(triangles>budget)return mesh;
         int original=p.length/3,total=original+midpoints.size();float[] outP=Arrays.copyOf(p,total*3),outN=Arrays.copyOf(n,total*3),outUV=Arrays.copyOf(mesh.getTexCoords(),total*2);int vertex=original;
         for(Map.Entry<Long,Integer> item:midpoints.entrySet()){
             int a=(int)(item.getKey()>>>32),b=(int)(long)item.getKey(),dst=vertex++;item.setValue(dst);

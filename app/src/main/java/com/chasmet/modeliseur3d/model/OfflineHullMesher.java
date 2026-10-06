@@ -1,8 +1,6 @@
 package com.chasmet.modeliseur3d.model;
 
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 
 /** Closed marching-tetrahedra surface, with canonical shared edge vertices. */
@@ -42,11 +40,11 @@ public final class OfflineHullMesher {
         int high=index(axis==0?Math.min(w-1,x+1):x,axis==1?Math.min(h-1,y+1):y,axis==2?Math.min(d-1,z+1):z,w,d);
         return f[high]-f[low];
     }
-    private static int vertex(int a,int b,float[] f,int w,int h,int d,Map<Long,Integer> edges,Floats p,Floats n,float iso){
-        if(a>b){int swap=a;a=b;b=swap;}long key=((long)a<<32)|b;Integer found=edges.get(key);if(found!=null)return found;
+    private static int vertex(int a,int b,float[] f,int w,int h,int d,MeshEdgeMap edges,Floats p,Floats n,float iso){
+        if(a>b){int swap=a;a=b;b=swap;}long key=((long)a<<32)|b;int found=edges.get(key);if(found>=0)return found;
         float t=(iso-f[a])/(f[b]-f[a]);
         float x=a/d%w+(b/d%w-a/d%w)*t,y=a/(w*d)+(b/(w*d)-a/(w*d))*t,z=a%d+(b%d-a%d)*t;
-        int id=p.size/3;edges.put(key,id);
+        int id=p.size/3;edges.putIfAbsent(key,id);
         p.add((x/(w-1)*2-1)*w/h,1-2*y/(h-1),(z/(d-1)*2-1)*d/h);
         float nx=-(gradient(f,a,0,w,h,d)*(1-t)+gradient(f,b,0,w,h,d)*t);
         float ny=gradient(f,a,1,w,h,d)*(1-t)+gradient(f,b,1,w,h,d)*t;
@@ -72,8 +70,8 @@ public final class OfflineHullMesher {
     /** Object-centred grids are bounded separately from the legacy full-cube path. */
     public static MeshData buildDetailedField(float[] values,int w,int h,int d){long heap=Runtime.getRuntime().maxMemory();return buildField(values,w,h,d,256,heap<192L*1024*1024?60000:heap<384L*1024*1024?100000:180000);}
     public static MeshData buildDetailedField(float[] values,int w,int h,int d,int triangleBudget){
-        if(triangleBudget<60000||triangleBudget>320000)throw new IllegalArgumentException("Budget de maillage invalide.");
-        return buildField(values,w,h,d,256,triangleBudget);
+        if(triangleBudget<60000||triangleBudget>480000)throw new IllegalArgumentException("Budget de maillage invalide.");
+        return buildField(values,w,h,d,320,triangleBudget);
     }
     private static MeshData buildField(float[] values,int w,int h,int d,int limit,int triangleLimit){
         if(w<4||h<4||d<4||w>limit||h>limit||d>limit||values==null||values.length!=w*h*d)throw new IllegalArgumentException("Champ mobile invalide.");
@@ -89,7 +87,7 @@ public final class OfflineHullMesher {
     }
     private static MeshData buildSurface(float[] f,int w,int h,int d,float iso,int triangleLimit){
         Floats p=new Floats(),n=new Floats();Ints triangles=new Ints();
-        Map<Long,Integer> edges=new HashMap<>();int[] cube=new int[8],inside=new int[4],outside=new int[4];
+        MeshEdgeMap edges=new MeshEdgeMap();int[] cube=new int[8],inside=new int[4],outside=new int[4];
         for(int y=0;y<h-1;y++){check();if(triangleLimit>0&&triangles.size>triangleLimit*3)throw new TooComplexException();for(int x=0;x<w-1;x++)for(int z=0;z<d-1;z++){
             for(int k=0;k<8;k++)cube[k]=index(x+CORNERS[k][0],y+CORNERS[k][1],z+CORNERS[k][2],w,d);
             for(int[] tetra:TETRA){

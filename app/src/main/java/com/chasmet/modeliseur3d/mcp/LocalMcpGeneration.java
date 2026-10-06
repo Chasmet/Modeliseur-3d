@@ -24,6 +24,7 @@ public final class LocalMcpGeneration {
         String quality = options == null ? "precise" : options.optString("quality", "precise");
         int detail = "fast".equals(quality) ? 0 : "precise".equals(quality) ? 2 : 1;
         if (!quality.matches("fast|balanced|precise")) throw new IOException("Qualité MCP invalide.");
+        TripoQualityOptions finishOptions=new TripoQualityOptions(1024,1,true,learned&&!four&&TripoComputePolicy.maximumPower(context));
         boolean smooth = options == null || options.optBoolean("smoothing", true);
         TripoDetailRegion region=options==null?null:TripoDetailRegion.fromJson(options.optJSONArray("detail_region"));
         float strength=options==null?.7f:(float)options.optDouble("detail_strength",.7);
@@ -88,10 +89,10 @@ public final class LocalMcpGeneration {
             if (learned && !four) {
                 TripoSRRefinedField field = TripoSREngine.reconstructSingleDetailed(context, images[0],
                         new File(folder,"service-manual-triposr-0.bin"),TripoSREngine.CACHE_VERSION+":"+id+":0",
-                        new int[]{128,192,256}[detail],progress);
+                        finishOptions.neuralResolution(detail),progress);
                 progress.check(); progress.update("Maillage détaillé et texture…");
                 OfflineDepthField detailDepth=region==null||strength==0?null:TripoDetailDepth.estimate(context,images[0],region,new File(folder,"service-detail-depth.bin"),id+":hd",progress);
-                progress.check();result = TripoSRSingleViewVolume.buildDetailed(field,images[0],smooth,TripoQualityOptions.defaults(),region,detailDepth,strength);
+                progress.check();result = TripoSRSingleViewVolume.buildDetailed(field,images[0],smooth,finishOptions,region,detailDepth,strength);
             } else if (learned) {
                 File[] caches = new File[4]; String[] keys = new String[4];
                 for (int i=0;i<4;i++) { caches[i]=new File(folder,"service-manual-triposr-"+i+".bin"); keys[i]=TripoSREngine.CACHE_VERSION+":"+id+":"+i; }
@@ -107,13 +108,13 @@ public final class LocalMcpGeneration {
             if (!output.getParentFile().isDirectory() && !output.getParentFile().mkdirs()) throw new IOException("Stockage GLB indisponible.");
             JSONObject metadata = new JSONObject().put("appVersion",UpdateManager.currentVersion(context))
                     .put("engine",learned?"TripoSR":"Silhouettes").put("method",result.method).put("localOnly",true)
-                    .put("mcpCommandId",id).put("quality",quality).put("imagePreparation","IS-Net local / PNG transparent").put("pipeline","manual-workshop-v1").put("neuralResolution",learned&&!four?new int[]{128,192,256}[detail]:new int[]{64,88,112}[detail]).put("inputViews",images.length).put("detail",detail).put("smoothing",smooth)
+                    .put("mcpCommandId",id).put("quality",quality).put("imagePreparation","IS-Net local / PNG transparent").put("pipeline","manual-workshop-v1").put("neuralResolution",learned&&!four?finishOptions.neuralResolution(detail):new int[]{64,88,112}[detail]).put("inputViews",images.length).put("detail",detail).put("smoothing",smooth)
                     .put("projectName","ChatGPT "+id.substring(0,8)).put("generatedAt",System.currentTimeMillis())
                     .put("reconstructionMode",four?"four-view":"single-image").put("hiddenSurfacesEstimated",!four)
                     .put("textureMode",learned&&!four?"visible-photo-neural-hidden":"existing");
             MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
             String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
-            metadata.put("detailRegion",region==null?JSONObject.NULL:region.json()).put("detailStrength",strength).put("computeThreads",TripoComputePolicy.threads(context)).put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight());
+            metadata.put("detailRegion",region==null?JSONObject.NULL:region.json()).put("detailStrength",strength).put("computeThreads",TripoComputePolicy.threads(context)).put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight()).put("maximumPower",finishOptions.maximumPower).put("triangleBudget",finishOptions.triangleBudget());
             context.getSharedPreferences("offline_workshop",Context.MODE_PRIVATE).edit().putString("lastQualityReport",measured).apply();
             com.chasmet.modeliseur3d.diagnostics.DiagnosticLog.record("OK",measured);
             ExternalViewerGlbExporter.write(part,result.mesh,result.texture,metadata);

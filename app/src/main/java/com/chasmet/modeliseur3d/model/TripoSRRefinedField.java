@@ -11,7 +11,7 @@ public final class TripoSRRefinedField {
     private final float[] density;
     private final int[] colors;
     public TripoSRRefinedField(int nx,int ny,int nz,float[] bounds,float[] density,int[] colors){
-        if(nx<4||ny<4||nz<4||nx>256||ny>256||nz>256||bounds==null||bounds.length!=6||density==null||density.length!=nx*ny*nz||colors==null||colors.length!=density.length)
+        if(nx<4||ny<4||nz<4||nx>320||ny>320||nz>320||bounds==null||bounds.length!=6||density==null||density.length!=nx*ny*nz||colors==null||colors.length!=density.length)
             throw new IllegalArgumentException("Grille détaillée invalide.");
         for(int a=0;a<3;a++)if(!Float.isFinite(bounds[a])||!Float.isFinite(bounds[a+3])||bounds[a]<-1||bounds[a+3]>1||bounds[a+3]<=bounds[a])throw new IllegalArgumentException("Bornes détaillées invalides.");
         for(float value:density)if(!Float.isFinite(value))throw new IllegalArgumentException("Densité détaillée non finie.");
@@ -39,7 +39,7 @@ public final class TripoSRRefinedField {
     public static TripoSRRefinedField read(File file)throws IOException{
         try(DataInputStream in=new DataInputStream(new BufferedInputStream(new FileInputStream(file)))){
             if(in.readInt()!=MAGIC)throw new IOException("Cache détaillé invalide.");int nx=in.readInt(),ny=in.readInt(),nz=in.readInt();
-            if(nx<4||ny<4||nz<4||nx>256||ny>256||nz>256||file.length()!=40L+8L*nx*ny*nz)throw new IOException("Cache détaillé incomplet.");
+            if(nx<4||ny<4||nz<4||nx>320||ny>320||nz>320||file.length()!=40L+8L*nx*ny*nz)throw new IOException("Cache détaillé incomplet.");
             float[] bounds=new float[6];for(int a=0;a<6;a++)bounds[a]=in.readFloat();float[] density=new float[nx*ny*nz];int[] colors=new int[density.length];for(int a=0;a<density.length;a++)density[a]=in.readFloat();for(int a=0;a<colors.length;a++)colors[a]=in.readInt();
             try{return new TripoSRRefinedField(nx,ny,nz,bounds,density,colors);}catch(IllegalArgumentException e){throw new IOException(e.getMessage(),e);}
         }
