@@ -163,3 +163,68 @@ async def test_preview_denies_oversized_image():
             assert "taille excessive" in result
         finally:
             relay.OWNER.reset(owner)
+
+
+@pytest.mark.asyncio
+async def test_retry_result_after_lost_ack_is_idempotent():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),base_url=relay.BASE) as client:
+        headers={"Authorization":"Bearer "+PHONE}
+        await client.get("/agentbrowser/api/poll",headers=headers)
+        owner=relay.OWNER.set(DEVICE)
+        try:
+            task=asyncio.create_task(relay.issue("click",{"selector":"button"}))
+            await asyncio.sleep(0)
+            command=(await client.get("/agentbrowser/api/poll",headers=headers)).json()["command"]
+            payload={"id":command["id"],"ok":True,"result":"Clic effectué"}
+            assert (await client.post("/agentbrowser/api/result",headers=headers,json=payload)).status_code==200
+            await task
+            repeated=await client.post("/agentbrowser/api/result",headers=headers,json=payload)
+            assert repeated.status_code==200 and repeated.json()["duplicate"]
+            payload["result"]="Different"
+            assert (await client.post("/agentbrowser/api/result",headers=headers,json=payload)).status_code==409
+            assert not (await client.get("/agentbrowser/api/poll",headers=headers)).json()["command"]
+        finally:
+            relay.OWNER.reset(owner)
+
+
+@pytest.mark.asyncio
+async def test_saved_autonomy_and_connectivity_status():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),base_url=relay.BASE) as client:
+        headers={"Authorization":"Bearer "+PHONE}
+        response=await client.post("/agentbrowser/api/heartbeat",headers=headers,
+            json={"url":"https://example.org","title":"Example","autonomous":True})
+        assert response.status_code==200
+        owner=relay.OWNER.set(DEVICE)
+        try:
+            status=relay.browser_status()
+            assert status["online"] and status["autonomous"]
+            assert status["approval_mode"]=="saved_owner_consent"
+            assert status["last_seen_seconds"]<1
+            relay.state[DEVICE]["seen"]-=relay.ONLINE_TTL+1
+            assert not relay.browser_status()["online"]
+        finally:
+            relay.OWNER.reset(owner)
+
+
+@pytest.mark.asyncio
+async def test_full_store_description_and_unknown_result():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),base_url=relay.BASE) as client:
+        headers={"Authorization":"Bearer "+PHONE}
+        await client.get("/agentbrowser/api/poll",headers=headers)
+        owner=relay.OWNER.set(DEVICE)
+        try:
+            task=asyncio.create_task(relay.browser_type("textarea","a"*4000))
+            await asyncio.sleep(0)
+            command=(await client.get("/agentbrowser/api/poll",headers=headers)).json()["command"]
+            assert len(command["args"]["text"])==4000
+            await client.post("/agentbrowser/api/result",headers=headers,
+                json={"id":command["id"],"ok":True,"result":"Saisie effectuée"})
+            assert (await task)["ok"]
+            assert (await client.post("/agentbrowser/api/result",headers=headers,
+                json={"id":"unknown","ok":True,"result":"late"})).status_code==404
+            tools=await relay.browser_mcp.list_tools()
+            for tool in tools:
+                if tool.name in ["browser_read_page","browser_open_url","browser_click","browser_type","browser_scroll"]:
+                    assert "manual mode" in tool.description.lower()
+        finally:
+            relay.OWNER.reset(owner)

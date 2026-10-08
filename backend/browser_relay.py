@@ -29,7 +29,7 @@ BASE = "https://" + HOST
 MASTER = os.environ.get("BROWSER_RELAY_SECRET", "")
 DEVICE_RE = re.compile(r"^[a-f0-9]{64}$")
 OWNER = ContextVar("agent_browser_device", default="")
-ONLINE_TTL = 35
+ONLINE_TTL = 90
 COMMAND_TTL = 48
 MAX_DEVICES = 12
 state = {}
@@ -50,7 +50,7 @@ def get_device(device_id: str):
     if device_id not in state:
         if len(state) >= MAX_DEVICES:
             return None
-        state[device_id] = {"seen": 0., "commands": [], "pending": {}, "types": {}, "page": "", "title": ""}
+        state[device_id] = {"seen": 0., "commands": [], "pending": {}, "types": {}, "page": "", "title": "", "autonomous": False, "receipts": {}}
     return state[device_id]
 
 
@@ -101,6 +101,8 @@ async def heartbeat(request: Request):
             payload = await request.json()
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
+            if isinstance(payload.get("autonomous"),bool):
+                row["autonomous"] = payload["autonomous"]
         except (ValueError, TypeError):
             pass
     return JSONResponse({"ok": True, "online": True})
@@ -132,6 +134,13 @@ async def result(request: Request):
             return bad("Réponse trop longue", 413)
         payload = json.loads(data)
         ident = str(payload.get("id", ""))
+        digest = hashlib.sha256(data).hexdigest()
+        receipt = row["receipts"].get(ident)
+        if receipt:
+            if not hmac.compare_digest(receipt,digest):
+                return bad("Résultat déjà reçu avec un contenu différent",409)
+            row["seen"] = time.monotonic()
+            return JSONResponse({"ok": True, "duplicate": True})
         future = row["pending"].get(ident)
         if not future or future.done():
             return bad("Commande expirée ou inconnue", 404)
@@ -142,6 +151,10 @@ async def result(request: Request):
         answer = {"ok": bool(payload.get("ok", False)),
                   "result": str(payload.get("result", ""))[:maximum],
                   "error": str(payload.get("error", ""))[:1000]}
+        row["receipts"][ident] = digest
+        while len(row["receipts"])>64:
+            row["receipts"].pop(next(iter(row["receipts"])))
+        row["seen"] = time.monotonic()
         future.set_result(answer)
     except (ValueError, TypeError):
         return bad("Résultat invalide")
@@ -205,12 +218,15 @@ def browser_status() -> dict:
     return {"online": bool(row and time.monotonic()-row["seen"] < ONLINE_TTL),
             "title": row["title"] if row else "", "url": row["page"] if row else "",
             "transport": "Android WebView via isolated Render relay",
-            "credits": "no AI API or paid browser service"}
+            "credits": "no AI API or paid browser service",
+            "autonomous": row["autonomous"] if row else False,
+            "last_seen_seconds": round(time.monotonic()-row["seen"],1) if row and row["seen"] else None,
+            "approval_mode": "saved_owner_consent" if row and row["autonomous"] else "manual_on_phone"}
 
 
 @browser_mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 async def browser_read_page() -> dict:
-    """Read visible text and current page URL with explicit confirmation on Android."""
+    """Read page text, current URL and visible control selectors. Uses the owner's saved autonomous authorization; only manual mode asks on Android."""
     return await issue("read_page")
 
 
@@ -222,7 +238,7 @@ async def browser_tabs() -> dict:
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
 async def browser_open_url(url: str) -> dict:
-    """Open an HTTPS URL in Android browser after phone-owner confirmation."""
+    """Open an HTTPS URL using saved owner authorization. Autonomous mode runs without per-action phone confirmation; manual mode asks."""
     url = url.strip()
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or len(url) > 2000:
@@ -240,7 +256,7 @@ async def browser_open_url(url: str) -> dict:
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
 async def browser_click(selector: str) -> dict:
-    """Click one CSS selector on current page, after approval on phone."""
+    """Click one CSS selector using saved owner authorization. Autonomous mode runs without per-action phone confirmation; manual mode asks."""
     if not 0 < len(selector) < 350:
         return {"ok": False, "error": "Sélecteur CSS invalide."}
     return await issue("click", {"selector": selector})
@@ -248,15 +264,15 @@ async def browser_click(selector: str) -> dict:
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
 async def browser_type(selector: str, text: str) -> dict:
-    """Write text into an ordinary field with approval; password fields are blocked."""
-    if not 0 < len(selector) < 350 or len(text) > 500:
+    """Fill an ordinary field using saved owner authorization. Autonomous mode runs without per-action phone confirmation; manual mode asks. Password, file and hidden fields remain blocked."""
+    if not 0 < len(selector) < 350 or len(text) > 8000:
         return {"ok": False, "error": "Sélecteur ou texte trop long."}
     return await issue("type", {"selector": selector, "text": text})
 
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": False})
 async def browser_scroll(direction: str = "down") -> dict:
-    """Scroll the current web page up or down with Android owner's approval."""
+    """Scroll the page using saved owner authorization. Autonomous mode runs without per-action phone confirmation; manual mode asks."""
     if direction not in ("up", "down"):
         return {"ok": False, "error": "Direction attendue : up ou down."}
     return await issue("scroll", {"direction": direction})
