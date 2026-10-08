@@ -1,0 +1,26 @@
+name: CHK Agent Browser - tests du module MCP isolé
+on:
+  push:
+    branches:
+      - agent/browser-mcp-isolated
+    paths:
+      - backend/browser_relay.py
+      - backend/tests/test_browser_relay.py
+      - .github/workflows/browser-mcp-tests.yml
+  workflow_dispatch:
+jobs:
+  browser-mcp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installer le protocole MCP
+        run: pip install mcp==1.26.0 starlette==0.52.1 httpx==0.28.1 pytest==8.3.5 pytest-asyncio==0.26.0
+      - name: Vérifier la syntaxe Python des deux services
+        run: python -m compileall -q backend/server.py backend/browser_relay.py
+      - name: Tester l'authentification, l'isolation et le relais
+        env:
+          BROWSER_RELAY_SECRET: test-only-secret-not-for-production-123456789
+        run: PYTHONPATH=. pytest -q backend/tests/test_browser_relay.py

@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 import httpx
 from PIL import Image, UnidentifiedImageError
 from backend.signing import signing_key
+from backend.browser_relay import browser_mcp, relay_dispatch
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -560,7 +561,9 @@ def model_download(model_id: str) -> dict:
 
 @asynccontextmanager
 async def lifespan(app):
-    async with mcp.session_manager.run(): yield
+    async with mcp.session_manager.run():
+        async with browser_mcp.session_manager.run():
+            yield
 
 async def error_response(request, error):
     return JSONResponse({'error': error.detail}, status_code=error.status_code)
@@ -580,7 +583,9 @@ mcp_app = mcp.streamable_http_app()
 async def app(scope, receive, send):
     """Pure ASGI routing preserves the MCP context and streaming (no BaseHTTPMiddleware)."""
     path = scope.get('path', '')
-    if scope['type'] == 'http' and path.rstrip('/') == '/mcp':
+    if path.startswith('/agentbrowser/'):
+        await relay_dispatch(scope, receive, send)
+    elif scope['type'] == 'http' and path.rstrip('/') == '/mcp':
         context_token = owner_context.set(active_owner())
         try:
             inner = dict(scope, path='/', raw_path=b'/', root_path='')
