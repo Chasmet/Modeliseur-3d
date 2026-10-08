@@ -4,6 +4,8 @@ Run with: pytest -q backend/tests/test_browser_relay.py
 No phone, paid API, or live Render service required.
 """
 import asyncio
+import base64
+import json
 import hashlib
 import hmac
 import os
@@ -108,3 +110,57 @@ async def test_reject_private_navigation_and_unpaired_mcp():
         msgs.append(message)
     await relay.relay_dispatch(scope, receive, send)
     assert msgs[0]["status"] == 401
+
+
+@pytest.mark.asyncio
+async def test_private_preview_round_trip_as_mcp_image():
+    """A JPEG is returned to this MCP caller only, not written to disk or public endpoint."""
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),
+                                 base_url="https://modeliseur-trellis-mcp.onrender.com") as client:
+        await client.post("/agentbrowser/api/register", json={"device_token": PHONE})
+        headers = {"Authorization": "Bearer " + PHONE}
+        await client.get("/agentbrowser/api/poll", headers=headers)
+        owner = relay.OWNER.set(DEVICE)
+        try:
+            task = asyncio.create_task(relay.browser_preview())
+            await asyncio.sleep(0)
+            response = await client.get("/agentbrowser/api/poll", headers=headers)
+            cmd = response.json()["command"]
+            assert cmd["action"] == "preview"
+            jpeg = b"\xff\xd8\xff\xe0TEST_JPEG\xff\xd9"
+            payload = json.dumps({
+                "url": "https://example.com/",
+                "jpeg_base64": base64.b64encode(jpeg).decode()
+            })
+            completed = await client.post("/agentbrowser/api/result",
+                headers=headers, json={"id": cmd["id"], "ok": True, "result": payload})
+            assert completed.status_code == 200
+            result = await asyncio.wait_for(task, timeout=1)
+            assert isinstance(result, relay.Image)
+            assert result.data == jpeg
+            assert result.format == "jpeg"
+        finally:
+            relay.OWNER.reset(owner)
+
+
+@pytest.mark.asyncio
+async def test_preview_denies_oversized_image():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),
+                                 base_url="https://modeliseur-trellis-mcp.onrender.com") as client:
+        await client.post("/agentbrowser/api/register", json={"device_token": PHONE})
+        headers = {"Authorization": "Bearer " + PHONE}
+        await client.get("/agentbrowser/api/poll", headers=headers)
+        owner = relay.OWNER.set(DEVICE)
+        try:
+            task = asyncio.create_task(relay.browser_preview())
+            await asyncio.sleep(0)
+            response = await client.get("/agentbrowser/api/poll", headers=headers)
+            cmd = response.json()["command"]
+            huge = "A" * 222000
+            completed = await client.post("/agentbrowser/api/result",
+                headers=headers, json={"id": cmd["id"], "ok": True, "result": json.dumps({"jpeg_base64": huge})})
+            assert completed.status_code == 200
+            result = await asyncio.wait_for(task, timeout=1)
+            assert "taille excessive" in result
+        finally:
+            relay.OWNER.reset(owner)
