@@ -23,4 +23,4 @@ jobs:
       - name: Tester l'authentification, l'isolation et le relais
         env:
           BROWSER_RELAY_SECRET: test-only-secret-not-for-production-123456789
-        run: pytest -q backend/tests/test_browser_relay.py
+        run: PYTHONPATH=. pytest -q backend/tests/test_browser_relay.py
