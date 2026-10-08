@@ -5,6 +5,7 @@ on:
       - agent/browser-mcp-isolated
     paths:
       - backend/browser_relay.py
+      - backend/browser_signing.py
       - backend/tests/test_browser_relay.py
       - .github/workflows/browser-mcp-tests.yml
   workflow_dispatch:
@@ -19,7 +20,7 @@ jobs:
       - name: Installer le protocole MCP
         run: pip install mcp==1.26.0 starlette==0.52.1 httpx==0.28.1 pytest==8.3.5 pytest-asyncio==0.26.0
       - name: Vérifier la syntaxe Python des deux services
-        run: python -m compileall -q backend/server.py backend/browser_relay.py
+        run: python -m compileall -q backend/server.py backend/browser_relay.py backend/browser_signing.py
       - name: Tester l'authentification, l'isolation et le relais
         env:
           BROWSER_RELAY_SECRET: test-only-secret-not-for-production-123456789

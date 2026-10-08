@@ -43,6 +43,8 @@ async def test_pairing_and_no_auth_leak():
             "https://modeliseur-trellis-mcp.onrender.com/agentbrowser/mcp/" + DEVICE + "/")
         assert PHONE not in data["mcp_url"]
         no_auth = await client.get("/agentbrowser/api/poll")
+        denied_signing=await client.get("/agentbrowser/ci/signing")
+        assert denied_signing.status_code == 401
         assert no_auth.status_code == 401
         wrong = await client.get("/agentbrowser/api/poll",
                                  headers={"Authorization": "Bearer " + "00"*32})

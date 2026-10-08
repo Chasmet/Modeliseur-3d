@@ -20,6 +20,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
+from backend.browser_signing import issue_signing
 
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "modeliseur-trellis-mcp.onrender.com")
 BASE = "https://" + HOST
@@ -148,6 +149,7 @@ async def health(request: Request):
 
 
 browser_http = Starlette(routes=[
+    Route("/agentbrowser/ci/signing", issue_signing, methods=["GET"]),
     Route("/agentbrowser/api/health", health, methods=["GET"]),
     Route("/agentbrowser/api/register", register, methods=["POST"]),
     Route("/agentbrowser/api/heartbeat", heartbeat, methods=["POST"]),
