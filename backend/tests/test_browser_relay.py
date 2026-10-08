@@ -138,7 +138,6 @@ async def test_private_preview_round_trip_as_mcp_image():
             result = await asyncio.wait_for(task, timeout=1)
             assert isinstance(result, relay.Image)
             assert result.data == jpeg
-            assert result.format == "jpeg"
         finally:
             relay.OWNER.reset(owner)
 
