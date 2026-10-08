@@ -2,7 +2,7 @@ name: CHK Agent Browser - tests du module MCP isolé
 on:
   push:
     branches:
-      - agent/browser-mcp-isolated
+      - agent/browser-live-preview-20261008
     paths:
       - backend/browser_relay.py
       - backend/browser_signing.py

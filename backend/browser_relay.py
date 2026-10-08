@@ -5,6 +5,8 @@ Existing Modéliseur MCP and API paths are untouched. Commands remain in
 memory; browser data and authentication never persist on Render.
 """
 import asyncio
+import base64
+import json
 from contextvars import ContextVar
 import hashlib
 import hmac
@@ -14,7 +16,7 @@ import secrets
 import time
 from urllib.parse import urlparse
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -48,7 +50,7 @@ def get_device(device_id: str):
     if device_id not in state:
         if len(state) >= MAX_DEVICES:
             return None
-        state[device_id] = {"seen": 0., "commands": [], "pending": {}, "page": "", "title": ""}
+        state[device_id] = {"seen": 0., "commands": [], "pending": {}, "types": {}, "page": "", "title": ""}
     return state[device_id]
 
 
@@ -121,20 +123,24 @@ async def result(request: Request):
     device_id, row = authenticated(request)
     if not row:
         return bad("Appareil non autorisé", 401)
-    if request.headers.get("content-length", "0").isdigit() and int(request.headers["content-length"]) > 48000:
+    length_header = request.headers.get("content-length", "0")
+    if length_header.isdigit() and int(length_header) > 260000:
         return bad("Réponse trop longue", 413)
     try:
         data = await request.body()
-        if len(data) > 48000:
+        if len(data) > 260000:
             return bad("Réponse trop longue", 413)
-        import json
         payload = json.loads(data)
         ident = str(payload.get("id", ""))
         future = row["pending"].get(ident)
         if not future or future.done():
             return bad("Commande expirée ou inconnue", 404)
+        is_preview = row["types"].get(ident) == "preview"
+        maximum = 240000 if is_preview else 32000
+        if not is_preview and len(data) > 48000:
+            return bad("Résultat trop long pour cette commande", 413)
         answer = {"ok": bool(payload.get("ok", False)),
-                  "result": str(payload.get("result", ""))[:32000],
+                  "result": str(payload.get("result", ""))[:maximum],
                   "error": str(payload.get("error", ""))[:1000]}
         future.set_result(answer)
     except (ValueError, TypeError):
@@ -179,6 +185,7 @@ async def issue(action: str, args: dict = None) -> dict:
     ident = secrets.token_hex(12)
     future = asyncio.get_running_loop().create_future()
     row["pending"][ident] = future
+    row["types"][ident] = action
     row["commands"].append({"id": ident, "action": action, "args": args or {},
                             "created": time.monotonic()})
     try:
@@ -187,6 +194,7 @@ async def issue(action: str, args: dict = None) -> dict:
         return {"ok": False, "error": "Le téléphone n'a pas répondu sous 48 secondes."}
     finally:
         row["pending"].pop(ident, None)
+        row["types"].pop(ident, None)
         row["commands"][:] = [c for c in row["commands"] if c["id"] != ident]
 
 
@@ -253,6 +261,29 @@ async def browser_scroll(direction: str = "down") -> dict:
         return {"ok": False, "error": "Direction attendue : up ou down."}
     return await issue("scroll", {"direction": direction})
 
+
+
+@browser_mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+async def browser_preview():
+    """Return an on-demand JPEG snapshot of the Android browser in ChatGPT.
+
+    This is a still image, not an interactive embedded Android WebView. The owner
+    enables screenshot sharing on their Android phone. Nothing persists on Render.
+    """
+    reply = await issue("preview")
+    if not reply.get("ok"):
+        return "Aperçu indisponible : " + reply.get("error", "pas de réponse Android")
+    try:
+        payload = json.loads(reply["result"])
+        encoded = payload["jpeg_base64"]
+        if not isinstance(encoded, str) or len(encoded) > 220000:
+            return "Image rejetée : taille excessive"
+        image_bytes = base64.b64decode(encoded, validate=True)
+        if len(image_bytes) > 165000 or not image_bytes.startswith(b"\xff\xd8"):
+            return "Image JPEG invalide"
+        return Image(data=image_bytes, format="jpeg")
+    except (KeyError, ValueError, TypeError):
+        return "La capture reçue ne peut pas être affichée"
 
 async def relay_dispatch(scope, receive, send):
     """Called only for the /agentbrowser/ prefix by the existing ASGI app."""
