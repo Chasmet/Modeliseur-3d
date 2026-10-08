@@ -18,7 +18,7 @@ import secrets
 import socket
 import time
 from contextvars import ContextVar
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP, Image
@@ -181,29 +181,39 @@ def safe_name(value: str) -> str:
 
 
 async def read_remote_file(url: str) -> tuple[bytes, str]:
-    url = validate_public_https(url)
-    await assert_public_dns(url)
+    current = validate_public_https(url)
     timeout = httpx.Timeout(35.0, connect=12.0)
     async with httpx.AsyncClient(
         follow_redirects=False, timeout=timeout, trust_env=False
     ) as client:
-        async with client.stream(
-            "GET", url, headers={"User-Agent": "CHK-Agent-Browser-Relay/2.1"}
-        ) as response:
-            if response.status_code != 200:
-                raise ValueError(
-                    "Téléchargement source refusé (HTTP %d)." % response.status_code
-                )
-            length = response.headers.get("content-length")
-            if length and int(length) > MAX_TRANSFER:
-                raise ValueError("Fichier supérieur à 12 Mo.")
-            raw = bytearray()
-            async for chunk in response.aiter_bytes():
-                raw.extend(chunk)
-                if len(raw) > MAX_TRANSFER:
+        for hop in range(4):
+            await assert_public_dns(current)
+            async with client.stream(
+                "GET", current, headers={"User-Agent": "CHK-Agent-Browser-Relay/2.1"}
+            ) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    if hop >= 3:
+                        raise ValueError("Trop de redirections pour le fichier source.")
+                    location = response.headers.get("location", "")
+                    if not location:
+                        raise ValueError("Redirection de fichier invalide.")
+                    current = validate_public_https(urljoin(current, location))
+                    continue
+                if response.status_code != 200:
+                    raise ValueError(
+                        "Téléchargement source refusé (HTTP %d)." % response.status_code
+                    )
+                length = response.headers.get("content-length")
+                if length and int(length) > MAX_TRANSFER:
                     raise ValueError("Fichier supérieur à 12 Mo.")
-            mime = response.headers.get("content-type", "").split(";", 1)[0].strip()
-            return bytes(raw), mime
+                raw = bytearray()
+                async for chunk in response.aiter_bytes():
+                    raw.extend(chunk)
+                    if len(raw) > MAX_TRANSFER:
+                        raise ValueError("Fichier supérieur à 12 Mo.")
+                mime = response.headers.get("content-type", "").split(";", 1)[0].strip()
+                return bytes(raw), mime
+    raise ValueError("Fichier source indisponible.")
 
 
 def decode_base64_file(value: str) -> bytes:
