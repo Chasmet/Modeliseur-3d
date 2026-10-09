@@ -136,3 +136,19 @@ async def test_media_frame_is_image_and_revision_is_forwarded():
         assert "image/jpeg" in str(result)
     finally:
         relay.OWNER.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_old_video_editor_status_remains_usable_before_apk_update():
+    row=relay.get_device(DEVICE);row["seen"]=time.monotonic();row["workspace_version"]=1
+    token=relay.OWNER.set(DEVICE)
+    try:
+        task=asyncio.create_task(relay.browser_mcp.call_tool("browser_video_editor_status",{}))
+        await asyncio.sleep(0)
+        command=row["commands"][0]
+        assert command["action"] == "video_editor_status"
+        row["pending"][command["id"]].set_result({"ok":True,"result":json.dumps({"state":"completed","progress_percent":100})})
+        result=await task
+        assert "completed" in str(result)
+    finally:
+        relay.OWNER.reset(token)

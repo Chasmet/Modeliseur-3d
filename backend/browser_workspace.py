@@ -35,7 +35,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         row = state.get(owner.get())
         if row and not row.get("workspace_version"):
             return {"ok": False, "error": "Mets à jour l’APK CHK Agent Browser pour activer Fichiers et Notes."}
-        if row and row.get("workspace_version",0)<2 and (action.startswith("media_") or action.startswith("video_editor_") or action in {"files_catalog","files_copy"}):
+        if row and row.get("workspace_version",0)<2 and (action.startswith("media_") or action in {"files_catalog","files_copy","video_editor_project_save"}):
             return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour utiliser le nouveau Studio et les outils média."}
         return await issue(action, args or {})
 
