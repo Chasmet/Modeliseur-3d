@@ -13,6 +13,7 @@ WORKSPACE_ACTIONS = frozenset({
     "notes_trash", "notes_restore", "notes_export",
     "video_editor_status", "video_editor_project_read", "video_editor_project_save",
     "video_editor_preset_alpha_omega", "video_editor_export", "video_editor_cancel",
+    "video_editor_verify_output",
 })
 
 
@@ -267,6 +268,13 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         Immediate acknowledgment; use browser_video_editor_status to track progress.
         Refuses existing output unless replace=true. May use significant phone battery."""
         return await call("video_editor_export", {"replace": replace})
+
+    @mcp.tool(annotations=read)
+    async def browser_video_editor_verify_output() -> dict:
+        """Verify the exported local MP4: actual duration, video/audio streams, size,
+        dimensions and availability of source files. Returns valid=false when missing or
+        incomplete. Does not claim visual quality or lip-sync verification."""
+        return await call("video_editor_verify_output")
 
     @mcp.tool(annotations=write)
     async def browser_video_editor_cancel() -> dict:
