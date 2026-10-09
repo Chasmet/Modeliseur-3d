@@ -433,7 +433,7 @@ async def health(request: Request):
         {
             "ok": True,
             "module": "agentbrowser-mcp",
-            "version": "3.0-mobile-workspace",
+            "version": "3.1-video-editor",
             "online_devices": online,
             "configured": len(MASTER) >= 32,
             "command_ttl_seconds": COMMAND_TTL,
@@ -519,7 +519,7 @@ def browser_status() -> dict:
         "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
-        "relay_version": "3.0-mobile-workspace",
+        "relay_version": "3.1-video-editor",
         "workspace_version": row.get("workspace_version", 0) if row else 0,
         "credits": "no AI API or paid browser service",
         "autonomous": row["autonomous"] if row else False,
