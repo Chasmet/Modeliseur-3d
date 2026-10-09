@@ -558,6 +558,38 @@ async def browser_click(selector: str) -> dict:
 
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
+async def browser_click_verified(
+    selector: str,
+    expected_selector: str = "",
+    expected_text: str = "",
+    expected_url_contains: str = "",
+    timeout_ms: int = 10000,
+) -> dict:
+    """Click no more than once, only if the requested postcondition is not already true.
+
+    The Android browser waits for the selected element, text or URL to become
+    observable. On timeout it reports an UNCONFIRMED result; do not retry a
+    possibly completed click without inspecting the page.
+    """
+    if not selector or len(selector) > 340:
+        return {"ok": False, "error": "Sélecteur CSS invalide."}
+    if not any((expected_selector, expected_text, expected_url_contains)):
+        return {"ok": False, "error": "Condition de réussite obligatoire."}
+    if len(expected_selector) > 340 or len(expected_text) > 250 or len(expected_url_contains) > 500:
+        return {"ok": False, "error": "Condition de réussite trop longue."}
+    return await issue(
+        "click_verified",
+        {
+            "selector": selector,
+            "expected_selector": expected_selector,
+            "expected_text": expected_text,
+            "expected_url_contains": expected_url_contains,
+            "timeout_ms": min(20000, max(800, int(timeout_ms))),
+        },
+    )
+
+
+@browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
 async def browser_type(selector: str, text: str) -> dict:
     """Fill an ordinary field. Password, hidden and file fields remain blocked."""
     if not 0 < len(selector) < 350 or len(text) > 8000:
