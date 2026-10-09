@@ -13,7 +13,7 @@ WORKSPACE_ACTIONS = frozenset({
     "notes_trash", "notes_restore", "notes_export",
     "video_editor_status", "video_editor_project_read", "video_editor_project_save",
     "video_editor_preset_alpha_omega", "video_editor_export", "video_editor_cancel",
-    "video_editor_verify_output",
+    "video_editor_verify_output", "media_info", "media_frame", "media_codecs", "files_catalog", "files_copy",
 })
 
 
@@ -35,6 +35,8 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         row = state.get(owner.get())
         if row and not row.get("workspace_version"):
             return {"ok": False, "error": "Mets à jour l’APK CHK Agent Browser pour activer Fichiers et Notes."}
+        if row and row.get("workspace_version",0)<2 and (action.startswith("media_") or action.startswith("video_editor_") or action in {"files_catalog","files_copy"}):
+            return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour utiliser le nouveau Studio et les outils média."}
         return await issue(action, args or {})
 
     async def path_call(action, path, args=None, root=False):
@@ -237,11 +239,19 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         return await call("video_editor_project_read")
 
     @mcp.tool(annotations=write)
-    async def browser_video_editor_project_save(project: dict) -> dict:
+    async def browser_video_editor_project_save(project: dict, expected_revision: int | None = None) -> dict:
         """Save a complete offline video editing project. Provide name, output (relative MP4
         path in Files), clips list ({path,start_ms,duration_ms,filter,fade_ms}) and audio
-        list ({path,start_ms,duration_ms}). Existing video sources are not modified.
-        All paths must be relative to CHK Files, no URLs or absolute paths."""
+        list ({path,start_ms,duration_ms}). Clip options: speed (0.25–4), rotation
+        (-180–180), text (500 chars), mute, filter (aucun/noir/cinema/chaud/froid/contraste/nuit/vintage),
+        fade_ms (0–1500). Project: aspect_ratio (source or width:height, e.g. 9:16,16:9,1:1),
+        aspect_mode (fit/crop), resolution (480/720/1080), mute_original (default false;
+        default true when external audio exists). Empty drafts may be saved.
+        Audio clips play sequentially from zero and must not outlast video; shorter tracks stop.
+        Original video audio is retained by default, or can be mixed with external audio
+        by setting mute_original=false. Existing video sources are not modified.
+        Read current project first and pass its revision as expected_revision to avoid overwriting
+        a newer edit. All paths must be relative to CHK Files, no URLs or absolute paths."""
         if not isinstance(project, dict):
             return {"ok": False, "error": "Projet JSON obligatoire."}
         if len(json.dumps(project)) > 64000:
@@ -250,8 +260,8 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
             validate_path(project.get("output", ""))
             clips = project.get("clips")
             audio = project.get("audio", [])
-            if not isinstance(clips, list) or not 1 <= len(clips) <= 40:
-                raise ValueError("1 à 40 vidéos requises.")
+            if not isinstance(clips, list) or not 0 <= len(clips) <= 40:
+                raise ValueError("0 à 40 vidéos requises (au moins une pour exporter).")
             if not isinstance(audio, list) or len(audio) > 40:
                 raise ValueError("0 à 40 fichiers audio.")
             for element in clips + audio:
@@ -260,7 +270,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
                 validate_path(element.get("path", ""))
         except (ValueError, TypeError) as exc:
             return {"ok": False, "error": str(exc)}
-        return await call("video_editor_project_save", {"project": project})
+        return await call("video_editor_project_save", {"project": project, **({"expected_revision":expected_revision} if expected_revision is not None else {})})
 
     @mcp.tool(annotations=write)
     async def browser_video_editor_export(replace: bool = False) -> dict:
@@ -280,3 +290,59 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
     async def browser_video_editor_cancel() -> dict:
         """Cancel current local MP4 export. The unfinished partial MP4 is deleted."""
         return await call("video_editor_cancel")
+
+
+    @mcp.tool(annotations=read)
+    async def browser_files_catalog(category: str = "all", folder: str = "", query: str = "", sort: str = "name", offset: int = 0) -> dict:
+        """Browse imported CHK files by category: all/image/video/audio/document/archive/recent/other.
+        'all' lists one folder; categories traverse below folder (max 5000 entries, reports truncated).
+        Sort name/date/size; pages of 50; includes free phone storage and category counts.
+        Uses CHK workspace only; import phone/cloud content first through Files."""
+        if category not in {"all","image","video","audio","document","archive","recent","other"} or sort not in {"name","date","size"}:
+            return {"ok":False,"error":"Catégorie ou tri invalide."}
+        try:
+            validate_path(folder,root=True)
+        except ValueError as exc:
+            return {"ok":False,"error":str(exc)}
+        return await call("files_catalog",{"category":category,"folder":folder,"query":query[:120],"sort":sort,"offset":max(0,offset)})
+
+    @mcp.tool(annotations=write)
+    async def browser_files_copy(path: str, destination: str) -> dict:
+        """Copy a file inside CHK Files (max 512 MiB). Parent must exist. Refuses overwrite and folders."""
+        try:
+            validate_path(destination)
+        except ValueError as exc:
+            return {"ok":False,"error":str(exc)}
+        return await path_call("files_copy",path,{"destination":destination})
+
+    @mcp.tool(annotations=read)
+    async def browser_media_info(path: str) -> dict:
+        """Inspect a requested phone video/audio of any Android extractor-supported container.
+        Reports dimensions, duration, rotation, audio/video track MIME and decoder availability.
+        Arbitrary ratios are read; container/codec support depends on the phone. No transcription."""
+        return await path_call("media_info",path)
+
+    @mcp.tool(annotations=read)
+    async def browser_media_codecs() -> dict:
+        """List the actual phone's available decoder and encoder names/MIME types.
+        Use before promising a format can play or export. Export target is MP4 H.264/AAC."""
+        return await call("media_codecs")
+
+    @mcp.tool(annotations=read)
+    async def browser_media_frame(path: str, time_ms: int = 0):
+        """Read a bounded JPEG video frame near requested time (nearest keyframe, max 640 px).
+        Allows visual analysis across portrait/landscape/square ratios. Phone preview sharing
+        must be enabled. Repeated frames sample video; this is not exhaustive motion or audio analysis."""
+        if not 0 <= time_ms <= 86400000:
+            return {"ok":False,"error":"Instant invalide."}
+        reply=await path_call("media_frame",path,{"time_ms":time_ms})
+        if not reply.get("ok"):
+            return reply
+        try:
+            data=json.loads(reply["result"])
+            raw=base64.b64decode(data["jpeg_base64"],validate=True)
+            if len(raw)>150000 or not raw.startswith(b"\xff\xd8"):
+                raise ValueError("Image invalide")
+            return Image(data=raw,format="jpeg")
+        except (ValueError,KeyError,TypeError):
+            return {"ok":False,"error":"Image vidéo invalide."}

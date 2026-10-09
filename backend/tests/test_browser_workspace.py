@@ -85,3 +85,54 @@ async def test_import_removes_only_its_own_transfers():
     finally:
         relay._remove_transfer(row,unrelated["id"])
         relay.OWNER.reset(token)
+
+@pytest.mark.asyncio
+async def test_v2_tools_and_capability_negotiation():
+    tools={tool.name:tool for tool in await relay.browser_mcp.list_tools()}
+    for name in ["browser_media_info","browser_media_codecs","browser_media_frame","browser_files_catalog","browser_files_copy"]:
+        assert name in tools
+    assert tools["browser_media_frame"].annotations.readOnlyHint
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=relay.browser_http),base_url=relay.BASE) as client:
+        headers={"Authorization":"Bearer "+PHONE}
+        await client.post("/agentbrowser/api/heartbeat",headers=headers,json={"workspace_version":2})
+        assert relay.state[DEVICE]["workspace_version"] == 2
+        await client.post("/agentbrowser/api/heartbeat",headers=headers,json={"workspace_version":True})
+        assert relay.state[DEVICE]["workspace_version"] == 0
+
+@pytest.mark.asyncio
+async def test_new_media_commands_reject_old_phone_and_invalid_queries():
+    row=relay.get_device(DEVICE);row["seen"]=time.monotonic();row["workspace_version"]=1
+    token=relay.OWNER.set(DEVICE)
+    try:
+        result=await relay.browser_mcp.call_tool("browser_media_info",{"path":"vidéo.mov"})
+        assert "APK" in str(result)
+        assert not row["commands"]
+        for args in [{"category":"../../secret"},{"folder":"../phone"},{"sort":"drop_table"}]:
+            result=await relay.browser_mcp.call_tool("browser_files_catalog",args)
+            assert "False" in str(result) or '"ok": false' in str(result)
+        assert not row["commands"]
+    finally:
+        relay.OWNER.reset(token)
+
+@pytest.mark.asyncio
+async def test_media_frame_is_image_and_revision_is_forwarded():
+    row=relay.get_device(DEVICE);row["seen"]=time.monotonic();row["workspace_version"]=2
+    token=relay.OWNER.set(DEVICE)
+    try:
+        project={"output":"Draft.mp4","clips":[],"audio":[]}
+        task=asyncio.create_task(relay.browser_mcp.call_tool("browser_video_editor_project_save",{"project":project,"expected_revision":7}))
+        await asyncio.sleep(0)
+        command=row["commands"][0]
+        assert command["args"]["expected_revision"] == 7
+        row["pending"][command["id"]].set_result({"ok":True,"result":"{}"})
+        await task
+        task=asyncio.create_task(relay.browser_mcp.call_tool("browser_media_frame",{"path":"movie.mkv","time_ms":1200}))
+        await asyncio.sleep(0)
+        command=row["commands"][-1]
+        assert command["action"] == "media_frame"
+        assert command["args"]["time_ms"] == 1200
+        row["pending"][command["id"]].set_result({"ok":True,"result":json.dumps({"jpeg_base64":"/9j/2Q=="})})
+        result=await task
+        assert "image/jpeg" in str(result)
+    finally:
+        relay.OWNER.reset(token)

@@ -321,7 +321,7 @@ async def heartbeat(request: Request):
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
             row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
-            row["workspace_version"] = 1 if payload.get("workspace_version") == 1 else 0
+            row["workspace_version"] = min(2, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
             if isinstance(payload.get("autonomous"), bool):
                 row["autonomous"] = payload["autonomous"]
             executing = str(payload.get("executing_id", ""))
@@ -433,7 +433,7 @@ async def health(request: Request):
         {
             "ok": True,
             "module": "agentbrowser-mcp",
-            "version": "3.1-video-editor",
+            "version": "3.2-mobile-studio",
             "online_devices": online,
             "configured": len(MASTER) >= 32,
             "command_ttl_seconds": COMMAND_TTL,
@@ -519,7 +519,7 @@ def browser_status() -> dict:
         "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
-        "relay_version": "3.1-video-editor",
+        "relay_version": "3.2-mobile-studio",
         "workspace_version": row.get("workspace_version", 0) if row else 0,
         "credits": "no AI API or paid browser service",
         "autonomous": row["autonomous"] if row else False,
