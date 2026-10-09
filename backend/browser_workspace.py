@@ -11,6 +11,8 @@ WORKSPACE_ACTIONS = frozenset({
     "files_trash_list", "files_restore", "files_import", "files_downloads",
     "files_import_download", "files_preview", "notes_list", "notes_read", "notes_save",
     "notes_trash", "notes_restore", "notes_export",
+    "video_editor_status", "video_editor_project_read", "video_editor_project_save",
+    "video_editor_preset_alpha_omega", "video_editor_export", "video_editor_cancel",
 })
 
 
@@ -212,3 +214,61 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
     async def browser_notes_export(id: str, path: str) -> dict:
         """Export a saved phone note to a new Markdown file in Files. Includes source URL; no overwrite."""
         return await path_call("notes_export", path, {"id": id[:100]})
+
+
+    # CHK Studio vidéo — editor runs entirely on the Android device.
+    # These tools use the existing authenticated, owner-bound MCP relay.
+    @mcp.tool(annotations=read)
+    async def browser_video_editor_status() -> dict:
+        """Read local video rendering status (idle/running/completed/failed), MP4 path and percent.
+        Use while checking a long mobile Media3 export; no access to unrelated phone files."""
+        return await call("video_editor_status")
+
+    @mcp.tool(annotations=write)
+    async def browser_video_editor_preset_alpha_omega() -> dict:
+        """Create an editable 60 s project directly from the existing GROK_01..06.mp4 and
+        cut_1..6.wav files in CHK Files. Does NOT export or overwrite video."""
+        return await call("video_editor_preset_alpha_omega")
+
+    @mcp.tool(annotations=read)
+    async def browser_video_editor_project_read() -> dict:
+        """Read the local editing timeline: ordered clips, audio cuts, filters, trims and output."""
+        return await call("video_editor_project_read")
+
+    @mcp.tool(annotations=write)
+    async def browser_video_editor_project_save(project: dict) -> dict:
+        """Save a complete offline video editing project. Provide name, output (relative MP4
+        path in Files), clips list ({path,start_ms,duration_ms,filter,fade_ms}) and audio
+        list ({path,start_ms,duration_ms}). Existing video sources are not modified.
+        All paths must be relative to CHK Files, no URLs or absolute paths."""
+        if not isinstance(project, dict):
+            return {"ok": False, "error": "Projet JSON obligatoire."}
+        if len(json.dumps(project)) > 64000:
+            return {"ok": False, "error": "Projet trop grand."}
+        try:
+            validate_path(project.get("output", ""))
+            clips = project.get("clips")
+            audio = project.get("audio", [])
+            if not isinstance(clips, list) or not 1 <= len(clips) <= 40:
+                raise ValueError("1 à 40 vidéos requises.")
+            if not isinstance(audio, list) or len(audio) > 40:
+                raise ValueError("0 à 40 fichiers audio.")
+            for element in clips + audio:
+                if not isinstance(element, dict):
+                    raise ValueError("Média non structuré.")
+                validate_path(element.get("path", ""))
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "error": str(exc)}
+        return await call("video_editor_project_save", {"project": project})
+
+    @mcp.tool(annotations=write)
+    async def browser_video_editor_export(replace: bool = False) -> dict:
+        """START a background MP4 export using the saved mobile project, media and filters.
+        Immediate acknowledgment; use browser_video_editor_status to track progress.
+        Refuses existing output unless replace=true. May use significant phone battery."""
+        return await call("video_editor_export", {"replace": replace})
+
+    @mcp.tool(annotations=write)
+    async def browser_video_editor_cancel() -> dict:
+        """Cancel current local MP4 export. The unfinished partial MP4 is deleted."""
+        return await call("video_editor_cancel")
