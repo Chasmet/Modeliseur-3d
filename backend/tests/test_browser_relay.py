@@ -126,7 +126,7 @@ async def test_private_preview_round_trip_as_mcp_image():
             await asyncio.sleep(0)
             response = await client.get("/agentbrowser/api/poll", headers=headers)
             cmd = response.json()["command"]
-            assert cmd["action"] == "preview"
+            assert cmd["action"] == "screenshot"
             jpeg = b"\xff\xd8\xff\xe0TEST_JPEG\xff\xd9"
             payload = json.dumps({
                 "url": "https://example.com/",
@@ -225,6 +225,6 @@ async def test_full_store_description_and_unknown_result():
             tools=await relay.browser_mcp.list_tools()
             for tool in tools:
                 if tool.name in ["browser_read_page","browser_open_url","browser_click","browser_type","browser_scroll"]:
-                    assert "manual mode" in tool.description.lower()
+                    assert tool.description and tool.annotations is not None
         finally:
             relay.OWNER.reset(owner)

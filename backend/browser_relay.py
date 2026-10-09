@@ -28,6 +28,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 from backend.browser_signing import issue_signing
+from backend.browser_workspace import WORKSPACE_ACTIONS, register_workspace
 
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "modeliseur-trellis-mcp.onrender.com")
 BASE = "https://" + HOST
@@ -320,6 +321,7 @@ async def heartbeat(request: Request):
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
             row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
+            row["workspace_version"] = 1 if payload.get("workspace_version") == 1 else 0
             if isinstance(payload.get("autonomous"), bool):
                 row["autonomous"] = payload["autonomous"]
             executing = str(payload.get("executing_id", ""))
@@ -381,7 +383,7 @@ async def result(request: Request):
         future = row["pending"].get(ident)
         if not future or future.done():
             return bad("Commande expirée ou inconnue", 404)
-        is_preview = row["types"].get(ident) in ("preview", "screenshot")
+        is_preview = row["types"].get(ident) in ({"preview", "screenshot"} | WORKSPACE_ACTIONS)
         maximum = 240000 if is_preview else 32000
         if not is_preview and len(data) > 48000:
             return bad("Résultat trop long pour cette commande", 413)
@@ -431,7 +433,7 @@ async def health(request: Request):
         {
             "ok": True,
             "module": "agentbrowser-mcp",
-            "version": "2.1-upload-resume",
+            "version": "3.0-mobile-workspace",
             "online_devices": online,
             "configured": len(MASTER) >= 32,
             "command_ttl_seconds": COMMAND_TTL,
@@ -517,7 +519,8 @@ def browser_status() -> dict:
         "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
-        "relay_version": "2.1-upload-resume",
+        "relay_version": "3.0-mobile-workspace",
+        "workspace_version": row.get("workspace_version", 0) if row else 0,
         "credits": "no AI API or paid browser service",
         "autonomous": row["autonomous"] if row else False,
         "last_seen_seconds": round(time.monotonic() - row["seen"], 1)
@@ -689,9 +692,9 @@ async def browser_upload_file(
     row = state.get(OWNER.get())
     if not row:
         return {"ok": False, "error": "Navigateur hors ligne."}
+    staged = []
     try:
         host = destination_host(row, expected_host)
-        staged = []
         total = 0
         for item in files:
             descriptor = await stage_file(OWNER.get(), row, item)
@@ -708,10 +711,8 @@ async def browser_upload_file(
         return {"ok": False, "error": str(exc)}
     finally:
         if row:
-            for transfer_id in list(row.get("transfers", {})):
-                item = row["transfers"].get(transfer_id)
-                if item and time.time() - item.get("created", 0) < 60:
-                    _remove_transfer(row, transfer_id)
+            for item in staged:
+                _remove_transfer(row, item["id"])
 
 
 @browser_mcp.tool(
@@ -783,6 +784,9 @@ async def browser_screenshot():
 async def browser_preview():
     """Backward-compatible alias for browser_screenshot."""
     return await _snapshot_reply()
+
+
+register_workspace(browser_mcp, issue, OWNER, state, stage_file, _remove_transfer)
 
 
 async def relay_dispatch(scope, receive, send):
