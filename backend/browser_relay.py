@@ -93,6 +93,7 @@ def get_device(device_id: str):
             "types": {},
             "page": "",
             "title": "",
+            "session_source": "unknown",
             "autonomous": False,
             "receipts": {},
             "transfers": {},
@@ -318,6 +319,7 @@ async def heartbeat(request: Request):
             payload = await request.json()
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
+            row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
             if isinstance(payload.get("autonomous"), bool):
                 row["autonomous"] = payload["autonomous"]
             executing = str(payload.get("executing_id", ""))
@@ -512,6 +514,7 @@ def browser_status() -> dict:
     return {
         "online": bool(row and time.monotonic() - row["seen"] < ONLINE_TTL),
         "title": row["title"] if row else "",
+        "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
         "relay_version": "2.1-upload-resume",
@@ -555,6 +558,38 @@ async def browser_click(selector: str) -> dict:
     if not 0 < len(selector) < 350:
         return {"ok": False, "error": "Sélecteur CSS invalide."}
     return await issue("click", {"selector": selector})
+
+
+@browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
+async def browser_click_verified(
+    selector: str,
+    expected_selector: str = "",
+    expected_text: str = "",
+    expected_url_contains: str = "",
+    timeout_ms: int = 10000,
+) -> dict:
+    """Click no more than once, only if the requested postcondition is not already true.
+
+    The Android browser waits for the selected element, text or URL to become
+    observable. On timeout it reports an UNCONFIRMED result; do not retry a
+    possibly completed click without inspecting the page.
+    """
+    if not selector or len(selector) > 340:
+        return {"ok": False, "error": "Sélecteur CSS invalide."}
+    if not any((expected_selector, expected_text, expected_url_contains)):
+        return {"ok": False, "error": "Condition de réussite obligatoire."}
+    if len(expected_selector) > 340 or len(expected_text) > 250 or len(expected_url_contains) > 500:
+        return {"ok": False, "error": "Condition de réussite trop longue."}
+    return await issue(
+        "click_verified",
+        {
+            "selector": selector,
+            "expected_selector": expected_selector,
+            "expected_text": expected_text,
+            "expected_url_contains": expected_url_contains,
+            "timeout_ms": min(20000, max(800, int(timeout_ms))),
+        },
+    )
 
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
