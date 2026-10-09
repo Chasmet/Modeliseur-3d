@@ -93,6 +93,7 @@ def get_device(device_id: str):
             "types": {},
             "page": "",
             "title": "",
+            "session_source": "unknown",
             "autonomous": False,
             "receipts": {},
             "transfers": {},
@@ -318,6 +319,7 @@ async def heartbeat(request: Request):
             payload = await request.json()
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
+            row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
             if isinstance(payload.get("autonomous"), bool):
                 row["autonomous"] = payload["autonomous"]
             executing = str(payload.get("executing_id", ""))
@@ -512,6 +514,7 @@ def browser_status() -> dict:
     return {
         "online": bool(row and time.monotonic() - row["seen"] < ONLINE_TTL),
         "title": row["title"] if row else "",
+        "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
         "relay_version": "2.1-upload-resume",
