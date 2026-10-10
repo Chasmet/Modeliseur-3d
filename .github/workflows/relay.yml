@@ -1,0 +1,25 @@
+name: Vérifier le relais Android et MCP
+on:
+  push:
+    branches: [main, agent/trellis-third-tab-auto-update]
+    paths: ['backend/**', 'tools/trellis/**', '.github/workflows/relay.yml']
+  pull_request:
+    branches: [main]
+    paths: ['backend/**', 'tools/trellis/**', '.github/workflows/relay.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r backend/requirements.txt pytest==9.1.1
+      - run: python -m pytest backend/tests -q
+      - run: npm ci --prefix tools/trellis
+      - run: npm test --prefix tools/trellis

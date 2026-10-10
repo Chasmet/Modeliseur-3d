@@ -1,0 +1,312 @@
+name: Publier APK signé avec mise à jour automatique
+run-name: ${{ github.event.head_commit.message || 'Modéliseur 3D — APK signé' }}
+
+on:
+  push:
+    branches: [agent/trellis-third-tab-auto-update]
+    paths: ['tools/offline-models/**', 'tools/android-smoke/**', 'app/**', 'tools/viewer/**', 'gradle/**', '*.gradle', 'gradle.properties', 'gradlew*', 'signing/prepare_ci.py', 'signing/publish_source_snapshot.sh', '.github/workflows/release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: modeliseur-public-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MODELISEUR_DEBUG_KEYSTORE: ${{ github.workspace }}/.ci-signing/debug.keystore
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Récupérer la signature persistante sans clé API
+        run: python3 signing/prepare_ci.py
+
+      - name: Vérifier l'identité de signature V6.0.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -exportcert -keystore "$MODELISEUR_DEBUG_KEYSTORE" -storepass android -alias androiddebugkey -file /tmp/modeliseur-cert.der
+          test "$(sha256sum /tmp/modeliseur-cert.der | cut -d' ' -f1)" = "29e4bf6469e65741750b25f7ea50c97e7b538d5ead63bffebfd93cf197dd9335"
+
+      - name: Mettre en cache IS-Net Anime FP32
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+
+      - name: Télécharger et vérifier IS-Net Anime FP32
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL="app/src/main/assets/models/isnet_anime_fp32.onnx"
+          PART="${MODEL}.part"
+          SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          URL="https://huggingface.co/onnx-community/anime-seg-ONNX/resolve/25f233dc9f60e116dc79a5ba7e9575585388a36f/onnx/model.onnx?download=true"
+          mkdir -p "$(dirname "$MODEL")"
+          if [ ! -f "$MODEL" ] || ! echo "$SHA  $MODEL" | sha256sum -c - >/dev/null 2>&1; then
+            rm -f "$MODEL" "$PART"
+            curl -L --fail --retry 5 --retry-delay 2 --connect-timeout 30 -o "$PART" "$URL"
+            echo "$SHA  $PART" | sha256sum -c -
+            mv "$PART" "$MODEL"
+          fi
+
+      - name: Mettre en cache la profondeur IA embarquée
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+          key: modeliseur-depth-small-fp32-afb6a5c2
+      - name: Vérifier les poids de profondeur avant compilation
+        run: python3 tools/offline-models/fetch_depth.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mettre en cache TripoSR 4 bits embarqué
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-128-fd5be249-v1
+      - name: Préparer et vérifier TripoSR embarqué
+        run: |
+          python3 -m pip install -r tools/offline-models/requirements.txt
+          python3 tools/offline-models/fetch_triposr.py
+
+      - name: Préparer le SDK Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew
+
+      - name: Vérifier la version et l’architecture Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' app/build.gradle)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$CODE" -gt 0
+          grep -Fq "Modéliseur 3D V$VERSION" app/src/main/AndroidManifest.xml
+          grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'FOOD = "Nourriture et marché"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'MAGIC = "Magie et effets"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q 'FURNITURE = "Mobilier et intérieur"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
+          grep -q "assetExportButton" app/src/main/res/layout/row_asset_3d.xml
+          grep -q "void onExport" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DAdapter.java
+          grep -q "ActivityResultContracts.CreateDocument" app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
+          grep -q "copyToDocument" app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
+          grep -q "class ProceduralAsset3DGenerator" app/src/main/java/com/chasmet/modeliseur3d/assets/ProceduralAsset3DGenerator.java
+          grep -q "MAXIMUM_ASSET_BYTES = 8_000_000L" app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DDownloader.java
+          grep -q "ManualProfileTransformer.apply" app/src/main/java/com/chasmet/modeliseur3d/Manual3DActivity.java
+          grep -q "HumanoidVolumeRefiner.refine" app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java
+          grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
+          ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
+          grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q "McpConnectionService" app/src/main/java/com/chasmet/modeliseur3d/HomeActivity.java
+          grep -q 'android:stopWithTask="false"' app/src/main/AndroidManifest.xml
+          grep -q "android.permission.RECEIVE_BOOT_COMPLETED" app/src/main/AndroidManifest.xml
+          grep -q "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" app/src/main/AndroidManifest.xml
+          grep -q "McpKeepAliveReceiver" app/src/main/AndroidManifest.xml
+          grep -q "setAndAllowWhileIdle" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "Modeliseur3D:McpConnection" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "PhoneMcpServer" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "LocalImagePreparation.prepare" app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
+          grep -q "LocalMcpGeneration.generate" app/src/main/java/com/chasmet/modeliseur3d/mcp/McpConnectionService.java
+          grep -q "EXTRA_MCP_COMMAND_ID" app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
+          grep -q "uploadLocalResult" app/src/main/java/com/chasmet/modeliseur3d/cloud/CloudApi.java
+          ! grep -q 'android:name=".Cloud3DActivity"' app/src/main/AndroidManifest.xml
+          grep -q 'handler.post(heartbeat)' app/src/main/java/com/chasmet/modeliseur3d/Cloud3DActivity.java
+          grep -q 'current.json("/api/poll", null)' app/src/main/java/com/chasmet/modeliseur3d/Cloud3DActivity.java
+
+      - name: Vérifier les GLB officiels libres sous 8 Mo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          models = [
+              "RiggedSimple", "RiggedFigure", "RecursiveSkeletons", "Fox",
+              "ToyCar", "SimpleInstancing", "AlphaBlendModeTest",
+              "AnimatedColorsCube", "BoxAnimated", "CubeVisibility",
+              "BoxVertexColors", "ClearCoatCarPaint"
+          ]
+          maximum = 8_000_000
+          errors = []
+          for model in models:
+              url = (
+                  "https://api.github.com/repos/KhronosGroup/glTF-Sample-Assets/contents/"
+                  f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
+              )
+              request = urllib.request.Request(url, headers={
+                  "User-Agent": "Modeliseur3D-CI/6.4.4",
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                  "Accept": "application/vnd.github+json"
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      metadata = json.load(response)
+                  size = int(metadata["size"])
+                  print(f"{model}: {size} octets")
+                  if size > maximum:
+                      errors.append(f"{model} dépasse 8 Mo ({size})")
+              except Exception as error:
+                  errors.append(f"{model} inaccessible ({error})")
+          if errors:
+              raise SystemExit("\n".join(errors))
+          print(f"{len(models)} GLB officiels vérifiés sous 8 Mo.")
+          PY
+
+      - name: Tester le catalogue et la reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/asset-tests build/orientation-tests build/stylized-tests build/legacy-tests
+          javac -encoding UTF-8 -d build/asset-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DItem.java \
+            app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java \
+            validation/java/com/chasmet/modeliseur3d/assets/Asset3DCatalogSelfTest.java
+          java -cp build/asset-tests com.chasmet.modeliseur3d.assets.Asset3DCatalogSelfTest
+          javac -encoding UTF-8 -d build/orientation-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrector.java \
+            validation/java/com/chasmet/modeliseur3d/model/MeshOrientationCorrectorSelfTest.java
+          java -cp build/orientation-tests com.chasmet.modeliseur3d.model.MeshOrientationCorrectorSelfTest
+          javac -encoding UTF-8 -d build/stylized-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FourViewAutoCorrector.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefiner.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/StylizedFourViewProjector.java \
+            validation/java/com/chasmet/modeliseur3d/model/StylizedCharacter3DSelfTest.java \
+            validation/java/com/chasmet/modeliseur3d/model/HumanoidVolumeRefinerSelfTest.java
+          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.StylizedCharacter3DSelfTest
+          java -cp build/stylized-tests com.chasmet.modeliseur3d.model.HumanoidVolumeRefinerSelfTest
+          javac -encoding UTF-8 -d build/legacy-tests \
+            app/src/main/java/com/chasmet/modeliseur3d/model/MeshData.java \
+            app/src/main/java/com/chasmet/modeliseur3d/model/FaceBack25DMesher.java \
+            validation/java/com/chasmet/modeliseur3d/model/FaceBack25DMesherSelfTest.java
+          java -cp build/legacy-tests com.chasmet.modeliseur3d.model.FaceBack25DMesherSelfTest
+
+      - name: Compiler avec Gradle
+        run: |
+          ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebug || {
+            find app/build/reports -name 'lint-results-debug.txt' -print -exec cat {} \; 2>/dev/null || true
+            exit 1
+          }
+
+      - name: Vérifier l'APK et sa signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          ISNET_SHA="6a92a19a47e8197fb6dbcf85be14600806019831fedfe7f86eeeeffd4c40dbba"
+          python3 tools/offline-models/check_apk.py "$APK"
+          ls -lh "$APK"
+          sha256sum "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
+          test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
+          test "$(unzip -p "$APK" assets/models/depth_anything_v2_small_fp32.onnx | sha256sum | cut -d' ' -f1)" = "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c"
+
+      - name: Vérifier HTTP et HTTPS du MCP direct
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest --tests com.chasmet.modeliseur3d.mcp.PhoneMcpServerTest
+
+      - name: Vérifier MCP direct et moteurs locaux avant publication
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest
+
+      - name: Vérifier le paquet prêt à publier
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          echo "APK validé et tests Android/MCP exécutés avant publication."
+
+      - name: Identifier la version de l’APK
+        id: apk-version
+        run: echo "version=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)" >> "$GITHUB_OUTPUT"
+
+      - name: Préparer le fichier APK avec son vrai numéro de version
+        shell: bash
+        env:
+          APK_VERSION: ${{ steps.apk-version.outputs.version }}
+        run: |
+          mkdir -p artifact
+          cp app/build/outputs/apk/debug/app-debug.apk "artifact/Modeliseur-3D-$APK_VERSION.apk"
+          cd artifact
+          sha256sum "Modeliseur-3D-$APK_VERSION.apk" > "Modeliseur-3D-$APK_VERSION.apk.sha256"
+
+      - name: Publier l’APK signé ${{ steps.apk-version.outputs.version }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modeliseur-3D-${{ steps.apk-version.outputs.version }}-APK-signe
+          path: artifact/Modeliseur-3D-*.apk*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publier une vraie GitHub Release avec APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle)
+          TAG="v$VERSION"
+          APK="Modeliseur-3D-$VERSION.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          RESUME_DRAFT=false
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/modeliseur-release-draft.txt" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "refs/tags/$TAG"
+            RELEASE_SOURCE=$(git rev-parse 'FETCH_HEAD^{commit}')
+            # Never replace published bytes. Only CI changes may reuse an existing version.
+            git diff --exit-code "$RELEASE_SOURCE" "$GITHUB_SHA" -- . ':(exclude).github/workflows/**' ':(exclude)signing/publish_source_snapshot.sh'
+            if grep -qx 'false' "$RUNNER_TEMP/modeliseur-release-draft.txt"; then
+              echo "Version $VERSION déjà publiée avec les mêmes sources d’application : fichier public conservé."
+              exit 0
+            fi
+            RESUME_DRAFT=true
+          fi
+          cat > /tmp/modeliseur-release.md <<'NOTES'
+          V6.6.1 : mode Puissance maximale pour TripoSR 1 image sur les téléphones disposant d’assez de mémoire. En qualité Précis : grille jusqu’à 320 pixels sur l’axe le plus long, budget jusqu’à 384 000 ou 480 000 triangles selon la mémoire Android et jusqu’à 7 threads sur un CPU 8 cœurs.
+          Le gros plan réserve une partie du budget pour le visage ou le détail sélectionné. La subdivision utilise le budget restant progressivement, au lieu d’annuler toute l’étape quand le plafond est atteint. Le relief est validé localement : un triangle difficile ne supprime plus tous les détails.
+          Les tables d’arêtes utilisent des tableaux primitifs pour réduire la mémoire de génération, de lissage et de texture. Sous pression mémoire, l’application conserve les limites habituelles. La RAM physique ne remplace pas la limite mémoire de l’application.
+          Dans TripoSR 1 image, sélectionner Précis et garder Puissance maximale activée. Le calcul est plus long. Pour un visage, utiliser Améliorer un visage / détail et sélectionner la zone sur une photo HD. Les surfaces cachées restent estimées par le modèle ; davantage de calcul ne garantit pas leur exactitude.
+          Installer par-dessus l’application existante. Même package et même signature Android, projets et réglages conservés. Mise à jour publique dans Réglages > Mise à jour automatique, sans clé API ni PAT. Compilation, tests unitaires, tests Android et signature vérifiés avant publication.
+          NOTES
+          bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
+          SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")
+          printf '\nSources APK : %s. Application compilée et testée depuis %s, avec les workflows de la branche principale conservés dans la branche de sources de publication.\n' "$SOURCE_COMMIT" "$GITHUB_SHA" >> /tmp/modeliseur-release.md
+          if [ "$RESUME_DRAFT" = true ]; then
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          else
+            gh release create "$TAG" "$APK" "$APK.sha256" --target "$SOURCE_COMMIT" --title "Modéliseur 3D $VERSION" --notes-file /tmp/modeliseur-release.md --draft
+          fi
+          gh release edit "$TAG" --draft=false --latest

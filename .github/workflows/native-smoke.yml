@@ -1,0 +1,168 @@
+name: Vérifier les onglets et la mise à jour Android
+on:
+  pull_request:
+    branches: [main]
+    paths: ['tools/offline-models/**', 'tools/android-smoke/**', 'app/src/main/**', '.github/workflows/native-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/isnet_anime_fp32.onnx
+          key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+      - name: Mettre en cache la profondeur IA embarquée
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/models/depth_anything_v2_small_fp32.onnx
+          key: modeliseur-depth-small-fp32-afb6a5c2
+      - name: Vérifier les poids de profondeur avant compilation
+        run: python3 tools/offline-models/fetch_depth.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mettre en cache TripoSR 4 bits embarqué
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-128-fd5be249-v1
+      - name: Préparer et vérifier TripoSR embarqué
+        run: |
+          python3 -m pip install -r tools/offline-models/requirements.txt
+          python3 tools/offline-models/fetch_triposr.py
+
+      - name: Préparer les tests Android sans modifier l'APK publiée
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew
+      - name: Tester HTTP et HTTPS du serveur téléphone
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest --tests com.chasmet.modeliseur3d.mcp.PhoneMcpServerTest
+      - name: Tester la navigation, le téléchargement réel et l'installateur Android
+        run: ./gradlew --no-daemon -PofflineSmoke testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-generated-glb
+          path: app/build/offline-fixture/*.glb
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-navigation-update-test-reports
+          path: app/build/reports/tests/testDebugUnitTest
+  offline-viewer:
+    needs: android-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: offline-generated-glb
+          path: app/src/main/assets/model
+      - run: npm ci --prefix tools/viewer && npm run build --prefix tools/viewer
+      - run: npm ci --prefix tools/trellis
+      - name: Valider le GLB produit par le moteur Android
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import validator from './tools/trellis/node_modules/gltf-validator/index.js';
+          for (const name of fs.readdirSync('app/src/main/assets/model')) {
+            if (!name.endsWith('.glb')) continue;
+            const report=await validator.validateBytes(new Uint8Array(fs.readFileSync('app/src/main/assets/model/'+name)));
+            console.log(name,JSON.stringify(report.issues));
+            if(report.issues.numErrors)process.exit(1);
+          }
+          JS
+      - run: npx --yes agent-browser@0.38.1 install --with-deps
+      - name: Installer le lecteur PNG pour le contrôle des couleurs
+        run: python3 -m pip install Pillow
+      - name: Vérifier le rendu du volume hors connexion
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/offline-viewer.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000001'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || !document.querySelector("#status").textContent.startsWith("Sans animation")) throw new Error("Volume local non chargé"); return "Volume Android chargé"; })()'
+          npx --yes agent-browser@0.38.1 screenshot offline-volume.png
+          npx --yes agent-browser@0.38.1 errors
+          python3 - <<'PY'
+          from PIL import Image
+          image=Image.open('offline-volume.png').convert('RGB')
+          red=sum(r>160 and g<80 and b<80 for r,g,b in image.getdata())
+          blue=sum(b>160 and r<80 and g<80 for r,g,b in image.getdata())
+          green=sum(g>160 and r<80 and b<80 for r,g,b in image.getdata())
+          print('Texture visible:',red,blue,green)
+          assert min(red,blue,green)>100,'Texture missing, blocked or mapped incorrectly'
+          PY
+      - name: Afficher les quatre photographies sur le vrai maillage Android
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/four-viewer.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000004'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          for VIEW in front back right left; do
+            npx --yes agent-browser@0.38.1 click "[data-view='$VIEW']"
+            npx --yes agent-browser@0.38.1 wait 1000
+            npx --yes agent-browser@0.38.1 screenshot "offline-four-$VIEW.png"
+          done
+          npx --yes agent-browser@0.38.1 errors
+          python3 - <<'PY'
+          from PIL import Image
+          predicates={'front':lambda r,g,b:r>160 and g<80 and b<80,'back':lambda r,g,b:b>160 and r<80 and g<80,'right':lambda r,g,b:g>160 and r<80 and b<80,'left':lambda r,g,b:r>160 and g>160 and b<80}
+          for view,predicate in predicates.items():
+              image=Image.open('offline-four-'+view+'.png').convert('RGB')
+              count=sum(predicate(*pixel) for pixel in image.getdata())
+              print('Photographie visible',view,count)
+              assert count>100,'Wrong photograph or missing surface: '+view
+          PY
+      - name: Afficher le vrai GLB TripoSR et ses quatre textures sans serveur externe
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory app/src/main/assets > /tmp/triposr-viewer.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true; npx --yes agent-browser@0.38.1 close || true' EXIT
+          npx --yes agent-browser@0.38.1 --args '--no-sandbox,--use-angle=swiftshader,--enable-unsafe-swiftshader' open 'http://127.0.0.1:8765/viewer/index.html?id=00000000000000000000000000000005'
+          npx --yes agent-browser@0.38.1 wait --load networkidle
+          npx --yes agent-browser@0.38.1 eval '(() => { if (!document.querySelector("canvas") || !document.querySelector("#status").textContent.startsWith("Sans animation")) throw new Error("TripoSR local non chargé"); return "Vrai GLB TripoSR chargé"; })()'
+          for VIEW in front back right left; do
+            npx --yes agent-browser@0.38.1 click "[data-view='$VIEW']"
+            npx --yes agent-browser@0.38.1 wait 1000
+            npx --yes agent-browser@0.38.1 screenshot "offline-ai-$VIEW.png"
+          done
+          npx --yes agent-browser@0.38.1 errors
+          python3 - <<'PYTHON'
+          from PIL import Image
+          predicates={'front':lambda r,g,b:r>160 and g<80 and b<80,'back':lambda r,g,b:b>160 and r<80 and g<80,'right':lambda r,g,b:g>120 and g>1.3*r and g>1.3*b,'left':lambda r,g,b:r>160 and g>160 and b<80}
+          for view,predicate in predicates.items():
+              image=Image.open('offline-ai-'+view+'.png').convert('RGB')
+              count=sum(predicate(*pixel) for pixel in image.getdata())
+              print('Photographie sur forme TripoSR',view,count)
+              assert count>100,'Texture ou surface TripoSR absente : '+view
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-volume-render
+          path: offline-*.png

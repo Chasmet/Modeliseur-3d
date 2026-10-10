@@ -1,74 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/background"
-    android:fillViewport="true">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="22dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Modéliseur 3D V5.9.10"
-            android:textColor="@color/text_primary"
-            android:textSize="30sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:text="Choisis une reconstruction ou ouvre le catalogue de 259 assets exportables."
-            android:textColor="@color/text_secondary"
-            android:textSize="15sp" />
-
-        <Button
-            android:id="@+id/mode25dButton"
-            android:layout_width="match_parent"
-            android:layout_height="112dp"
-            android:layout_marginTop="26dp"
-            android:backgroundTint="@color/launcher_background"
-            android:gravity="center"
-            android:text="2.5D\nFace + Dos"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="23sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/mode3dButton"
-            android:layout_width="match_parent"
-            android:layout_height="112dp"
-            android:layout_marginTop="14dp"
-            android:backgroundTint="@color/viewer_background"
-            android:gravity="center"
-            android:text="3D anatomique\nMembres affinés + GLB propre"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/assets3dButton"
-            android:layout_width="match_parent"
-            android:layout_height="122dp"
-            android:layout_marginTop="14dp"
-            android:backgroundTint="@color/launcher_background"
-            android:gravity="center"
-            android:text="Assets 3D disponibles\n259 modèles • ouverture + export"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/background" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+        <TextView android:id="@+id/homeVersion" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:text="Modéliseur 3D"
+            android:textColor="@color/text_primary" android:textSize="28sp" android:textStyle="bold" />
+        <Button android:id="@+id/settingsButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Réglages" android:textAllCaps="false" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/mcpHomeStatus" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:paddingTop="8dp" android:paddingBottom="4dp"
+                android:text="ChatGPT MCP : déconnecté" android:textColor="@color/text_secondary" android:textSize="14sp" />
+            <Button android:id="@+id/mcpConnectionButton" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Activer MCP" android:textAllCaps="false"
+                android:contentDescription="Activer ou désactiver le serveur ChatGPT en arrière-plan" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Le MCP reste actif en arrière-plan lorsqu’il est activé. Serveur local et accès depuis Internet sont indiqués séparément dans Réglages. Désactiver le MCP conserve le travail."
+            android:textColor="@color/text_secondary" android:textSize="12sp" />
+        <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <TabWidget android:id="@android:id/tabs" android:layout_width="match_parent" android:layout_height="56dp" />
+                <FrameLayout android:id="@android:id/tabcontent" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <LinearLayout android:id="@+id/tab25d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reconstruction locale à partir de la face et du dos."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/mode25dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/launcher_background" android:text="2.5D\nFace + Dos" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="23sp" />
+                    </LinearLayout>
+                    <LinearLayout android:id="@+id/tab3d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ton mode 3D original : importe les quatre images — face, dos, profil droit et profil gauche. Reconstruction locale et export GLB."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/mode3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/viewer_background" android:text="Ouvrir le mode 3D original\nFace · Dos · Droite · Gauche" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                    </LinearLayout>
+                    <LinearLayout android:id="@+id/tabTrellis" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="TripoSR embarqué : ajoute face, dos, profil droit et profil gauche. Les quatre formes IA sont combinées avec tes silhouettes et textures, entièrement sur ce téléphone. Aperçu, sauvegarde et export GLB hors connexion. Le moteur Silhouettes reste disponible pour un calcul plus léger. Une troisième option TripoSR permet de créer un modèle à partir d’une seule image."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/offline3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="16dp"
+                            android:backgroundTint="@color/viewer_background" android:text="IA 3D hors connexion\n4 images → modèle texturé · GLB" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                        <Button android:id="@+id/singleImage3dButton" android:layout_width="match_parent" android:layout_height="96dp" android:layout_marginTop="14dp"
+                            android:backgroundTint="@color/launcher_background" android:text="TripoSR — 1 seule image\nVolume + couleurs IA · GLB hors ligne" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+                    </LinearLayout>
+                </FrameLayout>
+            </LinearLayout>
+        </TabHost>
+        <Button android:id="@+id/assets3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="24dp"
+            android:backgroundTint="@color/launcher_background" android:text="Assets 3D disponibles\n259 modèles • ouverture + export" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
+        <TextView android:id="@+id/updateHomeStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary" android:paddingTop="10dp" />
     </LinearLayout>
-
 </ScrollView>

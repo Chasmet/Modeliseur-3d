@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="file" path="phone_mcp/" />
+        <exclude domain="sharedpref" path="phone_mcp.xml" />
+        <exclude domain="sharedpref" path="mcp_local_bridge.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="phone_mcp/" />
+        <exclude domain="sharedpref" path="phone_mcp.xml" />
+        <exclude domain="sharedpref" path="mcp_local_bridge.xml" />
+    </device-transfer>
+</data-extraction-rules>
