@@ -28,7 +28,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     public static final String EXTRA_MCP_QUALITY="mcp_quality";
     public static final String EXTRA_MCP_SMOOTHING="mcp_smoothing";
     private TextView modeHelp,status,depthLabel;private ImageView preview;private SeekBar depth,tolerance;
-    private Button selectDetail;private CheckBox assistDetail;private SeekBar detailStrength;private TextView detailLabel;private TripoDetailRegion detailRegion;
+    private Button selectDetail,detectFaceDetail;private CheckBox assistDetail;private SeekBar detailStrength;private TextView detailLabel;private TripoDetailRegion detailRegion;
     private Spinner textureQuality;private SeekBar photoFidelity;private TextView photoFidelityLabel;private CheckBox fineDetail,maximumPower,tripoInputBoost;private Button photoCheck;
     private Spinner quality,shape,engine;private Button inspect,compare,cancel;private CheckBox ai,depthAi,smoothing;private Button generate,open,export,choose,rotate,gallery;
     private final ImageView[] previews=new ImageView[4];
@@ -164,6 +164,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         photoFidelity=new SeekBar(this);photoFidelity.setMax(100);photoFidelity.setProgress(Math.max(0,Math.min(100,prefs().getInt("photoFidelity",100))));p.addView(photoFidelity);
         photoFidelity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int value,boolean user){photoFidelityLabel.setText("Fidélité de la photo visible : "+value+" % · une image");}public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}});
         selectDetail=button(p,"Améliorer un visage / détail",this::selectDetail);
+        detectFaceDetail=button(p,"Détecter mon visage automatiquement · hors ligne",this::detectFaceDetail);
         assistDetail=new CheckBox(this);assistDetail.setText("Assistant gros plan · TripoSR + Depth Anything");assistDetail.setChecked(prefs().getBoolean("assistDetail",false));p.addView(assistDetail);
         try{String saved=prefs().getString("detailRegion","");if(!saved.isEmpty())detailRegion=TripoDetailRegion.fromJson(new org.json.JSONArray(saved));}catch(Exception ignored){assistDetail.setChecked(false);}
         detailLabel=text(p,"Relief du détail : "+prefs().getInt("detailStrength",70)+" %",16);
@@ -221,8 +222,8 @@ public final class Offline3DActivity extends AppCompatActivity {
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
         depth.setVisibility(single?View.GONE:View.VISIBLE);depthLabel.setVisibility(single?View.GONE:View.VISIBLE);
         depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
-        selectDetail.setVisibility(single?View.VISIBLE:View.GONE);assistDetail.setVisibility(single?View.VISIBLE:View.GONE);detailLabel.setVisibility(single?View.VISIBLE:View.GONE);detailStrength.setVisibility(single?View.VISIBLE:View.GONE);
-        selectDetail.setEnabled(!busy&&!managed&&single&&source().isFile());assistDetail.setEnabled(!busy&&!managed&&single&&detailRegion!=null);detailStrength.setEnabled(!busy&&!managed&&single&&detailRegion!=null);
+        selectDetail.setVisibility(single?View.VISIBLE:View.GONE);detectFaceDetail.setVisibility(single?View.VISIBLE:View.GONE);assistDetail.setVisibility(single?View.VISIBLE:View.GONE);detailLabel.setVisibility(single?View.VISIBLE:View.GONE);detailStrength.setVisibility(single?View.VISIBLE:View.GONE);
+        selectDetail.setEnabled(!busy&&!managed&&single&&source().isFile());detectFaceDetail.setEnabled(!busy&&!managed&&single&&source().isFile());assistDetail.setEnabled(!busy&&!managed&&single&&detailRegion!=null);detailStrength.setEnabled(!busy&&!managed&&single&&detailRegion!=null);
         tripoInputBoost.setEnabled(!busy&&!managed&&learned);tripoInputBoost.setVisibility(learned?View.VISIBLE:View.GONE);textureQuality.setEnabled(!busy&&!managed&&learned);fineDetail.setEnabled(!busy&&!managed&&single);maximumPower.setEnabled(!busy&&!managed&&single);maximumPower.setVisibility(single?View.VISIBLE:View.GONE);
         photoFidelity.setEnabled(!busy&&!managed&&single);photoFidelityLabel.setVisibility(single?View.VISIBLE:View.GONE);photoFidelity.setVisibility(single?View.VISIBLE:View.GONE);fineDetail.setVisibility(single?View.VISIBLE:View.GONE);photoCheck.setEnabled(!busy&&!managed);
         tolerance.setEnabled(!busy&&!managed);quality.setEnabled(!busy&&!managed);shape.setEnabled(!busy&&!managed&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
@@ -289,6 +290,33 @@ public final class Offline3DActivity extends AppCompatActivity {
                 });
                 message(agreement+(Math.min(calibration.frontAgreement,calibration.profileAgreement)<.65f?" · Écarts importants : vérifie les photos avant de lancer l’IA.":" · Comparaison disponible sans lancer TripoSR."));
             }finally{for(Bitmap image:images)if(image!=null)image.recycle();}
+        });
+    }
+    /** Optional, on-device Android face detection; manual selection remains available. */
+    private void detectFaceDetail(){
+        if(busy||!source().isFile())return;
+        int t=tolerance.getProgress()+8;boolean useAi=ai.isChecked();
+        work(()->{
+            File ready=prepareCutout(t,useAi);checkpoint();
+            Bitmap image=BitmapFactory.decodeFile(ready.getPath());
+            if(image==null)throw new IOException("Image préparée illisible.");
+            TripoDetailRegion detected;
+            try{detected=TripoFaceLocator.locate(image);}finally{image.recycle();}
+            checkpoint();
+            if(detected==null){
+                message("Visage frontal non reconnu localement. Utilise Améliorer un visage / détail pour placer le cadre manuellement.");
+                return;
+            }
+            String selectedKey=prefs().getString(key("cutoutKey",0),"");
+            ui(()->{
+                if(isFinishing())return;
+                detailRegion=detected;
+                prefs().edit().putString("detailRegion",detected.json().toString())
+                        .putString("detailCutoutKey",selectedKey).putBoolean("assistDetail",true).apply();
+                assistDetail.setChecked(true);quality.setSelection(2);textureQuality.setSelection(2);
+                fineDetail.setChecked(true);photoFidelity.setProgress(100);buttons();
+                status.setText("Visage trouvé sur le téléphone. Vérifie le cadre avec Améliorer un visage / détail, puis lance TripoSR.");
+            });
         });
     }
     private void selectDetail(){
