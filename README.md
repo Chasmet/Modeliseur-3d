@@ -2,7 +2,7 @@
 
 Cette branche ajoute un filtre léger, local et désactivable sur **l'entrée de TripoSR** (une ou quatre photos). Le filtre réduit les halos près de la silhouette grâce à la prise en compte de l'alpha, accentue prudemment les détails et permet de concentrer ce traitement dans une zone visage/détail sélectionnée. Les photos sauvegardées et la texture GLB restent celles d'origine. Il ne change aucun poids du réseau ni le moteur de reconstruction.
 
-L’activation invalide uniquement le cache d’inférence correspondant (clé différente selon la zone). La désactivation conserve la clé historique. Les tests Robolectric vérifient alpha, région de sélection et cache.
+L’activation invalide uniquement le cache d’inférence correspondant (clé différente selon la zone). La désactivation conserve la clé historique. Les tests Robolectric vérifient alpha, région de sélection et cache. Une détection facultative de visage par les API Android complète la sélection manuelle ; elle peut échouer sur les visages de dessin animé et ne remplace pas 3DDFA-V2.
 
 La qualité géométrique et la ressemblance ne sont pas garanties par ce seul filtre : faire une comparaison avec/sans amélioration sur les mêmes photos.
 

@@ -161,11 +161,24 @@ tasks.register('downloadOfflineTripoSRModels', Exec) {
     outputs.files(file('src/main/assets/models/triposr_encoder_int4.onnx'),file('src/main/assets/models/triposr_encoder_int4.onnx.data'),file('src/main/assets/models/triposr_decoder.onnx'),file('src/main/assets/models/triposr_decoder.onnx.data'))
     outputs.upToDateWhen { false }
 }
+// Unit-test-only mode: compile Android/Java sources without downloading ~2 GB of
+// pinned model assets. Never use this mode for an APK: packaging is refused.
+def tripoSourceCheckOnly = providers.gradleProperty('tripoSourceCheckOnly').isPresent()
+if (tripoSourceCheckOnly) {
+    gradle.taskGraph.whenReady { graph ->
+        if (graph.allTasks.any { task ->
+            task.name.startsWith('assemble') || task.name.startsWith('bundle')
+                    || task.name.startsWith('packageDebug') || task.name.startsWith('packageRelease')
+        }) throw new GradleException('tripoSourceCheckOnly vérifie seulement les sources : un APK sans les modèles serait incomplet.')
+    }
+}
 tasks.named('preBuild').configure {
-    dependsOn tasks.named('downloadOfflineTripoSRModels')
-    dependsOn tasks.named('buildMobileViewer')
-    dependsOn tasks.named('downloadAnimeSegmentationModel')
-    dependsOn tasks.named('downloadOfflineDepthModel')
+    if (!tripoSourceCheckOnly) {
+        dependsOn tasks.named('downloadOfflineTripoSRModels')
+        dependsOn tasks.named('buildMobileViewer')
+        dependsOn tasks.named('downloadAnimeSegmentationModel')
+        dependsOn tasks.named('downloadOfflineDepthModel')
+    }
 }
 
 configurations.configureEach {
