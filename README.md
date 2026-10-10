@@ -81,3 +81,8 @@ Pour lancer toutes les vérifications Android de bureau : `./gradlew --no-daemon
 Sur l’accueil, le bouton **Connecté / Déconnecté** active le service Android persistant. Une notification permet de suivre le calcul et de déconnecter le relais. La connexion et les commandes locales continuent pendant YouTube, Netflix, ChatGPT et après fermeture de l’écran ou retrait des applications récentes. Aucun écran partagé n’est nécessaire. La première activation demande l’autorisation des notifications sous Android 13+.
 
 Déconnecter arrête la réception et suspend le travail aux points d’arrêt du moteur. Commande, images, caches IA et GLB déjà sauvegardés sont conservés ; reconnecter reprend automatiquement. Le GLB est enregistré sur le téléphone avant son transfert au relais. Le service redémarre après une interruption de processus quand Android le permet. Un arrêt forcé, l’arrêt via le gestionnaire Android, l’extinction du téléphone ou certaines restrictions du constructeur peuvent arrêter le service : rouvrir l’application pour reprendre.
+
+
+## V6.6.3 : préparation photo renforcée dans TripoSR, 100 % locale
+
+TripoSR reste le moteur principal (une ou quatre images). Une case optionnelle active un renforcement des contours avant l'encodage ONNX local : conservation exacte de la silhouette alpha et de la photo originale pour les textures GLB, traitement borné et compatible avec le cache IA. Un bouton utilise la détection faciale Android locale, avec repli sur la sélection de détail manuelle et le gros plan Depth Anything V2 déjà existant. Aucune clé, aucun serveur GPU, aucune suppression de projet. Les poids TripoSR ne sont pas remplacés et la fidélité géométrique n'est pas garantie par ce filtre.
