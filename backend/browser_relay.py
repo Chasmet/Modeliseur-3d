@@ -29,6 +29,7 @@ from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 from backend.browser_signing import issue_signing
 from backend.browser_workspace import WORKSPACE_ACTIONS, register_workspace
+from backend.browser_keyboard import register_keyboard
 
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "modeliseur-trellis-mcp.onrender.com")
 BASE = "https://" + HOST
@@ -322,6 +323,7 @@ async def heartbeat(request: Request):
             row["page"] = str(payload.get("url", ""))[:500]
             row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
             row["workspace_version"] = min(2, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
+            row["keyboard_version"] = min(1, max(0, payload.get("keyboard_version", 0))) if type(payload.get("keyboard_version")) is int else 0
             if isinstance(payload.get("autonomous"), bool):
                 row["autonomous"] = payload["autonomous"]
             executing = str(payload.get("executing_id", ""))
@@ -433,7 +435,7 @@ async def health(request: Request):
         {
             "ok": True,
             "module": "agentbrowser-mcp",
-            "version": "3.2-mobile-studio",
+            "version": "3.3-agent-keyboard",
             "online_devices": online,
             "configured": len(MASTER) >= 32,
             "command_ttl_seconds": COMMAND_TTL,
@@ -519,8 +521,9 @@ def browser_status() -> dict:
         "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
-        "relay_version": "3.2-mobile-studio",
+        "relay_version": "3.3-agent-keyboard",
         "workspace_version": row.get("workspace_version", 0) if row else 0,
+        "keyboard_version": row.get("keyboard_version", 0) if row else 0,
         "credits": "no AI API or paid browser service",
         "autonomous": row["autonomous"] if row else False,
         "last_seen_seconds": round(time.monotonic() - row["seen"], 1)
@@ -597,7 +600,11 @@ async def browser_click_verified(
 
 @browser_mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": True})
 async def browser_type(selector: str, text: str) -> dict:
-    """Fill an ordinary field. Password, hidden and file fields remain blocked."""
+    """Fill an ordinary field. Password, hidden and file fields remain blocked.
+    Agent keyboard compatibility: selector=chk://keyboard and text=JSON request
+    with target=web/native, operation=inspect/replace/insert/select/key/fill and inspected context.
+    The carrier remains available before the refreshed connector exposes keyboard tools.
+    """
     if not 0 < len(selector) < 350 or len(text) > 8000:
         return {"ok": False, "error": "Sélecteur ou texte trop long."}
     return await issue("type", {"selector": selector, "text": text})
@@ -820,3 +827,5 @@ async def relay_dispatch(scope, receive, send):
             OWNER.reset(context)
     else:
         await browser_http(scope, receive, send)
+
+register_keyboard(browser_mcp, issue, OWNER, state)
