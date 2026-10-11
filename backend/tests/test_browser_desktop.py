@@ -118,3 +118,43 @@ def test_fifty_step_task_and_hundreds_of_file_selection_fit_contract():
     steps = [{"id": str(i), "action": "files_write_text", "args": {"path": f"file-{i}.txt", "text": "ok"}, "verify": {"action": "files_read_text", "args": {"path": f"file-{i}.txt"}, "expect": {"text": "ok"}}} for i in range(50)]
     validate({"tool": "tasks", "operation": "submit", "id": "fixture", "steps": steps})
     validate({"tool": "files", "operation": "plan", "id": "fixture", "paths": [f"file-{i}.txt" for i in range(500)]})
+
+
+@pytest.mark.asyncio
+async def test_fifty_steps_work_through_the_installed_carrier_without_repairing():
+    row = relay.get_device(DEVICE)
+    row.update(seen=time.monotonic(), desktop_version=1)
+    token = relay.OWNER.set(DEVICE)
+    try:
+        steps = [{"id": str(i), "action": "files_write_text", "args": {"path": f"file-{i}.txt", "text": "v" * 120}} for i in range(50)]
+        text = json.dumps({"tool": "tasks", "operation": "submit", "id": "fixture", "steps": steps})
+        assert 8000 < len(text) < 60000
+        task = asyncio.create_task(relay.browser_type("chk://desktop", text))
+        await asyncio.sleep(0)
+        command = row["commands"][0]
+        assert len(command["args"]["steps"]) == 50
+        row["pending"][command["id"]].set_result({"ok": True, "result": '{"ok":true,"state":"running"}'})
+        assert (await task)["state"] == "running"
+    finally:
+        relay.OWNER.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_screenshot_tool_returns_mcp_image_and_coordinate_metadata():
+    row = relay.get_device(DEVICE)
+    row.update(seen=time.monotonic(), desktop_version=1)
+    token = relay.OWNER.set(DEVICE)
+    try:
+        task = asyncio.create_task(relay.browser_mcp.call_tool("browser_desktop_screenshot", {}))
+        for _ in range(30):
+            await asyncio.sleep(0)
+            if row["commands"]:
+                break
+        command = row["commands"][0]
+        row["pending"][command["id"]].set_result({"ok": True, "result": json.dumps({"ok": True, "jpeg_base64": "/9j/2Q==", "context": "screen:x", "width": 480, "image_width": 480})})
+        result = await task
+        content = result[0] if isinstance(result, tuple) else result
+        assert any(getattr(block, "type", None) == "image" for block in content)
+        assert "screen:x" in str(content)
+    finally:
+        relay.OWNER.reset(token)

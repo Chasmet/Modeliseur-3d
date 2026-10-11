@@ -609,7 +609,7 @@ async def browser_type(selector: str, text: str) -> dict:
     selector=chk://desktop transports JSON requests for pointer/vision/files/tasks/terminal.
     The carriers remain available before the refreshed connector exposes the new tools.
     """
-    if not 0 < len(selector) < 350 or len(text) > 8000:
+    if not 0 < len(selector) < 350 or len(text) > (60000 if selector == "chk://desktop" else 8000):
         return {"ok": False, "error": "Sélecteur ou texte trop long."}
     if selector == "chk://desktop":
         try:
