@@ -2,9 +2,11 @@
 import asyncio
 import hashlib
 import json
+import os
 import time
 import httpx
 import pytest
+os.environ.setdefault("BROWSER_RELAY_SECRET", "test-only-secret-not-for-production-123456789")
 from backend import browser_relay as relay
 from backend.browser_desktop import validate
 
