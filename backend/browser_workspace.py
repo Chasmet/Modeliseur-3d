@@ -14,6 +14,7 @@ WORKSPACE_ACTIONS = frozenset({
     "video_editor_status", "video_editor_project_read", "video_editor_project_save",
     "video_editor_preset_alpha_omega", "video_editor_export", "video_editor_cancel",
     "video_editor_verify_output", "media_info", "media_frame", "media_codecs", "files_catalog", "files_copy",
+    "document_read", "document_page", "media_transcribe", "media_model_status",
 })
 
 
@@ -37,6 +38,8 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
             return {"ok": False, "error": "Mets à jour l’APK CHK Agent Browser pour activer Fichiers et Notes."}
         if row and row.get("workspace_version",0)<2 and (action.startswith("media_") or action in {"files_catalog","files_copy","video_editor_project_save"}):
             return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour utiliser le nouveau Studio et les outils média."}
+        if row and row.get("workspace_version",0)<3 and action in {"document_read","document_page","media_transcribe","media_model_status"}:
+            return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour lire les PDF, OCR et audio."}
         return await issue(action, args or {})
 
     async def path_call(action, path, args=None, root=False):
@@ -72,7 +75,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
 
     @mcp.tool(annotations=read)
     async def browser_files_read_text(path: str, offset: int = 0) -> dict:
-        """Read UTF-8 workspace text (file max 64 KiB), 12,000 characters per page. Use next_offset."""
+        """Read UTF-8 text or extract text from a PDF, DOCX or picture (OCR). Speech in FR is supported for an audio/video file. 12,000 characters per page; use next_offset or document_read for page navigation. Preview permission is required for transcription."""
         return await path_call("files_read_text", path, {"offset": max(0, offset)})
 
     @mcp.tool(annotations=read)
@@ -150,7 +153,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
 
     @mcp.tool(annotations=read)
     async def browser_files_preview(path: str):
-        """Show an image file from Files as a bounded JPEG thumbnail. Phone preview sharing must be enabled."""
+        """Show a bounded JPEG preview of an image or the first PDF page in Files. Phone preview sharing must be enabled."""
         reply = await path_call("files_preview", path)
         if not reply.get("ok"):
             return reply
@@ -346,3 +349,47 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
             return Image(data=raw,format="jpeg")
         except (ValueError,KeyError,TypeError):
             return {"ok":False,"error":"Image vidéo invalide."}
+
+
+    # Multimodal reader v3. Read-only commands run exclusively on the owner's Android app.
+    @mcp.tool(annotations=read)
+    async def browser_document_read(path: str, page: int = 1, page_count: int = 8, offset: int = 0) -> dict:
+        """Extract text from local PDF / scanned PDF with on-phone OCR, DOCX, or pictures.
+        page is 1-based; 1–8 PDF pages per call, with next_page for subsequent pages.
+        The file remains unchanged. No external OCR service receives the content."""
+        if page<1 or not 1<=page_count<=8 or offset<0:
+            return {"ok":False,"error":"Page, nombre de pages ou position invalide."}
+        return await path_call("document_read",path,{"page":page,"page_count":page_count,"offset":offset})
+
+    @mcp.tool(annotations=read)
+    async def browser_document_page(path: str, page: int = 1):
+        """Display a scanned or native PDF page as JPEG for visual inspection.
+        Pages are 1-based; read-only, local Android PDF renderer; preview consent required."""
+        if page<1 or page>10000:
+            return {"ok":False,"error":"Numéro de page invalide."}
+        reply=await path_call("document_page",path,{"page":page-1})
+        if not reply.get("ok"):
+            return reply
+        try:
+            data=json.loads(reply["result"])
+            raw=base64.b64decode(data["jpeg_base64"],validate=True)
+            if len(raw)>180000 or not raw.startswith(b"\\xff\\xd8"):
+                raise ValueError("Image PDF non reconnue.")
+            return Image(data=raw,format="jpeg")
+        except (ValueError,KeyError,TypeError):
+            return {"ok":False,"error":"Aperçu de la page indisponible."}
+
+    @mcp.tool(annotations=read)
+    async def browser_media_model_status() -> dict:
+        """Check whether French and English offline voice-recognition models are installed on the phone."""
+        return await call("media_model_status")
+
+    @mcp.tool(annotations={**read,"openWorldHint":True})
+    async def browser_media_transcribe(path: str, language: str = "fr", max_seconds: int = 120) -> dict:
+        """Transcribe owner-authorized audio or a video's audio track locally in French or English.
+        First call may download the open-source Vosk voice model (about 40 MB) to the phone.
+        Audio is never uploaded to Render or to a transcription service. Preview consent required.
+        Source formats depend on Android audio codecs, and recognition may be inaccurate."""
+        if language not in {"fr","en"} or not 1<=max_seconds<=180:
+            return {"ok":False,"error":"Langue fr/en et durée de 1 à 180 s attendues."}
+        return await path_call("media_transcribe",path,{"language":language,"max_seconds":max_seconds})
