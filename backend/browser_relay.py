@@ -323,7 +323,7 @@ async def heartbeat(request: Request):
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
             row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
-            row["workspace_version"] = min(2, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
+            row["workspace_version"] = min(3, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
             row["keyboard_version"] = min(1, max(0, payload.get("keyboard_version", 0))) if type(payload.get("keyboard_version")) is int else 0
             row["desktop_version"] = min(1,max(0,payload.get("desktop_version",0))) if type(payload.get("desktop_version")) is int else 0
             if isinstance(payload.get("autonomous"), bool):
@@ -523,7 +523,7 @@ def browser_status() -> dict:
         "session_source": row.get("session_source", "unknown") if row else "unknown",
         "url": row["page"] if row else "",
         "transport": "Android WebView via isolated Render relay",
-        "relay_version": "3.4-agent-desktop",
+        "relay_version": "3.5-universal-reader",
         "workspace_version": row.get("workspace_version", 0) if row else 0,
         "keyboard_version": row.get("keyboard_version", 0) if row else 0,
         "desktop_version": row.get("desktop_version", 0) if row else 0,
