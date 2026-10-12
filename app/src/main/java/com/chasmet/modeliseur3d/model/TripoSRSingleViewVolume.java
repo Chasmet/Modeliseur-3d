@@ -23,6 +23,21 @@ public final class TripoSRSingleViewVolume {
         TripoAdaptiveMesher.Result selected=TripoAdaptiveMesher.build(field,baseBudget,options.adaptiveMeshing);
         MeshData mesh=selected.mesh;int w=selected.w,h=selected.h,d=selected.d;
         if(mesh==null||mesh.getTriangleCount()<24)throw new IllegalArgumentException("Image non exploitable par TripoSR. Vérifie le sujet entier.");
+        // A stronger, conservative mesh pass on devices with enough Java heap.
+        // The learned field remains unchanged; fallback preserves previous behavior.
+        long heap=Runtime.getRuntime().maxMemory();
+        if(options.maximumPower&&heap>=512L*1024*1024&&selected.mesh.getTriangleCount()<baseBudget*.80f){
+            int extraBudget=Math.min(options.triangleBudget(),Math.round(baseBudget*1.20f));
+            try{
+                TripoAdaptiveMesher.Result stronger=TripoAdaptiveMesher.build(field,extraBudget,true);
+                if(stronger.mesh!=null&&stronger.mesh.getTriangleCount()>mesh.getTriangleCount()
+                        &&stronger.mesh.getTriangleCount()<=extraBudget){
+                    selected=stronger;mesh=stronger.mesh;w=stronger.w;h=stronger.h;d=stronger.d;
+                }
+            }catch(OfflineHullMesher.TooComplexException ignored){
+                // Preserve the first, valid reconstruction.
+            }
+        }
         float[] p=mesh.getPositions();for(int i=0;i<p.length;i+=3){p[i]=b[1]+(p[i]*h/w+1)*.5f*(b[4]-b[1]);p[i+1]=b[2]+(p[i+1]+1)*.5f*(b[5]-b[2]);p[i+2]=b[0]+(p[i+2]*h/d+1)*.5f*(b[3]-b[0]);}
         mesh=TripoSRFourViewVolume.removeTinyComponents(mesh);
         OfflineMeshFinisher.Result finished=OfflineMeshFinisher.finish(mesh,smoothing,.4f*(b[5]-b[2])/(h-1));
