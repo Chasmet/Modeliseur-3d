@@ -18,24 +18,17 @@ public final class TripoSRSingleViewVolume {
     }
     public static OfflineImageVolume.Result buildDetailed(TripoSRRefinedField field,Bitmap photo,boolean smoothing,TripoQualityOptions options,TripoDetailRegion region,OfflineDepthField detailDepth,float detailStrength){
         if(field==null||photo==null||photo.isRecycled())throw new IllegalArgumentException("Image et champ détaillé requis.");
-        int w=field.ny,h=field.nz,d=field.nx;MeshData mesh=null;float[] b=field.bounds;
+        float[] b=field.bounds;
         boolean closeup=region!=null&&detailDepth!=null&&detailStrength>0;int baseBudget=options.baseTriangleBudget(closeup);
-        for(int attempt=0;attempt<4;attempt++){
-            float[] values=new float[w*h*d];
-            for(int y=1;y<h-1;y++){
-                check();float yy=b[5]-(b[5]-b[2])*y/(h-1);
-                for(int x=1;x<w-1;x++)for(int z=1;z<d-1;z++)values[(y*w+x)*d+z]=field.probability(b[1]+(b[4]-b[1])*x/(w-1),yy,b[0]+(b[3]-b[0])*z/(d-1));
-            }
-            try{mesh=OfflineHullMesher.buildDetailedField(values,w,h,d,baseBudget);break;}
-            catch(OfflineHullMesher.TooComplexException e){w=Math.max(8,Math.round(w*.8f));h=Math.max(8,Math.round(h*.8f));d=Math.max(8,Math.round(d*.8f));}
-        }
+        TripoAdaptiveMesher.Result selected=TripoAdaptiveMesher.build(field,baseBudget,options.adaptiveMeshing);
+        MeshData mesh=selected.mesh;int w=selected.w,h=selected.h,d=selected.d;
         if(mesh==null||mesh.getTriangleCount()<24)throw new IllegalArgumentException("Image non exploitable par TripoSR. Vérifie le sujet entier.");
         float[] p=mesh.getPositions();for(int i=0;i<p.length;i+=3){p[i]=b[1]+(p[i]*h/w+1)*.5f*(b[4]-b[1]);p[i+1]=b[2]+(p[i+1]+1)*.5f*(b[5]-b[2]);p[i+2]=b[0]+(p[i+2]*h/d+1)*.5f*(b[3]-b[0]);}
         mesh=TripoSRFourViewVolume.removeTinyComponents(mesh);
         OfflineMeshFinisher.Result finished=OfflineMeshFinisher.finish(mesh,smoothing,.4f*(b[5]-b[2])/(h-1));
         MeshData detailed=finished.mesh;String detailMethod="";
         if(region!=null&&detailDepth!=null){TripoDetailRefiner.Result refinement=TripoDetailRefiner.refine(detailed,photo,region,detailDepth,detailStrength,options.triangleBudget());detailed=refinement.mesh;detailMethod=" · "+refinement.summary();}
-        return TripoSRPhotoTexture.bake(detailed,field,photo,"TripoSR IA 3D · 1 image · grille centrée "+field.nx+" × "+field.ny+" × "+field.nz+" · maillage "+w+" × "+h+" × "+d+" · budget "+options.triangleBudget()+" triangles"+(closeup?" · réserve gros plan "+(options.triangleBudget()-baseBudget):"")+((w<field.ny||h<field.nz||d<field.nx)?" · grille réduite pour respecter le budget de triangles":" · détail intégral")+(options.maximumPower?" · puissance maximale":"")+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts"+detailMethod,options,region);
+        return TripoSRPhotoTexture.bake(detailed,field,photo,"TripoSR IA 3D · 1 image · grille centrée "+field.nx+" × "+field.ny+" × "+field.nz+" · maillage "+w+" × "+h+" × "+d+" · budget "+options.triangleBudget()+" triangles"+(closeup?" · réserve gros plan "+(options.triangleBudget()-baseBudget):"")+((w<field.ny||h<field.nz||d<field.nx)?" · grille optimisée selon le budget de triangles":" · détail intégral")+(options.adaptiveMeshing?" · précision adaptative "+selected.attempts+" essais":"")+(options.maximumPower?" · puissance maximale":"")+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts"+detailMethod,options,region);
     }
 
     public static OfflineImageVolume.Result build(TripoSRField field,boolean smoothing){
