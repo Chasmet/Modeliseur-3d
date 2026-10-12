@@ -9,3 +9,9 @@ Aucun composant Python, Electron ni modèle GPU de Modly n’est embarqué dans 
 Based on [Modly](https://github.com/lightningpixel/modly) by [Lightning Pixel](https://github.com/lightningpixel).
 
 Modly est distribué sous licence MIT. Le texte de sa licence est disponible dans son dépôt d’origine.
+
+
+AndroidX ExifInterface 1.4.2 — Android Open Source Project / Google et contributeurs.
+Licence Apache-2.0. Correction locale des huit orientations EXIF dans le troisième atelier.
+Source : https://android.googlesource.com/platform/frameworks/support/+/androidx-main/exifinterface/
+Licence embarquée : assets/licenses/androidx-exifinterface-Apache-2.0.txt
