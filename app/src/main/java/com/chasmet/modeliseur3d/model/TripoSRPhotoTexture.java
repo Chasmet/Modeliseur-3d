@@ -210,6 +210,7 @@ public final class TripoSRPhotoTexture {
                 }
                 atlas.setPixels(row,0,cell,(v%columns)*cell,(v/columns)*cell+y,cell,1);
             }
+            if(options.adaptiveMeshing)TripoHiddenTextureDenoiser.improve(atlas,cell,columns);
             return new OfflineImageVolume.Result(new MeshData(Arrays.copyOf(outP,count*3),Arrays.copyOf(outN,count*3),Arrays.copyOf(uv,count*2),ids),atlas,method+" · profondeur de texture interpolée · photo "+Math.round(options.photoWeight*100)+" % sur surfaces visibles + couleurs IA cachées · atlas continu "+(cell*columns)+" × "+(cell*2)+(region==null?"":" · zone détail : texture dédiée "+cell+" × "+cell+" · projection stable"));
         }catch(RuntimeException|Error e){atlas.recycle();throw e;}
     }

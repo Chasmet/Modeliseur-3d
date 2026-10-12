@@ -1,3 +1,11 @@
+# Modéliseur 3D 6.6.4 — amélioration locale TripoSR
+
+Cette version conserve les moteurs et les modèles précédents. Dans l'atelier **TripoSR · 1 seule image**, la nouvelle case **Précision 3D adaptative + finition des faces cachées** est activée par défaut. Elle recherche une grille de maillage adaptée au budget de triangles au lieu de multiplier les réductions fixes de 20 %. Un filtre de couleur léger, bilatéral, ne traite que les vues cachées estimées par l'IA : la face photographiée et le gros plan ne sont pas lissés par ce filtre.
+
+Le nouveau mode utilise plus de CPU et peut prolonger le calcul, mais il **n'augmente pas artificiellement la résolution apprise par TripoSR**, ne crée pas de véritables observations des côtés invisibles et ne garantit pas une meilleure ressemblance. Il est désactivable et utilise la même inférence TripoSR mise en cache ; l'ancienne génération reste disponible pour comparer. Le plafond de triangles, les seuils mémoire, la signature Android et le stockage des projets restent inchangés.
+
+Les tests hors connexion doivent vérifier la géométrie, le filtre colorimétrique, la version Android, le pipeline TripoSR, puis la signature de l'APK avant publication.
+
 # Modéliseur 3D V6.6.1 — puissance maximale et détails locaux
 
 Trois onglets à l’accueil : **2.5D**, **3D** et **TRELLIS**. Le catalogue de 259 assets reste accessible.

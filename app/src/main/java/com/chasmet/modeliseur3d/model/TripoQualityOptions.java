@@ -6,13 +6,17 @@ public final class TripoQualityOptions {
     public final float photoWeight;
     public final boolean preserveFineDetail;
     public final boolean maximumPower;
+    public final boolean adaptiveMeshing;
     public TripoQualityOptions(int textureCell,float photoWeight,boolean preserveFineDetail) {
         this(textureCell,photoWeight,preserveFineDetail,false);
     }
     public TripoQualityOptions(int textureCell,float photoWeight,boolean preserveFineDetail,boolean maximumPower) {
+        this(textureCell,photoWeight,preserveFineDetail,maximumPower,false);
+    }
+    public TripoQualityOptions(int textureCell,float photoWeight,boolean preserveFineDetail,boolean maximumPower,boolean adaptiveMeshing) {
         if(textureCell!=512&&textureCell!=768&&textureCell!=1024)throw new IllegalArgumentException("Texture invalide.");
         if(!Float.isFinite(photoWeight)||photoWeight<0||photoWeight>1)throw new IllegalArgumentException("Fidélité photo invalide.");
-        this.textureCell=textureCell;this.photoWeight=photoWeight;this.preserveFineDetail=preserveFineDetail;this.maximumPower=maximumPower;
+        this.textureCell=textureCell;this.photoWeight=photoWeight;this.preserveFineDetail=preserveFineDetail;this.maximumPower=maximumPower;this.adaptiveMeshing=adaptiveMeshing;
     }
     public static TripoQualityOptions defaults(){return new TripoQualityOptions(1024,1,true);}
     public int effectiveTextureCell(){return effectiveTextureCell(Runtime.getRuntime().maxMemory());}
