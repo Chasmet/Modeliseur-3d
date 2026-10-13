@@ -118,12 +118,13 @@ public final class Offline3DActivity extends AppCompatActivity {
         if(fusion360)text(p,"SCAN 3D MULTIVUE · FACE / DOS / DROITE / GAUCHE · SANS CRÉDITS. Les quatre vues doivent représenter le même sujet et la même pose. TripoSR conserve la forme apprise ; Depth Anything V2 peut ajouter un relief local borné. Les parties réellement invisibles restent estimées.",15);
         projectName=new EditText(this);projectName.setSingleLine(true);projectName.setHint("Nom du projet (facultatif)");projectName.setText(isMcp()?"ChatGPT "+mcpCommandId.substring(0,8):prefs().getString("projectName",""));p.addView(projectName);
         modeHelp=text(p,"Quatre vues du même objet entier, dans la même pose : face, dos, profil droit et profil gauche. Une forme 3D apprise est calculée pour chaque photo, puis les quatre formes sont alignées et combinées avec les silhouettes et textures réelles. Tout se calcule sur ce téléphone, sans serveur.",16);
+        if(fusion360)text(p,"1 · Tes quatre photos",20);
         text(p,"Moteur de reconstruction",18);engine=spinner(p,"TripoSR · 4 images","Silhouettes · rapide","TripoSR · 1 seule image");
         int requestedEngine=fusion360?0:getIntent().getBooleanExtra(EXTRA_SINGLE_IMAGE,false)?2:Math.max(0,Math.min(2,prefs().getInt("engine",0)));
         if(isMcp())requestedEngine=mcpMode.startsWith("silhouettes")?1:(mcpMode.endsWith("_single")?2:0);
         engine.setSelection(requestedEngine);
         fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");
-        fourViews.setChecked(fusion360||isMcp()?(!isMcp()||mcpMode.endsWith("_four")):(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true))));p.addView(fourViews);
+        fourViews.setChecked(fusion360||(isMcp()?mcpMode.endsWith("_four"):(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true)))));p.addView(fourViews);
         countLabel=text(p,"",16);
         for(int row=0;row<2;row++) {
             LinearLayout line=new LinearLayout(this);line.setOrientation(LinearLayout.HORIZONTAL);p.addView(line);
@@ -140,7 +141,7 @@ public final class Offline3DActivity extends AppCompatActivity {
             }
         }
         choose=choices[0];rotate=rotations[0];preview=previews[0];
-        text(p,"Détail du modèle",18);quality=spinner(p,"Rapide · économie de mémoire","Équilibré","Précis · plus lent");
+        text(p,fusion360?"2 · Qualité du scan":"Détail du modèle",18);quality=spinner(p,"Rapide · économie de mémoire","Équilibré","Précis · plus lent");
         int requestedQuality="fast".equals(mcpQuality)?0:"precise".equals(mcpQuality)?2:1;
         quality.setSelection(fusion360?2:isMcp()?requestedQuality:prefs().getInt("quality",1));
         shape=spinner(p,"Volume arrondi","Relief fin","Objet rond à 360° · vase / bouteille");shape.setSelection(prefs().getInt("shape",0));
@@ -153,13 +154,13 @@ public final class Offline3DActivity extends AppCompatActivity {
         fusionDepth=new CheckBox(this);fusionDepth.setText("Assistance profondeur · Depth Anything V2 sur les 4 vues (hors ligne)");fusionDepth.setChecked(prefs().getBoolean("fusionDepth",true));p.addView(fusionDepth);
         if(fusion360)text(p,"La profondeur IA est relative : cette assistance conserve la forme principale de TripoSR, affine prudemment les reliefs visibles et évite les grandes déformations. Désactive-la si les photos présentent de gros écarts de pose.",14);
         text(p,"TripoSR, IS-Net et Depth Anything sont embarqués dans l’APK. TripoSR calcule une image ou les quatre vues successivement sur CPU ; le premier calcul peut prendre plusieurs minutes. Garde l’application ouverte. Les formes apprises sont conservées pour les réglages suivants.",14);
-        text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
-        text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
+        if(!fusion360)text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
+        if(!fusion360)text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
         smoothing=new CheckBox(this);smoothing.setText("Lissage léger du maillage IA");smoothing.setChecked(isMcp()?mcpSmoothing:prefs().getBoolean("smoothing",true));p.addView(smoothing);
         text(p,"Le lissage réduit les bosses de la grille sans assembler des morceaux séparés. Il réutilise les formes IA en cache. Désactive-le pour garder toute la rugosité du champ appris.",14);
         text(p,"Finition TripoSR",20);
-        textureQuality=spinner(p,"Texture légère · 512 pixels par face","Texture HD · 768 pixels par face","Texture maximale · 1 024 pixels par face");textureQuality.setSelection(Math.max(0,Math.min(2,prefs().getInt("textureQuality",2))));
-        fineDetail=new CheckBox(this);fineDetail.setText("Préserver le détail fin · TripoSR 1 image");fineDetail.setChecked(fusion360||prefs().getBoolean("fineDetail",true));p.addView(fineDetail);
+        textureQuality=spinner(p,"Texture légère · 512 pixels par face","Texture HD · 768 pixels par face","Texture maximale · 1 024 pixels par face");textureQuality.setSelection(fusion360?2:Math.max(0,Math.min(2,prefs().getInt("textureQuality",2))));
+        fineDetail=new CheckBox(this);fineDetail.setText(fusion360?"Préserver les détails fins · fusion 4 vues":"Préserver le détail fin · TripoSR 1 image");fineDetail.setChecked(fusion360||prefs().getBoolean("fineDetail",true));p.addView(fineDetail);
         maximumPower=new CheckBox(this);maximumPower.setText("Puissance maximale · calcul plus long");maximumPower.setChecked(fusion360||prefs().getBoolean("maximumPower",true));p.addView(maximumPower);
         tripoInputBoost=new CheckBox(this);tripoInputBoost.setText("Améliorer les détails de l’image avant TripoSR · local / sans crédits");tripoInputBoost.setChecked(prefs().getBoolean("tripoInputBoost",true));p.addView(tripoInputBoost);
         text(p,"Le renforcement local préserve la transparence et accentue légèrement les textures avant le réseau TripoSR. L’image originale reste utilisée pour le GLB. Option désactivable si le résultat est moins fidèle. Aucun téléchargement ni calcul distant.",14);
@@ -178,12 +179,12 @@ public final class Offline3DActivity extends AppCompatActivity {
         detailLabel=text(p,"Relief du détail : "+prefs().getInt("detailStrength",70)+" %",16);
         detailStrength=new SeekBar(this);detailStrength.setMax(100);detailStrength.setProgress(prefs().getInt("detailStrength",70));p.addView(detailStrength);
         detailStrength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar bar,int value,boolean user){detailLabel.setText("Relief du détail : "+value+" % · 0 % conserve uniquement la texture du gros plan");}public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}});
-        text(p,"Une image : encadre les yeux, le nez et la bouche, ou un autre détail. Le gros plan réserve sa propre texture et ajoute un relief local borné avec Depth Anything. Une zone de départ est proposée ; ajuste-la au sujet. Il ne détecte pas automatiquement les visages. Réimporte une photo HD pour garder jusqu’à 2 048 pixels selon la mémoire.",14);
+        if(!fusion360)text(p,"Une image : encadre les yeux, le nez et la bouche, ou un autre détail. Le gros plan réserve sa propre texture et ajoute un relief local borné avec Depth Anything. Une zone de départ est proposée ; ajuste-la au sujet. Il ne détecte pas automatiquement les visages. Réimporte une photo HD pour garder jusqu’à 2 048 pixels selon la mémoire.",14);
         text(p,"Puissance disponible : "+TripoComputePolicy.summary(this),14);
         photoCheck=button(p,"Diagnostiquer mes images avant calcul",this::diagnosePhotos);
         compare=button(p,"Comparer les silhouettes des quatre vues",this::compareSilhouettes);
         inspect=button(p,"Vérifier le détourage avant de générer",this::inspectCutout);
-        generate=button(p,"Générer sur ce téléphone",this::generate);
+        generate=button(p,fusion360?"Créer mon scan Tripo Fusion 360°":"Générer sur ce téléphone",this::generate);
         cancel=button(p,"Arrêter après l’étape en cours",()->{cancelled=true;Thread thread=runningThread;if(thread!=null)thread.interrupt();status.setText("Arrêt demandé… Les modèles enregistrés sont conservés.");cancel.setEnabled(false);});
         progress=new ProgressBar(this);p.addView(progress);status=text(p,"Prêt hors connexion. Aucun compte ni serveur requis.",16);
         open=button(p,"Ouvrir mon modèle",()->openModel(lastId));export=button(p,"Exporter mon GLB",()->exporter.launch("volume-local-"+lastId.substring(0,8)+".glb"));
@@ -494,7 +495,7 @@ public final class Offline3DActivity extends AppCompatActivity {
                 }checkpoint();
                 if(!output.getParentFile().isDirectory()&&!output.getParentFile().mkdirs())throw new IOException("Stockage du modèle indisponible.");
                 org.json.JSONObject provenance=new org.json.JSONObject().put("appVersion",UpdateManager.currentVersion(this))
-                    .put("reconstructionMode",fusion360?"tripo-fusion-360":single?"single-image":multiple?"four-view":"silhouette-single").put("hiddenSurfacesEstimated",single)
+                    .put("reconstructionMode",fusion360?"tripo-fusion-360":single?"single-image":multiple?"four-view":"silhouette-single").put("hiddenSurfacesEstimated",single||fusion360)
                     .put("engine",learned?"TripoSR":multiple?"Silhouettes":"Volume local").put("method",result.method)
                     .put("projectName",savedProject).put("localOnly",true).put("inputViews",bitmaps.length)
                     .put("fusion360",fusion360).put("fusionDepthRequested",useFusionDepth).put("fusionDepthUsed",useFusionDepth&&fields!=null).put("textureMode",single?"visible-photo-neural-hidden":"existing").put("localTripoInputBoost",boostInput).put("adaptiveMeshing",finishOptions.adaptiveMeshing).put("tripoInputBoostRevision",boostInput?TripoInputDetailBoost.CACHE_REVISION:"disabled").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
