@@ -1,0 +1,57 @@
+name: Vérifier Tripo Fusion 360
+
+on:
+  push:
+    branches:
+      - agent/tripo-fusion-360-v6.6.5
+      - agent/trellis-third-tab-auto-update
+    paths:
+      - 'app/**'
+      - 'tools/android-smoke/**'
+      - '.github/workflows/tripo-fusion-360.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-depth-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Préparer Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+          chmod +x gradlew
+      - name: Vérifier le nouvel onglet et l'export GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'fusion360Button' app/src/main/res/layout/activity_home.xml
+          grep -Fq 'EXTRA_FUSION_360' app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
+          grep -Fq 'buildFusion(' app/src/main/java/com/chasmet/modeliseur3d/model/TripoSRFourViewVolume.java
+          grep -Fq '"tripo-fusion-360"' app/src/main/java/com/chasmet/modeliseur3d/Offline3DActivity.java
+      - name: Compiler toutes les sources Android et tester le relief
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon -PtripoSourceCheckOnly -PofflineSmoke \
+            :app:compileDebugJavaWithJavac :app:testDebugUnitTest \
+            --tests 'com.chasmet.modeliseur3d.TripoFusion360AndroidTest'
+      - name: Archiver le rapport des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripo-fusion-360-source-tests
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
