@@ -164,6 +164,6 @@ public final class TripoSRFourViewVolume {
             mesh=refined.mesh;depthMethod=" · "+refined.summary();
         }
         return VisibilityPhotoTexture.bake(mesh,images,fa,sa,scale,calibration,
-            (fusion?"Tripo Fusion 360° · TripoSR + contours + textures 4 vues":"TripoSR IA 3D · 4 vues recalées")+" · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · grille finale "+w+" × "+h+" × "+d+" · budget "+(fusion?options.triangleBudget():120000)+" triangles"+depthMethod+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
+            (fusion?"Tripo Fusion 360° · silhouettes protégées (3 vues concordantes sur 4) + TripoSR + textures réelles":"TripoSR IA 3D · 4 vues recalées")+" · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · grille finale "+w+" × "+h+" × "+d+" · budget "+(fusion?options.triangleBudget():120000)+" triangles"+depthMethod+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
     }
 }
