@@ -127,11 +127,18 @@ public final class TripoSRFourViewVolume {
                     // solely because opposite masks disagree by a subpixel amount.
                     float contour=Math.min(Math.min(distances[0][y*w+x],distances[1][y*w+w-1-x]),
                         Math.min(distances[2][y*d+d-1-z],distances[3][y*d+z]));
-                    if(contour<=-1)continue;
+                    if(fusion?!TripoFusionSilhouetteField.hasSupport(contour):contour<=-1)continue;
                     float xx=2f*x/(w-1)-1,yy=1-2f*y/(h-1),zz=2f*z/(d-1)-1;
                     float neural=combineCalibrated(fields,calibration,xx,yy,zz);
-                    float support=Math.max(0,Math.min(1,.76f+.5f*contour));
-                    values[i]=Math.min(neural,support);
+                    if(fusion){
+                        // Critical: four independent TripoSR predictions disagree at the
+                        // arms, face and legs; do NOT let them amputate a photographed
+                        // silhouette. Learned shape only nudges its signed boundary.
+                        values[i]=TripoFusionSilhouetteField.probability(contour,neural);
+                    }else{
+                        float support=Math.max(0,Math.min(1,.76f+.5f*contour));
+                        values[i]=Math.min(neural,support);
+                    }
                 }
             }
             try{mesh=fusion?OfflineHullMesher.buildDetailedField(values,w,h,d,options.triangleBudget()):OfflineHullMesher.buildField(values,w,h,d);break;}
