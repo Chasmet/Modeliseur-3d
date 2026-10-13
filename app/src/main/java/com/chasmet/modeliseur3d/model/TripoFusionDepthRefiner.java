@@ -26,7 +26,7 @@ public final class TripoFusionDepthRefiner {
             throw new IllegalArgumentException("Tripo Fusion : vue ou carte absente.");
         if(!Float.isFinite(frontAspect)||!Float.isFinite(sideAspect)||!Float.isFinite(scale)
                 ||frontAspect<=0||sideAspect<=0||scale<=0)throw new IllegalArgumentException("Projection invalide.");
-        final float maxMove=.010f;
+        final float maxMove=.003f;
         float[] source=mesh.getPositions(),proposed=source.clone(),normals=mesh.getNormals();
         int vertices=source.length/3;int[] indices=mesh.getIndices();
         VisibilityPhotoTexture.DepthMaps visible=new VisibilityPhotoTexture.DepthMaps(mesh,128,frontAspect,sideAspect*scale);
@@ -41,7 +41,7 @@ public final class TripoFusionDepthRefiner {
             float dx=0,dz=0,weightSum=0;
             for(int view=0;view<4;view++){
                 float facing=view==0?normals[i+2]:view==1?-normals[i+2]:view==2?normals[i]:-normals[i];
-                if(facing<.55f||!visible.visible(view,x,y,z))continue;
+                if(facing<.70f||!visible.visible(view,x,y,z))continue;
                 float u=VisibilityPhotoTexture.u(view,x,z,frontAspect,sideAspect*scale),vv=(1-y)*.5f;
                 u=alignment.sourceU(view,u);vv=alignment.sourceV(view,vv);
                 u=.5f+(u-.5f)*(view<2?frontAspect:sideAspect)/(images[view].getWidth()/(float)images[view].getHeight());
@@ -52,8 +52,8 @@ public final class TripoFusionDepthRefiner {
                 for(int yy=-2;yy<=2;yy++)for(int xx=-2;xx<=2;xx++)mean+=field.sample(u+xx*du,vv+yy*dv);
                 // Relative maps cannot establish metric depth, so remove the local average.
                 float residual=clamp(d-mean/25f,-.20f,.20f);
-                float weight=(facing-.55f)/.45f;weight*=weight;
-                float delta=residual*.06f*weight;
+                float weight=(facing-.70f)/.30f;weight*=weight;
+                float delta=residual*.025f*weight;
                 if(view==0)dz+=delta;else if(view==1)dz-=delta;
                 else if(view==2)dx+=delta;else dx-=delta;
                 weightSum+=weight;
