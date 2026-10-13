@@ -49,6 +49,7 @@ public final class HomeActivity extends AppCompatActivity {
         tabs.addTab(tabs.newTabSpec("25d").setIndicator(tabTitle("2.5D")).setContent(R.id.tab25d));
         tabs.addTab(tabs.newTabSpec("3d").setIndicator(tabTitle("3D · 4 images")).setContent(R.id.tab3d));
         tabs.addTab(tabs.newTabSpec("trellis").setIndicator(tabTitle("IA locale")).setContent(R.id.tabTrellis));
+        tabs.addTab(tabs.newTabSpec("fusion360").setIndicator(tabTitle("Fusion 360°")).setContent(R.id.tabFusion360));
         tabs.setCurrentTab(savedInstanceState != null ? savedInstanceState.getInt("homeTab", 1)
                 : getPreferences(MODE_PRIVATE).getInt("homeTab", 1));
         tabs.setOnTabChangedListener(tag -> getPreferences(MODE_PRIVATE).edit().putInt("homeTab", tabs.getCurrentTab()).apply());
@@ -61,6 +62,7 @@ public final class HomeActivity extends AppCompatActivity {
         );
         findViewById(R.id.offline3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class)));
         findViewById(R.id.singleImage3dButton).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class).putExtra(Offline3DActivity.EXTRA_SINGLE_IMAGE,true)));
+        findViewById(R.id.fusion360Button).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class).putExtra(Offline3DActivity.EXTRA_FUSION_360,true)));
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
@@ -85,7 +87,7 @@ public final class HomeActivity extends AppCompatActivity {
 
     private TextView tabTitle(String text) {
         TextView title = new TextView(this);
-        title.setText(text); title.setTextSize(13); title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setText(text); title.setTextSize(12); title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setTextColor(new android.content.res.ColorStateList(new int[][]{{android.R.attr.state_selected},{}},
                 new int[]{android.graphics.Color.WHITE,0xFF121722}));
         title.setGravity(android.view.Gravity.CENTER);
