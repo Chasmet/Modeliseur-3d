@@ -20,12 +20,12 @@ public final class TripoFusionSilhouetteField {
     public static float consensusContour(float front,float back,float right,float left) {
         if(!Float.isFinite(front)||!Float.isFinite(back)||!Float.isFinite(right)||!Float.isFinite(left))
             throw new IllegalArgumentException("Contour multivue non fini.");
-        float worst=Float.POSITIVE_INFINITY,second=Float.POSITIVE_INFINITY;
-        float[] values={front,back,right,left};
-        for(float value:values){
-            if(value<worst){second=worst;worst=value;}
-            else if(value<second)second=value;
-        }
+        // Compute the smallest and second-smallest in registers. This runs once
+        // per 3D voxel; allocating an array here would cause millions of objects.
+        float pairMinA=Math.min(front,back),pairMaxA=Math.max(front,back);
+        float pairMinB=Math.min(right,left),pairMaxB=Math.max(right,left);
+        float worst=Math.min(pairMinA,pairMinB);
+        float second=Math.min(Math.max(pairMinA,pairMinB),Math.min(pairMaxA,pairMaxB));
         if(worst>=.0f||worst<=-6f||second<.5f)return worst;
         return Math.min(second,.75f);
     }
