@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"build":"esbuild viewer.js --bundle --minify --format=iife --target=es2020 --outfile=../../app/src/main/assets/viewer/viewer.js"},"dependencies":{"three":"0.180.0","esbuild":"0.25.10"}}
