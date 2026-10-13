@@ -125,8 +125,10 @@ public final class TripoSRFourViewVolume {
                     int i=(y*w+x)*d+z;
                     // One-pixel signed contour tolerance avoids amputating a thin limb
                     // solely because opposite masks disagree by a subpixel amount.
-                    float contour=Math.min(Math.min(distances[0][y*w+x],distances[1][y*w+w-1-x]),
-                        Math.min(distances[2][y*d+d-1-z],distances[3][y*d+z]));
+                    float front=distances[0][y*w+x],back=distances[1][y*w+w-1-x],
+                            right=distances[2][y*d+d-1-z],left=distances[3][y*d+z];
+                    float contour=fusion?TripoFusionSilhouetteField.consensusContour(front,back,right,left):
+                            Math.min(Math.min(front,back),Math.min(right,left));
                     if(fusion?!TripoFusionSilhouetteField.hasSupport(contour):contour<=-1)continue;
                     float xx=2f*x/(w-1)-1,yy=1-2f*y/(h-1),zz=2f*z/(d-1)-1;
                     float neural=combineCalibrated(fields,calibration,xx,yy,zz);

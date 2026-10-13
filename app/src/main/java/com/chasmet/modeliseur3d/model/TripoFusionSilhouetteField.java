@@ -14,6 +14,22 @@ package com.chasmet.modeliseur3d.model;
 public final class TripoFusionSilhouetteField {
     private TripoFusionSilhouetteField() {}
 
+    /** The four views need not agree pixel-perfectly. One photo may miss a hand
+     * or a leg due to pose, masking or projection. Accept three agreeing views,
+     * but reject a strong mismatch (over six voxels) and reject 2-of-4 guesses. */
+    public static float consensusContour(float front,float back,float right,float left) {
+        if(!Float.isFinite(front)||!Float.isFinite(back)||!Float.isFinite(right)||!Float.isFinite(left))
+            throw new IllegalArgumentException("Contour multivue non fini.");
+        float worst=Float.POSITIVE_INFINITY,second=Float.POSITIVE_INFINITY;
+        float[] values={front,back,right,left};
+        for(float value:values){
+            if(value<worst){second=worst;worst=value;}
+            else if(value<second)second=value;
+        }
+        if(worst>=.0f||worst<=-6f||second<.5f)return worst;
+        return Math.min(second,.75f);
+    }
+
     public static float probability(float signedContour,float neuralConsensus) {
         if(!Float.isFinite(signedContour)||!Float.isFinite(neuralConsensus)
                 ||neuralConsensus<0||neuralConsensus>1)
