@@ -125,13 +125,22 @@ public final class TripoSRFourViewVolume {
                     int i=(y*w+x)*d+z;
                     // One-pixel signed contour tolerance avoids amputating a thin limb
                     // solely because opposite masks disagree by a subpixel amount.
-                    float contour=Math.min(Math.min(distances[0][y*w+x],distances[1][y*w+w-1-x]),
-                        Math.min(distances[2][y*d+d-1-z],distances[3][y*d+z]));
-                    if(contour<=-1)continue;
+                    float front=distances[0][y*w+x],back=distances[1][y*w+w-1-x],
+                            right=distances[2][y*d+d-1-z],left=distances[3][y*d+z];
+                    float contour=fusion?TripoFusionSilhouetteField.consensusContour(front,back,right,left):
+                            Math.min(Math.min(front,back),Math.min(right,left));
+                    if(fusion?!TripoFusionSilhouetteField.hasSupport(contour):contour<=-1)continue;
                     float xx=2f*x/(w-1)-1,yy=1-2f*y/(h-1),zz=2f*z/(d-1)-1;
                     float neural=combineCalibrated(fields,calibration,xx,yy,zz);
-                    float support=Math.max(0,Math.min(1,.76f+.5f*contour));
-                    values[i]=Math.min(neural,support);
+                    if(fusion){
+                        // Critical: four independent TripoSR predictions disagree at the
+                        // arms, face and legs; do NOT let them amputate a photographed
+                        // silhouette. Learned shape only nudges its signed boundary.
+                        values[i]=TripoFusionSilhouetteField.probability(contour,neural);
+                    }else{
+                        float support=Math.max(0,Math.min(1,.76f+.5f*contour));
+                        values[i]=Math.min(neural,support);
+                    }
                 }
             }
             try{mesh=fusion?OfflineHullMesher.buildDetailedField(values,w,h,d,options.triangleBudget()):OfflineHullMesher.buildField(values,w,h,d);break;}
@@ -155,6 +164,6 @@ public final class TripoSRFourViewVolume {
             mesh=refined.mesh;depthMethod=" · "+refined.summary();
         }
         return VisibilityPhotoTexture.bake(mesh,images,fa,sa,scale,calibration,
-            (fusion?"Tripo Fusion 360° · TripoSR + contours + textures 4 vues":"TripoSR IA 3D · 4 vues recalées")+" · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · grille finale "+w+" × "+h+" × "+d+" · budget "+(fusion?options.triangleBudget():120000)+" triangles"+depthMethod+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
+            (fusion?"Tripo Fusion 360° · silhouettes protégées (3 vues concordantes sur 4) + TripoSR + textures réelles":"TripoSR IA 3D · 4 vues recalées")+" · accord face/dos "+Math.round(calibration.frontAgreement*100)+" %, profils "+Math.round(calibration.profileAgreement*100)+" % · "+fields[0].side+"³ neuronal · grille finale "+w+" × "+h+" × "+d+" · budget "+(fusion?options.triangleBudget():120000)+" triangles"+depthMethod+" · CPU local"+(smoothing?" · lissage léger borné":" · sans lissage")+" · "+finished.components+" partie(s) séparée(s) · "+finished.boundaryEdges+" bord(s) ouverts",options);
     }
 }
