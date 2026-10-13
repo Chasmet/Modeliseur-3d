@@ -47,7 +47,8 @@ jobs:
           set -euo pipefail
           ./gradlew --no-daemon -PtripoSourceCheckOnly -PofflineSmoke \
             :app:compileDebugJavaWithJavac :app:testDebugUnitTest \
-            --tests 'com.chasmet.modeliseur3d.TripoFusion360AndroidTest'
+            --tests 'com.chasmet.modeliseur3d.TripoFusion360AndroidTest' \
+            --tests 'com.chasmet.modeliseur3d.NavigationUpdateTest.fourTabsKeepBothEnginesFusionAndAssetsAccessible'
       - name: Archiver le rapport des tests
         if: always()
         uses: actions/upload-artifact@v4
