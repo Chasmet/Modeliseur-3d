@@ -30,6 +30,14 @@ public class TripoFusion360AndroidTest {
         return result;
     }
     private static void recycle(Bitmap[] images){for(Bitmap image:images)image.recycle();}
+    @Test public void threePhotographicSilhouettesCanRescueOneMismatchedView() {
+        assertTrue(TripoFusionSilhouetteField.probability(
+                TripoFusionSilhouetteField.consensusContour(-1,1,1,1),0)>.5f);
+        assertTrue(TripoFusionSilhouetteField.probability(
+                TripoFusionSilhouetteField.consensusContour(-1,-1,1,1),1)<.5f);
+        assertTrue(TripoFusionSilhouetteField.probability(.5f,0)>.5f);
+        assertTrue(TripoFusionSilhouetteField.probability(-.5f,1)<.5f);
+    }
     @Test public void flatDepthNeverChangesTripoSRShape(){
         MeshData mesh=sampleMesh();Bitmap[] images=bitmaps();
         float[] flat=new float[128*128];java.util.Arrays.fill(flat,.5f);
