@@ -23,6 +23,7 @@ import java.util.concurrent.*;
 public final class Offline3DActivity extends AppCompatActivity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     public static final String EXTRA_SINGLE_IMAGE="triposr_single_image";
+    public static final String EXTRA_FUSION_360="triposr_fusion_360";
     public static final String EXTRA_MCP_COMMAND_ID="mcp_command_id";
     public static final String EXTRA_MCP_MODE="mcp_mode";
     public static final String EXTRA_MCP_QUALITY="mcp_quality";
@@ -37,7 +38,7 @@ public final class Offline3DActivity extends AppCompatActivity {
     private EditText projectName;private volatile Thread runningThread;
     private final LinearLayout[] cards=new LinearLayout[4];
     private static final String[] VIEWS={"Face","Dos","Profil droit","Profil gauche"};
-    private CheckBox fourViews;private TextView countLabel;private int selectedSlot;
+    private CheckBox fourViews,fusionDepth;private TextView countLabel;private int selectedSlot;private boolean fusion360;
     private ProgressBar progress;private volatile boolean busy;private volatile boolean cancelled;private String lastId="";
     private String mcpCommandId="",mcpMode="",mcpQuality="precise";private boolean mcpSmoothing=true;private volatile boolean mcpGenerating;
     private android.content.SharedPreferences prefs(){return getSharedPreferences("offline_workshop",MODE_PRIVATE);}
@@ -97,8 +98,10 @@ public final class Offline3DActivity extends AppCompatActivity {
     private Spinner spinner(LinearLayout p,String... choices){Spinner s=new Spinner(this);s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices));p.addView(s);return s;}
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);DiagnosticLog.initialize(this);
+        fusion360=getIntent().getBooleanExtra(EXTRA_FUSION_360,false);
         String incoming=getIntent().getStringExtra(EXTRA_MCP_COMMAND_ID);
         if(incoming!=null&&incoming.matches("[a-f0-9]{32}")){
+            fusion360=false; // Existing MCP commands keep their original, isolated mode.
             mcpCommandId=incoming;
             mcpMode=getIntent().getStringExtra(EXTRA_MCP_MODE);
             if(mcpMode==null)mcpMode="triposr_single";
@@ -111,15 +114,16 @@ public final class Offline3DActivity extends AppCompatActivity {
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(0xFFF4F6FA);
         if(android.os.Build.VERSION.SDK_INT>=29)scroll.setForceDarkAllowed(false);LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);
         int pad=Math.round(20*getResources().getDisplayMetrics().density);p.setPadding(pad,pad,pad,pad);scroll.addView(p);setContentView(scroll);
-        text(p,"Atelier 3D hors connexion",26);
+        text(p,fusion360?"Tripo Fusion 360°":"Atelier 3D hors connexion",26);
+        if(fusion360)text(p,"SCAN 3D MULTIVUE · FACE / DOS / DROITE / GAUCHE · SANS CRÉDITS. Les quatre vues doivent représenter le même sujet et la même pose. TripoSR conserve la forme apprise ; Depth Anything V2 peut ajouter un relief local borné. Les parties réellement invisibles restent estimées.",15);
         projectName=new EditText(this);projectName.setSingleLine(true);projectName.setHint("Nom du projet (facultatif)");projectName.setText(isMcp()?"ChatGPT "+mcpCommandId.substring(0,8):prefs().getString("projectName",""));p.addView(projectName);
         modeHelp=text(p,"Quatre vues du même objet entier, dans la même pose : face, dos, profil droit et profil gauche. Une forme 3D apprise est calculée pour chaque photo, puis les quatre formes sont alignées et combinées avec les silhouettes et textures réelles. Tout se calcule sur ce téléphone, sans serveur.",16);
         text(p,"Moteur de reconstruction",18);engine=spinner(p,"TripoSR · 4 images","Silhouettes · rapide","TripoSR · 1 seule image");
-        int requestedEngine=getIntent().getBooleanExtra(EXTRA_SINGLE_IMAGE,false)?2:Math.max(0,Math.min(2,prefs().getInt("engine",0)));
+        int requestedEngine=fusion360?0:getIntent().getBooleanExtra(EXTRA_SINGLE_IMAGE,false)?2:Math.max(0,Math.min(2,prefs().getInt("engine",0)));
         if(isMcp())requestedEngine=mcpMode.startsWith("silhouettes")?1:(mcpMode.endsWith("_single")?2:0);
         engine.setSelection(requestedEngine);
         fourViews=new CheckBox(this);fourViews.setText("Reconstruction avec les 4 vues (recommandé)");
-        fourViews.setChecked(isMcp()?mcpMode.endsWith("_four"):(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true))));p.addView(fourViews);
+        fourViews.setChecked(fusion360||isMcp()?(!isMcp()||mcpMode.endsWith("_four")):(engine.getSelectedItemPosition()==0||(engine.getSelectedItemPosition()==1&&prefs().getBoolean("fourViews",true))));p.addView(fourViews);
         countLabel=text(p,"",16);
         for(int row=0;row<2;row++) {
             LinearLayout line=new LinearLayout(this);line.setOrientation(LinearLayout.HORIZONTAL);p.addView(line);
@@ -138,14 +142,16 @@ public final class Offline3DActivity extends AppCompatActivity {
         choose=choices[0];rotate=rotations[0];preview=previews[0];
         text(p,"Détail du modèle",18);quality=spinner(p,"Rapide · économie de mémoire","Équilibré","Précis · plus lent");
         int requestedQuality="fast".equals(mcpQuality)?0:"precise".equals(mcpQuality)?2:1;
-        quality.setSelection(isMcp()?requestedQuality:prefs().getInt("quality",1));
+        quality.setSelection(fusion360?2:isMcp()?requestedQuality:prefs().getInt("quality",1));
         shape=spinner(p,"Volume arrondi","Relief fin","Objet rond à 360° · vase / bouteille");shape.setSelection(prefs().getInt("shape",0));
         depthLabel=text(p,"",18);depth=new SeekBar(this);depth.setMax(100);depth.setProgress(prefs().getInt("depth",40));p.addView(depth);
         depth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int value,boolean user){updateDepthLabel();}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});
         depthLabel.setText("Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
         text(p,"Tolérance du fond uni",18);tolerance=new SeekBar(this);tolerance.setMax(100);tolerance.setProgress(prefs().getInt("tolerance",35));p.addView(tolerance);
-        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(isMcp()||prefs().getBoolean("ai",false));p.addView(ai);
+        ai=new CheckBox(this);ai.setText("Détourage IA local IS-Net · plus lent");ai.setChecked(fusion360||isMcp()||prefs().getBoolean("ai",false));p.addView(ai);
         depthAi=new CheckBox(this);depthAi.setText("Profondeur IA locale · Depth Anything V2 Small");depthAi.setChecked(isMcp()||prefs().getBoolean("depthAi",true));p.addView(depthAi);
+        fusionDepth=new CheckBox(this);fusionDepth.setText("Assistance profondeur · Depth Anything V2 sur les 4 vues (hors ligne)");fusionDepth.setChecked(prefs().getBoolean("fusionDepth",true));p.addView(fusionDepth);
+        if(fusion360)text(p,"La profondeur IA est relative : cette assistance conserve la forme principale de TripoSR, affine prudemment les reliefs visibles et évite les grandes déformations. Désactive-la si les photos présentent de gros écarts de pose.",14);
         text(p,"TripoSR, IS-Net et Depth Anything sont embarqués dans l’APK. TripoSR calcule une image ou les quatre vues successivement sur CPU ; le premier calcul peut prendre plusieurs minutes. Garde l’application ouverte. Les formes apprises sont conservées pour les réglages suivants.",14);
         text(p,"Option une image uniquement — Objet rond à 360° : photographie un objet vertical et symétrique. Sa forme tourne autour de son axe ; cette méthode convient aux vases et bouteilles, pas aux personnages. Choisis le moteur Silhouettes pour utiliser cette option.",14);
         text(p,"Le mode IA recale légèrement les vues opposées et utilise leurs contours pour préserver les parties fines. Les textures sont projetées sur les surfaces visibles et raccordées. TripoSR estime les détails ; quatre photos ne garantissent pas une copie exacte. Vérifie une même pose et des profils bien orientés. L’aperçu Géométrie permet de contrôler le volume sans les photos.",14);
@@ -153,11 +159,11 @@ public final class Offline3DActivity extends AppCompatActivity {
         text(p,"Le lissage réduit les bosses de la grille sans assembler des morceaux séparés. Il réutilise les formes IA en cache. Désactive-le pour garder toute la rugosité du champ appris.",14);
         text(p,"Finition TripoSR",20);
         textureQuality=spinner(p,"Texture légère · 512 pixels par face","Texture HD · 768 pixels par face","Texture maximale · 1 024 pixels par face");textureQuality.setSelection(Math.max(0,Math.min(2,prefs().getInt("textureQuality",2))));
-        fineDetail=new CheckBox(this);fineDetail.setText("Préserver le détail fin · TripoSR 1 image");fineDetail.setChecked(prefs().getBoolean("fineDetail",true));p.addView(fineDetail);
-        maximumPower=new CheckBox(this);maximumPower.setText("Puissance maximale · calcul plus long");maximumPower.setChecked(prefs().getBoolean("maximumPower",true));p.addView(maximumPower);
+        fineDetail=new CheckBox(this);fineDetail.setText("Préserver le détail fin · TripoSR 1 image");fineDetail.setChecked(fusion360||prefs().getBoolean("fineDetail",true));p.addView(fineDetail);
+        maximumPower=new CheckBox(this);maximumPower.setText("Puissance maximale · calcul plus long");maximumPower.setChecked(fusion360||prefs().getBoolean("maximumPower",true));p.addView(maximumPower);
         tripoInputBoost=new CheckBox(this);tripoInputBoost.setText("Améliorer les détails de l’image avant TripoSR · local / sans crédits");tripoInputBoost.setChecked(prefs().getBoolean("tripoInputBoost",true));p.addView(tripoInputBoost);
         text(p,"Le renforcement local préserve la transparence et accentue légèrement les textures avant le réseau TripoSR. L’image originale reste utilisée pour le GLB. Option désactivable si le résultat est moins fidèle. Aucun téléchargement ni calcul distant.",14);
-        adaptiveMesh=new CheckBox(this);adaptiveMesh.setText("Précision 3D adaptative + finition des faces cachées · 100 % locale");adaptiveMesh.setChecked(prefs().getBoolean("adaptiveMesh",true));p.addView(adaptiveMesh);
+        adaptiveMesh=new CheckBox(this);adaptiveMesh.setText("Précision 3D adaptative + finition des faces cachées · 100 % locale");adaptiveMesh.setChecked(fusion360||prefs().getBoolean("adaptiveMesh",true));p.addView(adaptiveMesh);
         text(p,"Recherche une grille de maillage plus précise sans dépasser la limite de triangles, puis réduit prudemment les parasites de couleur sur les faces cachées. Calcul plus long, sans nouveau modèle et sans connexion. Désactive cette option pour comparer avec la version précédente.",14);
         text(p,"Le mode maximal utilise une grille plus fine et davantage de triangles sur un téléphone puissant. Il revient au budget normal si la mémoire disponible est insuffisante. Sélectionne Précis pour en profiter.",14);
         maximumPower.setOnCheckedChangeListener((button,checked)->prefs().edit().putBoolean("maximumPower",checked).apply());
@@ -190,6 +196,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         engine.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
             public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
                 if(isMcp())fourViews.setChecked(mcpMode.endsWith("_four"));
+                else if(fusion360)fourViews.setChecked(true);
                 else fourViews.setChecked(position==0||(position==1&&prefs().getBoolean("fourViews",true)));
                 if(position==2)selectedSlot=0;buttons();
             }
@@ -207,7 +214,7 @@ public final class Offline3DActivity extends AppCompatActivity {
         }
     }
     private void updateDepthLabel(){
-        depthLabel.setText(fourViews.isChecked()?"Profondeur des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":shape.getSelectedItemPosition()==2?"Épaisseur déduite de la silhouette pour l’objet rond à 360°":"Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
+        depthLabel.setText(fusion360?"Échelle du volume des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":fourViews.isChecked()?"Profondeur des profils : "+(65+Math.round(depth.getProgress()*.7f))+" %":shape.getSelectedItemPosition()==2?"Épaisseur déduite de la silhouette pour l’objet rond à 360°":"Réglage de l’épaisseur : "+depth.getProgress()+" / 100");
     }
     private void buttons(){
         boolean managed=isMcp();
@@ -217,19 +224,19 @@ public final class Offline3DActivity extends AppCompatActivity {
             choices[slot].setEnabled(!busy&&!managed);rotations[slot].setEnabled(!busy&&!managed&&exists);cards[slot].setVisibility(multiple||slot==0?View.VISIBLE:View.GONE);
             mirrors[slot].setEnabled(!busy&&!managed&&exists);
         }
-        modeHelp.setText(single?"Une seule photo du sujet entier, de face ou de trois-quarts, avec un fond propre ou transparent. TripoSR estime le volume sur ce téléphone. La photo conserve les détails visibles ; les surfaces cachées utilisent les couleurs IA. Le dos et les zones cachées sont estimés, pas mesurés.":"Quatre vues du même objet entier et dans la même pose : face, dos et deux profils. TripoSR combine quatre formes IA ; Silhouettes propose un calcul plus léger.");
+        modeHelp.setText(fusion360?"Tripo Fusion 360° : quatre photos de la même pose. Le moteur combine les reconstructions TripoSR, recale les silhouettes, projette les vraies textures et peut analyser les quatre cartes de profondeur IA, localement. Une vraie mesure à 360° nécessite des photos des surfaces correspondantes.":single?"Une seule photo du sujet entier, de face ou de trois-quarts, avec un fond propre ou transparent. TripoSR estime le volume sur ce téléphone. La photo conserve les détails visibles ; les surfaces cachées utilisent les couleurs IA. Le dos et les zones cachées sont estimés, pas mesurés.":"Quatre vues du même objet entier et dans la même pose : face, dos et deux profils. TripoSR combine quatre formes IA ; Silhouettes propose un calcul plus léger.");
         countLabel.setText(single?(source().isFile()?"1 / 1 image prête. Les autres photos restent conservées.":"0 / 1 image. Choisis une photo dans Face."):multiple?count+" / 4 vues conservées sur ce téléphone. Ajoute les quatre pour générer.":"Une image : volume ou relief approximatif. La photo précédente est conservée dans Face.");
         generate.setEnabled(!busy&&(multiple?count==4:source().isFile()));inspect.setEnabled(!busy&&(multiple?count>0:source().isFile()));
         cancel.setVisibility(busy?View.VISIBLE:View.GONE);cancel.setEnabled(busy&&!cancelled);
         open.setEnabled(!busy&&saved);export.setEnabled(!busy&&saved);gallery.setEnabled(!busy);
         depth.setVisibility(single?View.GONE:View.VISIBLE);depthLabel.setVisibility(single?View.GONE:View.VISIBLE);
-        depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);
+        depth.setEnabled(!busy&&!single&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setEnabled(!busy&&!learned&&(multiple||shape.getSelectedItemPosition()!=2));depthAi.setVisibility(learned?View.GONE:View.VISIBLE);fusionDepth.setVisibility(fusion360?View.VISIBLE:View.GONE);fusionDepth.setEnabled(fusion360&&!busy&&!managed);
         selectDetail.setVisibility(single?View.VISIBLE:View.GONE);detectFaceDetail.setVisibility(single?View.VISIBLE:View.GONE);assistDetail.setVisibility(single?View.VISIBLE:View.GONE);detailLabel.setVisibility(single?View.VISIBLE:View.GONE);detailStrength.setVisibility(single?View.VISIBLE:View.GONE);
         selectDetail.setEnabled(!busy&&!managed&&single&&source().isFile());detectFaceDetail.setEnabled(!busy&&!managed&&single&&source().isFile());assistDetail.setEnabled(!busy&&!managed&&single&&detailRegion!=null);detailStrength.setEnabled(!busy&&!managed&&single&&detailRegion!=null);
-        tripoInputBoost.setEnabled(!busy&&!managed&&learned);tripoInputBoost.setVisibility(learned?View.VISIBLE:View.GONE);adaptiveMesh.setEnabled(!busy&&!managed&&single);adaptiveMesh.setVisibility(single?View.VISIBLE:View.GONE);textureQuality.setEnabled(!busy&&!managed&&learned);fineDetail.setEnabled(!busy&&!managed&&single);maximumPower.setEnabled(!busy&&!managed&&single);maximumPower.setVisibility(single?View.VISIBLE:View.GONE);
-        photoFidelity.setEnabled(!busy&&!managed&&single);photoFidelityLabel.setVisibility(single?View.VISIBLE:View.GONE);photoFidelity.setVisibility(single?View.VISIBLE:View.GONE);fineDetail.setVisibility(single?View.VISIBLE:View.GONE);photoCheck.setEnabled(!busy&&!managed);
+        tripoInputBoost.setEnabled(!busy&&!managed&&learned);tripoInputBoost.setVisibility(learned?View.VISIBLE:View.GONE);adaptiveMesh.setEnabled(!busy&&!managed&&single);adaptiveMesh.setVisibility(single?View.VISIBLE:View.GONE);textureQuality.setEnabled(!busy&&!managed&&learned);fineDetail.setEnabled(!busy&&!managed&&(single||fusion360));maximumPower.setEnabled(!busy&&!managed&&(single||fusion360));maximumPower.setVisibility(single||fusion360?View.VISIBLE:View.GONE);
+        photoFidelity.setEnabled(!busy&&!managed&&single);photoFidelityLabel.setVisibility(single?View.VISIBLE:View.GONE);photoFidelity.setVisibility(single?View.VISIBLE:View.GONE);fineDetail.setVisibility(single||fusion360?View.VISIBLE:View.GONE);photoCheck.setEnabled(!busy&&!managed);
         tolerance.setEnabled(!busy&&!managed);quality.setEnabled(!busy&&!managed);shape.setEnabled(!busy&&!managed&&!multiple);shape.setVisibility(multiple||single?View.GONE:View.VISIBLE);
-        ai.setEnabled(!busy&&!managed);engine.setEnabled(!busy&&!managed);fourViews.setEnabled(!busy&&!managed&&!learned);fourViews.setVisibility(single?View.GONE:View.VISIBLE);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
+        ai.setEnabled(!busy&&!managed);engine.setEnabled(!busy&&!managed&&!fusion360);engine.setVisibility(fusion360?View.GONE:View.VISIBLE);fourViews.setEnabled(!busy&&!managed&&!learned&&!fusion360);fourViews.setVisibility(single||fusion360?View.GONE:View.VISIBLE);progress.setVisibility(busy?View.VISIBLE:View.GONE);updateDepthLabel();
         projectName.setEnabled(!busy&&!managed);compare.setEnabled(!busy&&!managed&&multiple);compare.setVisibility(single?View.GONE:View.VISIBLE);smoothing.setEnabled(!busy&&!managed&&learned);smoothing.setVisibility(learned?View.VISIBLE:View.GONE);
     }
     private void saveBitmap(Bitmap bitmap,File target)throws IOException{
@@ -246,11 +253,11 @@ public final class Offline3DActivity extends AppCompatActivity {
     }
     private File prepareCutout(int tolerance,boolean useAi)throws Exception{return prepareCutout(0,tolerance,useAi);}
     private File prepareCutout(int slot,int tolerance,boolean useAi)throws Exception{
-        String cache="v3-soft-alpha:"+(engine.getSelectedItemPosition()==2?TripoComputePolicy.imageLimit():1024)+":"+source(slot).lastModified()+":"+source(slot).length()+":"+tolerance+":"+useAi;
+        String cache="v3-soft-alpha:"+((fusion360||engine.getSelectedItemPosition()==2)?TripoComputePolicy.imageLimit():1024)+":"+source(slot).lastModified()+":"+source(slot).length()+":"+tolerance+":"+useAi;
         if(cutout(slot).isFile()&&cache.equals(prefs().getString(key("cutoutKey",slot),"")))return cutout(slot);
         checkpoint();Bitmap bitmap=BitmapFactory.decodeFile(source(slot).getAbsolutePath());
         if(bitmap==null)throw new IOException("Photo "+VIEWS[slot]+" illisible.");
-        if(engine.getSelectedItemPosition()!=2&&Math.max(bitmap.getWidth(),bitmap.getHeight())>1024){int max=Math.max(bitmap.getWidth(),bitmap.getHeight());Bitmap scaled=Bitmap.createScaledBitmap(bitmap,Math.max(3,bitmap.getWidth()*1024/max),Math.max(3,bitmap.getHeight()*1024/max),true);if(scaled!=bitmap){bitmap.recycle();bitmap=scaled;}}
+        if(!fusion360&&engine.getSelectedItemPosition()!=2&&Math.max(bitmap.getWidth(),bitmap.getHeight())>1024){int max=Math.max(bitmap.getWidth(),bitmap.getHeight());Bitmap scaled=Bitmap.createScaledBitmap(bitmap,Math.max(3,bitmap.getWidth()*1024/max),Math.max(3,bitmap.getHeight()*1024/max),true);if(scaled!=bitmap){bitmap.recycle();bitmap=scaled;}}
 
         try{
             try(OfflineImageVolume.Prepared prepared=LocalImagePreparation.prepare(this,bitmap,tolerance,useAi,new TripoSREngine.Progress(){
@@ -385,7 +392,7 @@ public final class Offline3DActivity extends AppCompatActivity {
             prefs().edit().putString(key("depthKey",slot),cache).apply();return field;
         }finally{part.delete();}
     }
-    private void importImage(Uri uri){if(uri==null)return;final int slot=selectedSlot;message("Lecture de l’image HD et correction de l’orientation…");final int limit=engine.getSelectedItemPosition()==2?TripoComputePolicy.imageLimit():1024;work(()->{
+    private void importImage(Uri uri){if(uri==null)return;final int slot=selectedSlot;message("Lecture de l’image HD et correction de l’orientation…");final int limit=(fusion360||engine.getSelectedItemPosition()==2)?TripoComputePolicy.imageLimit():1024;work(()->{
         Bitmap bitmap=OfflineImageImporter.decode(getContentResolver(),uri,limit);try{saveImage(bitmap,slot);}finally{bitmap.recycle();}message("Orientation corrigée. Image copiée sur le téléphone ; prête hors connexion.");
     });}
     private void rotateImage(){rotateImage(0);}
@@ -411,14 +418,14 @@ public final class Offline3DActivity extends AppCompatActivity {
     }
     private void generate(){
         int selected=quality.getSelectedItemPosition(),kind=shape.getSelectedItemPosition(),t=tolerance.getProgress()+8;boolean single=engine.getSelectedItemPosition()==2,learned=engine.getSelectedItemPosition()!=1,multiple=!single&&fourViews.isChecked(),useAi=ai.isChecked(),useDepth=!learned&&depthAi.isChecked()&&(multiple||kind!=2);float profileScale=.65f+depth.getProgress()*.007f;float thickness=.025f+depth.getProgress()*.0035f;
-        boolean smooth=smoothing.isChecked();final boolean boostInput=learned&&(isMcp()||tripoInputBoost.isChecked());
+        boolean smooth=smoothing.isChecked();final boolean useFusionDepth=fusion360&&fusionDepth.isChecked();final boolean boostInput=learned&&(isMcp()||tripoInputBoost.isChecked());
         final TripoDetailRegion requestedRegion=single&&assistDetail.isChecked()?detailRegion:null;final float requestedStrength=detailStrength.getProgress()/100f;
-        TripoQualityOptions finishOptions=new TripoQualityOptions(isMcp()?1024:new int[]{512,768,1024}[textureQuality.getSelectedItemPosition()],isMcp()?1:photoFidelity.getProgress()/100f,isMcp()||fineDetail.isChecked(),single&&TripoComputePolicy.maximumPower(this,maximumPower.isChecked()),single&&(isMcp()||adaptiveMesh.isChecked()));
+        TripoQualityOptions finishOptions=new TripoQualityOptions(isMcp()?1024:new int[]{512,768,1024}[textureQuality.getSelectedItemPosition()],isMcp()?1:photoFidelity.getProgress()/100f,isMcp()||fineDetail.isChecked(),(single||fusion360)&&TripoComputePolicy.maximumPower(this,maximumPower.isChecked()),(single&&isMcp())||((single||fusion360)&&adaptiveMesh.isChecked()));
         DiagnosticLog.record("INFO","TripoSR : préparation locale de l’image "+(boostInput?"renforcée (détails fins)":"originale"));
         DiagnosticLog.record("INFO","Reconstruction : "+(single?"TripoSR 1 image":learned?"TripoSR 4 images":"Silhouettes")+" · détail "+selected+" · texture demandée "+finishOptions.textureCell+" / effective "+finishOptions.effectiveTextureCell()+" · budget "+finishOptions.triangleBudget()+" · "+TripoComputePolicy.summary(this));
         String project=projectName.getText().toString().trim();if(project.length()>80)project=project.substring(0,80);final String savedProject=project;
         if(!isMcp()){
-            prefs().edit().putBoolean("smoothing",smooth).putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putBoolean("tripoInputBoost",tripoInputBoost.isChecked()).putBoolean("adaptiveMesh",adaptiveMesh.isChecked()).putString("projectName",savedProject)
+            prefs().edit().putBoolean("fusionDepth",fusionDepth.isChecked()).putBoolean("smoothing",smooth).putInt("textureQuality",textureQuality.getSelectedItemPosition()).putInt("photoFidelity",photoFidelity.getProgress()).putBoolean("fineDetail",fineDetail.isChecked()).putBoolean("tripoInputBoost",tripoInputBoost.isChecked()).putBoolean("adaptiveMesh",adaptiveMesh.isChecked()).putString("projectName",savedProject)
                     .putInt("engine",engine.getSelectedItemPosition()).putInt("quality",selected).putInt("shape",kind)
                     .putInt("depth",depth.getProgress()).putInt("tolerance",tolerance.getProgress())
                     .putBoolean("ai",useAi).putBoolean("depthAi",depthAi.isChecked()).apply();
@@ -432,12 +439,19 @@ public final class Offline3DActivity extends AppCompatActivity {
             TripoDetailRegion appliedRegion=null;
             String id=UUID.randomUUID().toString().replace("-","");File output=model(id),part=new File(output.getPath()+".part");
             try{
-                OfflineDepthField[] fields=useDepth?new OfflineDepthField[bitmaps.length]:null;
+                OfflineDepthField[] fields=(useDepth||useFusionDepth)?new OfflineDepthField[bitmaps.length]:null;
                 for(int slot=0;slot<bitmaps.length;slot++) {
                     checkpoint();message(VIEWS[slot]+" · "+(slot+1)+" / "+bitmaps.length);
                     File ready=prepareCutout(slot,t,useAi);checkpoint();bitmaps[slot]=BitmapFactory.decodeFile(ready.getAbsolutePath());
                     if(bitmaps[slot]==null)throw new IOException("Détourage "+VIEWS[slot]+" illisible.");
-                    if(useDepth)fields[slot]=prepareDepth(bitmaps[slot],slot);checkpoint();
+                    if(fields!=null){
+                        try{fields[slot]=prepareDepth(bitmaps[slot],slot);}
+                        catch(Exception error){
+                            if(!useFusionDepth)throw error;
+                            DiagnosticLog.record("ERREUR","Depth Anything V2 multivue indisponible",error);
+                            fields=null;message("Profondeur IA indisponible sur cette vue : fusion TripoSR sans relief supplémentaire.");
+                        }
+                    }checkpoint();
                 }
                 TripoDetailRegion boostRegion=single&&requestedRegion!=null
                         &&prefs().getString("detailCutoutKey","").equals(prefs().getString(key("cutoutKey",0),""))
@@ -469,8 +483,10 @@ public final class Offline3DActivity extends AppCompatActivity {
                     int neuralDetail=new int[]{64,88,112}[selected];
                     TripoSRField[] learnedFields=TripoSREngine.reconstruct(this,inferenceBitmaps,caches,keys,neuralDetail,new TripoSREngine.Progress(){
                         public void update(String value){message(value);}public void check(){checkpoint();}
-                    });checkpoint();message("Fusion multivue "+neuralDetail+"³ et construction du maillage texturé HD…");
-                    result=TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale,smooth,finishOptions);
+                    });checkpoint();message((fusion360?"Tripo Fusion 360°":"Fusion multivue")+" · maillage texturé HD…");
+                    int meshResolution=fusion360?(finishOptions.maximumPower?160:128):neuralDetail;
+                    result=fusion360?TripoSRFourViewVolume.buildFusion(bitmaps,learnedFields,meshResolution,profileScale,smooth,finishOptions,useFusionDepth?fields:null):
+                        TripoSRFourViewVolume.build(bitmaps,learnedFields,neuralDetail,profileScale,smooth,finishOptions);
                 }else{
                 message("Construction locale du maillage et des textures…");
                 result=multiple?OfflineFourViewVolume.build(bitmaps,new int[]{64,88,112}[selected],profileScale,fields)
@@ -478,10 +494,10 @@ public final class Offline3DActivity extends AppCompatActivity {
                 }checkpoint();
                 if(!output.getParentFile().isDirectory()&&!output.getParentFile().mkdirs())throw new IOException("Stockage du modèle indisponible.");
                 org.json.JSONObject provenance=new org.json.JSONObject().put("appVersion",UpdateManager.currentVersion(this))
-                    .put("reconstructionMode",single?"single-image":multiple?"four-view":"silhouette-single").put("hiddenSurfacesEstimated",single)
+                    .put("reconstructionMode",fusion360?"tripo-fusion-360":single?"single-image":multiple?"four-view":"silhouette-single").put("hiddenSurfacesEstimated",single)
                     .put("engine",learned?"TripoSR":multiple?"Silhouettes":"Volume local").put("method",result.method)
                     .put("projectName",savedProject).put("localOnly",true).put("inputViews",bitmaps.length)
-                    .put("textureMode",single?"visible-photo-neural-hidden":"existing").put("localTripoInputBoost",boostInput).put("adaptiveMeshing",finishOptions.adaptiveMeshing).put("tripoInputBoostRevision",boostInput?TripoInputDetailBoost.CACHE_REVISION:"disabled").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
+                    .put("fusion360",fusion360).put("fusionDepthRequested",useFusionDepth).put("fusionDepthUsed",useFusionDepth&&fields!=null).put("textureMode",single?"visible-photo-neural-hidden":"existing").put("localTripoInputBoost",boostInput).put("adaptiveMeshing",finishOptions.adaptiveMeshing).put("tripoInputBoostRevision",boostInput?TripoInputDetailBoost.CACHE_REVISION:"disabled").put("detail",selected).put("smoothing",learned&&smooth).put("profileScale",multiple?profileScale:1f).put("generatedAt",System.currentTimeMillis());
                 MeshQualityReport measurement=MeshQualityReport.inspect(result.mesh);
                 String measured=measurement.summary()+" · texture "+result.texture.getWidth()+" × "+result.texture.getHeight()+"\n"+result.method;
                 provenance.put("detailRegion",appliedRegion==null?org.json.JSONObject.NULL:appliedRegion.json()).put("detailStrength",requestedStrength).put("computeThreads",TripoComputePolicy.threads(this)).put("qualityReport",measurement.summary()).put("textureWidth",result.texture.getWidth()).put("textureHeight",result.texture.getHeight()).put("photoFidelity",finishOptions.photoWeight).put("fineDetail",finishOptions.preserveFineDetail).put("maximumPower",finishOptions.maximumPower).put("triangleBudget",finishOptions.triangleBudget());
