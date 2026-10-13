@@ -46,6 +46,19 @@
                         <Button android:id="@+id/singleImage3dButton" android:layout_width="match_parent" android:layout_height="96dp" android:layout_marginTop="14dp"
                             android:backgroundTint="@color/launcher_background" android:text="TripoSR — 1 seule image\nVolume + couleurs IA · GLB hors ligne" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
                     </LinearLayout>
+                    <LinearLayout android:id="@+id/tabFusion360" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="Tripo Fusion 360° : photographie le même sujet de face, de dos et sur ses deux profils. Quatre reconstructions TripoSR sont recalées et associées aux silhouettes et textures des quatre vues. L’assistance Depth Anything V2 affine prudemment le relief. Tout reste sur le téléphone."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/fusion360Button" android:layout_width="match_parent" android:layout_height="120dp"
+                            android:layout_marginTop="16dp" android:backgroundTint="@color/launcher_background"
+                            android:text="Tripo Fusion 360°\n4 vues · profondeur IA · GLB"
+                            android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="21sp" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="Scan assisté hors ligne : une reconstruction estimée, et non une mesure photogrammétrique parfaite. Importation, comparaison, génération, bibliothèque et export GLB."
+                            android:textColor="@color/text_secondary" android:textSize="13sp"/>
+                    </LinearLayout>
                 </FrameLayout>
             </LinearLayout>
         </TabHost>
