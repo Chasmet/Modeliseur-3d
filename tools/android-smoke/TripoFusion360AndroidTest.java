@@ -96,6 +96,7 @@ public class TripoFusion360AndroidTest {
             for(int i=0;i<vertices.length;i+=3)if(vertices[i+1]<-.30f){
                 if(vertices[i]<-.13f)legL++;if(vertices[i]>.13f)legR++;
             }
+            System.out.println("FUSION LEGS: left="+legL+" right="+legR+" vertices="+vertices.length/3+" triangles="+result.mesh.getTriangleCount());
             assertTrue("Left photographed leg erased: "+legL,legL>20);
             assertTrue("Right photographed leg erased: "+legR,legR>20);
             assertTrue(result.method.contains("Tripo Fusion 360"));
