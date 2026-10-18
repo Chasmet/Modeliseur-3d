@@ -10,7 +10,22 @@ from backend.browser_workspace import validate_path
 TOOLS = {"vision", "pointer", "files", "tasks", "terminal"}
 GESTURES = {"tap", "double_tap", "long_press", "drag", "swipe", "back"}
 FILE_OPS = {"plan", "run", "apply", "status", "cancel", "stat", "external_roots", "external_request_access", "external_revoke", "external_list", "external_import", "external_export", "external_read_text", "external_rename"}
-ACTIONS = {"keyboard", "desktop", "files_list", "files_catalog", "files_mkdir", "files_copy", "files_move", "files_trash", "files_read_text", "files_write_text", "notes_list", "notes_read", "notes_save", "media_info", "workspace_status"}
+ACTIONS = {
+    "keyboard", "desktop", "files_list", "files_catalog", "files_mkdir",
+    "files_copy", "files_move", "files_trash", "files_read_text",
+    "files_write_text", "notes_list", "notes_read", "notes_save",
+    "media_info", "workspace_status", "tabs", "list_tabs",
+    "get_page_status", "get_form", "wait_for_element", "read_page",
+    "open_url", "new_tab", "open_tab", "switch_tab", "close_tab",
+    "translate_page", "click_verified", "type", "select_option",
+    "check", "upload_file",
+}
+READ_ONLY_TASKS = {
+    "files_list", "files_catalog", "files_read_text", "notes_list",
+    "notes_read", "media_info", "workspace_status", "tabs",
+    "list_tabs", "get_page_status", "get_form", "wait_for_element", "read_page",
+}
+VERIFIED_MUTATIONS = {"type", "select_option", "check", "click_verified", "upload_file"}
 
 
 def identifier(value):
@@ -83,6 +98,45 @@ def validate(request):
                 args = step["args"]
                 if step["action"] == "desktop" and (args.get("tool") not in {"vision", "pointer", "files"} or args.get("capture")):
                     raise ValueError("Pas de tâches imbriquées ni de captures dans le journal.")
+                if step["action"] in {"type", "select_option", "check", "click_verified", "upload_file", "wait_for_element"}:
+                    selector = args.get("selector", "")
+                    if not isinstance(selector, str) or not 0 < len(selector) <= 340 or not selector.strip():
+                        raise ValueError("Une cible CSS inspectée est obligatoire.")
+                if step["action"] == "type" and len(str(args.get("text", ""))) > 8000:
+                    raise ValueError("Saisie limitée à 8000 caractères.")
+                if step["action"] == "click_verified":
+                    if int(args.get("timeout_ms", 10000)) > 20000:
+                        raise ValueError("Vérification du clic limitée à 20 secondes.")
+                    if not any(args.get(key) for key in ("expected_selector", "expected_text", "expected_url_contains")):
+                        raise ValueError("Le clic doit préciser une condition observable.")
+                if step["action"] == "upload_file":
+                    host, files = args.get("expected_host"), args.get("files")
+                    if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9.-]{3,253}", host) or host.startswith(".") or host.endswith("."):
+                        raise ValueError("Domaine autorisé obligatoire pour l’importation.")
+                    if not isinstance(files, list) or not 1 <= len(files) <= 8:
+                        raise ValueError("Une sélection explicite de 1 à 8 fichiers est requise.")
+                verify = step.get("verify")
+                if verify is not None:
+                    if not isinstance(verify, dict):
+                        raise ValueError("Vérification de tâche invalide.")
+                    action, verify_args = verify.get("action"), verify.get("args")
+                    if not isinstance(verify_args, dict):
+                        raise ValueError("Paramètres de vérification manquants.")
+                    if action not in READ_ONLY_TASKS and not (
+                        action == "keyboard" and verify_args.get("operation") == "inspect"
+                        or action == "desktop" and (
+                            verify_args.get("tool") == "vision"
+                            or verify_args.get("tool") == "files" and
+                            verify_args.get("operation") in {"stat", "status", "external_list", "external_read_text"}
+                        )
+                    ):
+                        raise ValueError("La vérification doit uniquement lire l’état.")
+                    if not isinstance(verify.get("expect"), dict) and not isinstance(verify.get("contains"), dict):
+                        raise ValueError("Définis un résultat attendu pour la vérification.")
+                if step["action"] == "desktop" and args.get("tool") == "pointer" and verify is None:
+                    raise ValueError("Geste tactile : lecture de vérification obligatoire.")
+                if step["action"] in VERIFIED_MUTATIONS and verify is None:
+                    raise ValueError("Modification du web : lecture de vérification obligatoire.")
     if tool == "terminal":
         identifier(request.get("id"))
         if request.get("operation", "validate") not in {"validate", "run", "status", "resume", "cancel"}:

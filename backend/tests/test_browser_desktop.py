@@ -160,3 +160,41 @@ async def test_screenshot_tool_returns_mcp_image_and_coordinate_metadata():
         assert "screen:x" in str(content)
     finally:
         relay.OWNER.reset(token)
+
+
+def test_modern_form_workflows_match_android_policy():
+    """The relay must not silently reject actions added to AgentTasks.java."""
+    verify = {"action": "get_page_status", "args": {}, "contains": {"url": "play.google.com"}}
+    steps = [
+        {"id": "inspect", "action": "get_form", "args": {}},
+        {"id": "wait", "action": "wait_for_element", "args": {"selector": "#apk"}},
+        {"id": "choose", "action": "select_option",
+         "args": {"selector": "#category", "value": "tools"}, "verify": verify},
+        {"id": "type", "action": "type",
+         "args": {"selector": "#title", "text": "Sync 30"}, "verify": verify},
+        {"id": "check", "action": "check",
+         "args": {"selector": "#terms", "checked": True}, "verify": verify},
+        {"id": "click", "action": "click_verified",
+         "args": {"selector": "#save", "expected_text": "Enregistré"}, "verify": verify},
+        {"id": "upload", "action": "upload_file",
+         "args": {"selector": "#apk", "expected_host": "play.google.com",
+                  "files": [{"path": "build/release.aab"}]}, "verify": verify},
+    ]
+    assert validate({"tool": "tasks", "operation": "submit", "id": "google-play-workflow", "steps": steps})["steps"] == steps
+
+
+@pytest.mark.parametrize("step", [
+    {"id": "one", "action": "click_verified", "args": {"selector": "#confirm", "expected_text": "Terminé"}},
+    {"id": "one", "action": "type", "args": {"selector": "#title", "text": "texte"}},
+    {"id": "one", "action": "upload_file", "args": {"selector": "#apk", "expected_host": "play.google.com", "files": [{"path": "x.apk"}]}},
+    {"id": "one", "action": "upload_file", "args": {"selector": "#apk", "files": []},
+     "verify": {"action": "get_form", "args": {}, "contains": {"count": "1"}}},
+    {"id": "one", "action": "click_verified", "args": {"selector": "#publish"},
+     "verify": {"action": "get_page_status", "args": {}, "contains": {"url": "example.com"}}},
+    {"id": "one", "action": "type", "args": {"selector": "#x", "text": "hello"},
+     "verify": {"action": "check", "args": {"selector": "#confirm"}, "expect": {"checked": True}}},
+    {"id": "one", "action": "desktop", "args": {"tool": "pointer", "gesture": "tap", "x": 2, "y": 3}},
+])
+def test_unverified_mutations_are_rejected_at_relay(step):
+    with pytest.raises((ValueError, TypeError)):
+        validate({"tool": "tasks", "operation": "submit", "id": "unsafe", "steps": [step]})
