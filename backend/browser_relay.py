@@ -323,7 +323,7 @@ async def heartbeat(request: Request):
             row["title"] = str(payload.get("title", ""))[:150]
             row["page"] = str(payload.get("url", ""))[:500]
             row["session_source"] = str(payload.get("session_source", "unknown"))[:30]
-            row["workspace_version"] = min(3, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
+            row["workspace_version"] = min(4, max(0, payload.get("workspace_version", 0))) if type(payload.get("workspace_version")) is int else 0
             row["keyboard_version"] = min(1, max(0, payload.get("keyboard_version", 0))) if type(payload.get("keyboard_version")) is int else 0
             row["desktop_version"] = min(1,max(0,payload.get("desktop_version",0))) if type(payload.get("desktop_version")) is int else 0
             if isinstance(payload.get("autonomous"), bool):
@@ -437,7 +437,7 @@ async def health(request: Request):
         {
             "ok": True,
             "module": "agentbrowser-mcp",
-            "version": "3.4-agent-desktop",
+            "version": "4.0-studio-workspace",
             "online_devices": online,
             "configured": len(MASTER) >= 32,
             "command_ttl_seconds": COMMAND_TTL,

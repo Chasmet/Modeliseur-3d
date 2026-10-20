@@ -6,6 +6,7 @@ import base64
 from mcp.server.fastmcp import Image
 
 WORKSPACE_ACTIONS = frozenset({
+    'publication_prepare', 'publication_status', 'publication_list', 'publication_cancel', 'publication_submit', 'video_editor_project_read', 'video_editor_project_save', 'video_editor_project_list', 'video_editor_project_new', 'video_editor_project_open', 'video_editor_project_duplicate', 'video_editor_project_rename', 'video_editor_project_trash', 'video_editor_project_restore', 'video_editor_status', 'video_editor_export', 'video_editor_resume', 'video_editor_verify_output', 'video_editor_cancel', 'video_editor_offline_audit', 'cut_submit', 'cut_status', 'cut_cancel', 'cut_resume', 'cut_schedule', 'cut_planning', 'files_references', 'files_archive', 'workspace_capabilities',
     "workspace_status", "files_list", "files_mkdir", "files_write_text",
     "files_read_text", "files_read_bytes", "files_move", "files_trash",
     "files_trash_list", "files_restore", "files_import", "files_downloads",
@@ -34,6 +35,8 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
 
     async def call(action, args=None):
         row = state.get(owner.get())
+        if row and row.get("workspace_version", 0)<4 and action in {'video_editor_resume', 'video_editor_project_list', 'video_editor_offline_audit', 'cut_status', 'publication_list', 'video_editor_project_restore', 'video_editor_project_new', 'video_editor_project_rename', 'files_archive', 'publication_cancel', 'publication_status', 'cut_planning', 'video_editor_project_open', 'publication_submit', 'video_editor_project_duplicate', 'publication_prepare', 'video_editor_project_trash', 'cut_resume', 'files_references', 'cut_submit', 'cut_schedule', 'cut_cancel', 'workspace_capabilities'}:
+            return {"ok": False, "error": "Cette fonction nécessite la mise à jour CHK (protocole 4)."}
         if row and not row.get("workspace_version"):
             return {"ok": False, "error": "Mets à jour l’APK CHK Agent Browser pour activer Fichiers et Notes."}
         if row and row.get("workspace_version",0)<2 and (action.startswith("media_") or action in {"files_catalog","files_copy","video_editor_project_save"}):
@@ -276,11 +279,11 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         return await call("video_editor_project_save", {"project": project, **({"expected_revision":expected_revision} if expected_revision is not None else {})})
 
     @mcp.tool(annotations=write)
-    async def browser_video_editor_export(replace: bool = False) -> dict:
+    async def browser_video_editor_export(replace: bool = False, resume: bool = False) -> dict:
         """START a background MP4 export using the saved mobile project, media and filters.
         Immediate acknowledgment; use browser_video_editor_status to track progress.
         Refuses existing output unless replace=true. May use significant phone battery."""
-        return await call("video_editor_export", {"replace": replace})
+        return await call("video_editor_resume" if resume else "video_editor_export", {"replace": replace})
 
     @mcp.tool(annotations=read)
     async def browser_video_editor_verify_output() -> dict:
@@ -393,3 +396,48 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
         if language not in {"fr","en"} or not 1<=max_seconds<=180:
             return {"ok":False,"error":"Langue fr/en et durée de 1 à 180 s attendues."}
         return await path_call("media_transcribe",path,{"language":language,"max_seconds":max_seconds})
+
+    @mcp.tool(annotations=read)
+    async def browser_capabilities() -> dict:
+        """Read the installed APK's exact commands and limits. Protocol 4 required for new features."""
+        return await call("workspace_capabilities")
+
+    @mcp.tool(annotations=write)
+    async def browser_studio_project(operation: str, id: str = "", name: str = "", trash: bool = False) -> dict:
+        """Manage Studio projects: list/new/open/duplicate/rename/trash/restore/offline_audit. Existing files remain on the phone."""
+        allowed = {"list", "new", "open", "duplicate", "rename", "trash", "restore", "offline_audit"}
+        if operation not in allowed:
+            return {"ok": False, "error": "Opération Studio inconnue"}
+        action = "video_editor_offline_audit" if operation == "offline_audit" else "video_editor_project_" + operation
+        return await call(action, {"id": id, "name": name, "trash": trash})
+
+    @mcp.tool(annotations=write)
+    async def browser_cut(operation: str, request: dict) -> dict:
+        """Cut local videos (submit: path, seconds or segments=[{start_ms,end_ms}], request_id; output folder is generated), read status, resume interrupted cuts, cancel, prepare a reminder schedule or read planning. A reminder is NOT a confirmed platform publication."""
+        if operation not in {"submit", "status", "resume", "cancel", "schedule", "planning"}:
+            return {"ok": False, "error": "Opération Cut inconnue"}
+        return await call("cut_" + operation, request)
+
+    @mcp.tool(annotations=write)
+    async def browser_publication(operation: str, request: dict) -> dict:
+        """Prepare/list/status/cancel an organic publication or submit its verified browser click. Submit requires an observed selector, correct account/domain and observable success. Never repeat an uncertain submission. Paid campaigns are preparation only."""
+        if operation not in {"prepare", "status", "list", "cancel", "submit"}:
+            return {"ok": False, "error": "Opération publication inconnue"}
+        return await call("publication_" + operation, request)
+
+    @mcp.tool(annotations=read)
+    async def browser_files_references(path: str) -> dict:
+        """Find projects/publications using a file before renaming, moving or trashing it."""
+        return await path_call("files_references", path)
+
+    @mcp.tool(annotations=write)
+    async def browser_files_archive(paths: list[str], destination: str) -> dict:
+        """Create a local ZIP of selected files/folders, without modifying originals. Refuses overwriting."""
+        if not 1 <= len(paths) <= 500:
+            return {"ok": False, "error": "Sélection de 1 à 500 éléments requise"}
+        try:
+            for path in paths: validate_path(path)
+            validate_path(destination)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        return await call("files_archive", {"paths": paths, "destination": destination})

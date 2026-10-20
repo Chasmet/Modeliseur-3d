@@ -20,6 +20,12 @@ def clear():
     yield
     relay.state.clear()
 
+def test_extended_workflows_and_pause_are_accepted():
+    validate({"tool":"tasks","id":"all","operation":"list"})
+    validate({"tool":"tasks","id":"job","operation":"pause"})
+    for action in ("scroll","collect_public_comments","publication_prepare","cut_resume","video_editor_resume","files_archive"):
+        validate({"tool":"tasks","id":"job","operation":"submit","steps":[{"id":"one","action":action,"args":{}}]})
+
 
 @pytest.mark.asyncio
 async def test_registry_has_all_five_capabilities_and_context_schema():

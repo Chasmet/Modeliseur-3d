@@ -10,17 +10,10 @@ from backend.browser_workspace import validate_path
 TOOLS = {"vision", "pointer", "files", "tasks", "terminal"}
 GESTURES = {"tap", "double_tap", "long_press", "drag", "swipe", "back"}
 FILE_OPS = {"plan", "run", "apply", "status", "cancel", "stat", "external_roots", "external_request_access", "external_revoke", "external_list", "external_import", "external_export", "external_read_text", "external_rename"}
-ACTIONS = {
-    "keyboard", "desktop", "files_list", "files_catalog", "files_mkdir",
-    "files_copy", "files_move", "files_trash", "files_read_text",
-    "files_write_text", "notes_list", "notes_read", "notes_save",
-    "media_info", "workspace_status", "tabs", "list_tabs",
-    "get_page_status", "get_form", "wait_for_element", "read_page",
-    "open_url", "new_tab", "open_tab", "switch_tab", "close_tab",
-    "translate_page", "click_verified", "type", "select_option",
-    "check", "upload_file",
-}
+ACTIONS = {'check', 'files_copy', 'video_editor_project_duplicate', 'video_editor_verify_output', 'wait_for_element', 'publication_prepare', 'select_option', 'upload_file', 'notes_list', 'collect_public_comments', 'get_form', 'list_tabs', 'keyboard', 'files_list', 'video_editor_status', 'video_editor_cancel', 'cut_submit', 'notes_read', 'workspace_status', 'desktop', 'video_editor_project_new', 'tabs', 'files_write_text', 'cut_cancel', 'cut_resume', 'video_editor_export', 'video_editor_resume', 'translate_page', 'close_tab', 'cut_planning', 'video_editor_project_open', 'click_verified', 'document_read', 'files_trash', 'notes_save', 'publication_list', 'open_url', 'files_catalog', 'read_page', 'cut_status', 'open_tab', 'video_editor_project_save', 'video_editor_offline_audit', 'workspace_capabilities', 'files_references', 'get_page_status', 'video_editor_project_trash', 'media_info', 'media_model_status', 'cut_schedule', 'new_tab', 'files_move', 'resume_visible_page', 'video_editor_project_list', 'video_editor_project_restore', 'video_editor_project_read', 'publication_submit', 'video_editor_project_rename', 'publication_cancel', 'publication_status', 'type', 'scroll', 'files_archive', 'files_mkdir', 'switch_tab', 'files_read_text'}
+
 READ_ONLY_TASKS = {
+    "workspace_capabilities", "files_references", "cut_status", "cut_planning", "video_editor_status", "video_editor_project_list", "video_editor_project_read", "video_editor_verify_output", "video_editor_offline_audit", "document_read", "media_model_status", "publication_status", "publication_list",
     "files_list", "files_catalog", "files_read_text", "notes_list",
     "notes_read", "media_info", "workspace_status", "tabs",
     "list_tabs", "get_page_status", "get_form", "wait_for_element", "read_page",
@@ -81,7 +74,7 @@ def validate(request):
             raise ValueError("Traitement de fichiers non autorisé.")
     if tool == "tasks":
         identifier(request.get("id"))
-        if request.get("operation", "status") not in {"submit", "status", "resume", "cancel"}:
+        if request.get("operation", "status") not in {"submit", "status", "resume", "pause", "cancel", "list"}:
             raise ValueError("Opération de tâche inconnue.")
         if request.get("operation") == "submit":
             steps = request.get("steps")
@@ -249,9 +242,9 @@ def register_desktop(mcp, issue, owner, state):
         return await call(dict(tool="tasks", operation="submit", id=id, steps=steps))
 
     @mcp.tool(annotations={"readOnlyHint": False, "openWorldHint": False})
-    async def browser_task_control(id: str, operation: str = "status", offset: int = 0,
+    async def browser_task_control(id: str = "all", operation: str = "status", offset: int = 0,
                                    retry_failed: bool = False, retry_uncertain: bool = False) -> dict:
-        """Read/resume/cancel a local workflow. Confirmed steps never repeat. Failed verification retries verification only.
+        """List/read/pause/resume/cancel local workflows. Use operation=list without an id. Confirmed steps never repeat. Failed verification retries verification only.
         Resume uncertain steps first verifies any declared expected result without replaying the effect.
         retry_uncertain explicitly repeats an unconfirmed effect: inspect first; never set it blindly for submissions.
         Paginated step excerpts are marked if truncated, not represented as full JSON results.
