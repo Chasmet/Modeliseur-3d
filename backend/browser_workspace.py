@@ -29,6 +29,46 @@ def validate_path(path: str, root: bool = False) -> str:
     return path
 
 
+# The Android Files UI shows virtual categories. Map only those labels to the
+# existing private CHK workspace, never to arbitrary Android filesystem paths.
+_VISIBLE_ROOTS = {
+    "Documents": "Categories/Documents",
+    "Images": "Categories/Images",
+    "Vidéos": "Categories/Videos",
+    "Videos": "Categories/Videos",
+    "Audio": "Categories/Audio",
+}
+
+
+def canonical_visible_path(path: str) -> str:
+    if not isinstance(path, str) or not path:
+        return path
+    head, sep, tail = path.partition("/")
+    destination = _VISIBLE_ROOTS.get(head)
+    return destination + (sep + tail if sep else "") if destination else path
+
+
+def canonical_workspace_args(action: str, args: dict) -> dict:
+    """Accept Files breadcrumb paths on the pre-update APK as well as on newer APKs."""
+    values = dict(args)
+    if action.startswith("files_") and action != "files_external" or action in {
+        "document_read", "document_page", "media_info", "media_frame",
+        "media_transcribe", "notes_export",
+    }:
+        for key in ("path", "folder", "destination", "source"):
+            if isinstance(values.get(key), str):
+                values[key] = canonical_visible_path(values[key])
+        if isinstance(values.get("paths"), list):
+            values["paths"] = [canonical_visible_path(p) for p in values["paths"]]
+    if action == "upload_file" and isinstance(values.get("files"), list):
+        values["files"] = [
+            {**entry, "workspace_path": canonical_visible_path(entry["workspace_path"])}
+            if isinstance(entry, dict) and isinstance(entry.get("workspace_path"), str)
+            else entry for entry in values["files"]
+        ]
+    return values
+
+
 def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
     read = {"readOnlyHint": True, "openWorldHint": False}
     write = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -43,7 +83,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
             return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour utiliser le nouveau Studio et les outils média."}
         if row and row.get("workspace_version",0)<3 and action in {"document_read","document_page","media_transcribe","media_model_status"}:
             return {"ok":False,"error":"Mets à jour l’APK CHK Agent Browser pour lire les PDF, OCR et audio."}
-        return await issue(action, args or {})
+        return await issue(action, canonical_workspace_args(action, args or {}))
 
     async def path_call(action, path, args=None, root=False):
         try:
@@ -59,8 +99,7 @@ def register_workspace(mcp, issue, owner, state, stage_file, remove_transfer):
 
     @mcp.tool(annotations=read)
     async def browser_files_list(path: str = "", query: str = "", offset: int = 0) -> dict:
-        """List up to 50 phone workspace entries, folders first. path is relative; empty means root.
-        Search filters names in this folder. Continue using next_offset. No arbitrary phone paths."""
+        """List up to 50 CHK workspace entries. Use Documents/..., Images/...,\n        Vidéos/... or Audio/... exactly as displayed on the Android Files tab.\n        Canonical Categories/<type>/... paths remain valid; empty path is raw root.\n        Search filters names in this folder; next_offset paginates results."""
         return await path_call("files_list", path, {"query": query[:120], "offset": max(0, offset)}, root=True)
 
     @mcp.tool(annotations=write)
