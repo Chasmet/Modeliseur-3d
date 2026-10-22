@@ -1,0 +1,88 @@
+name: Télécharger l'APK signé publié
+run-name: Modéliseur 3D 6.6.2 — APK signé disponible
+
+on:
+  push:
+    branches: [agent/trellis-third-tab-auto-update]
+    paths: ['.github/workflows/apk-6.6.2.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: APK 6.6.2 signé — téléchargement
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Récupérer la Release publique 6.6.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          gh api repos/Chasmet/Modeliseur-3d/releases/tags/v6.6.2 > release.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import os
+          release = json.loads(Path('release.json').read_text())
+          if release['tag_name'] != 'v6.6.2' or release['draft'] or release['prerelease']:
+              raise SystemExit('La Release publique 6.6.2 est indisponible.')
+          asset = next(a for a in release['assets'] if a['name'] == 'Modeliseur-3D-6.6.2.apk')
+          url = 'https://github.com/Chasmet/Modeliseur-3d/releases/download/v6.6.2/Modeliseur-3D-6.6.2.apk'
+          digest = 'f6eec672b5e446029fad4b8f32f41b6daa733818ccf0ca221a40e54864551004'
+          if asset['browser_download_url'] != url or asset['size'] != 505403360 or asset['digest'] != 'sha256:' + digest:
+              raise SystemExit('La Release a changé : refus de publier un fichier différent.')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('APK_URL=' + url + '\n')
+          Path('artifact/Modeliseur-3D-6.6.2.apk.sha256').write_text(digest + '  Modeliseur-3D-6.6.2.apk\n')
+          PY
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 \
+            --output artifact/Modeliseur-3D-6.6.2.apk https://github.com/Chasmet/Modeliseur-3d/releases/download/v6.6.2/Modeliseur-3D-6.6.2.apk
+
+      - name: Vérifier le téléchargement et l'empreinte
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifact
+          test "$(stat -c '%s' Modeliseur-3D-6.6.2.apk)" = "505403360"
+          sha256sum --check Modeliseur-3D-6.6.2.apk.sha256
+          unzip -t Modeliseur-3D-6.6.2.apk > /dev/null
+
+      - name: Vérifier la signature et la version Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          if [ ! -x "$BUILD_TOOLS/apksigner" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;34.0.0"
+          fi
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs artifact/Modeliseur-3D-6.6.2.apk > signer.txt
+          grep -Fq 'Signer #1 certificate SHA-256 digest: 29e4bf6469e65741750b25f7ea50c97e7b538d5ead63bffebfd93cf197dd9335' signer.txt
+          "$BUILD_TOOLS/aapt" dump badging artifact/Modeliseur-3D-6.6.2.apk > badging.txt
+          grep -Fq "package: name='com.chasmet.modeliseur3d' versionCode='64' versionName='6.6.2'" badging.txt
+          printf '%s\n' '## Modéliseur 3D 6.6.2 — APK signé' \
+            'Télécharge l’archive **Modeliseur-3D-6.6.2-APK-signe** dans Artifacts.' \
+            'Ouvre le ZIP puis installe **Modeliseur-3D-6.6.2.apk** par-dessus l’application actuelle.' \
+            'Fichier identique à la Release publique : empreinte, package, versionCode 64 et certificat vérifiés.' \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Télécharger Modeliseur-3D-6.6.2.apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modeliseur-3D-6.6.2-APK-signe
+          path: |
+            artifact/Modeliseur-3D-6.6.2.apk
+            artifact/Modeliseur-3D-6.6.2.apk.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

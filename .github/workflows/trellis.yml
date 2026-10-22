@@ -1,0 +1,115 @@
+name: Générer, animer et compresser un GLB
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/trellis/**', '.github/workflows/trellis.yml']
+  pull_request:
+    branches: [main]
+    paths: ['tools/trellis/**', '.github/workflows/trellis.yml']
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'URL HTTPS publique de l’image entière (laisser vide pour un GLB existant)'
+        required: false
+        type: string
+      glb_url:
+        description: 'URL HTTPS publique du GLB existant (laisser vide pour générer depuis l’image)'
+        required: false
+        type: string
+      humanoid:
+        description: 'Ajouter un rig procédural : personnage entier debout, Y vertical, bras abaissés'
+        type: boolean
+        default: true
+      resolution:
+        description: 'Résolution TRELLIS.2'
+        type: choice
+        options: ['512', '1024', '1536']
+        default: '1024'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/trellis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/trellis/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: python -m pip install -r requirements.txt
+      - run: npm test
+      - run: python -m unittest discover -s test -p 'test_*.py'
+
+  generate:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/trellis
+    env:
+      IMAGE_URL: ${{ inputs.image_url }}
+      GLB_URL: ${{ inputs.glb_url }}
+      HUMANOID: ${{ inputs.humanoid }}
+      RESOLUTION: ${{ inputs.resolution }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: python -m pip install -r requirements.txt
+      - name: Générer ou récupérer le modèle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          if [ -n "$IMAGE_URL" ] && [ -z "$GLB_URL" ]; then
+            python fetch.py "$IMAGE_URL" output/reference.png
+            python generate.py --image output/reference.png --output output --resolution "$RESOLUTION"
+          elif [ -n "$GLB_URL" ] && [ -z "$IMAGE_URL" ]; then
+            python fetch.py "$GLB_URL" output/generated.glb
+          else
+            echo 'Renseigner une seule source : image_url ou glb_url.'
+            exit 2
+          fi
+      - name: Animer, compresser et vérifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          options=()
+          if [ "$HUMANOID" = 'true' ]; then options+=(--humanoid); fi
+          node finish.mjs output/generated.glb output/Modeliseur_anime_compresse.glb "${options[@]}"
+      - name: Conserver le GLB final et son contrôle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Modeliseur-GLB-compresse
+          path: |
+            tools/trellis/output/Modeliseur_anime_compresse.glb
+            tools/trellis/output/Modeliseur_anime_compresse.glb.report.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Conserver l’aperçu si l’export est bloqué
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trellis-apercu-generation-incomplete
+          path: tools/trellis/output/preview.html
+          if-no-files-found: ignore
+          retention-days: 1
