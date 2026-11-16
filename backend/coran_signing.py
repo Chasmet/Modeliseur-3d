@@ -15,9 +15,21 @@ CLAIMS = {
     "repository_id": "1456244792",
     "repository_owner_id": "160381695",
     "ref": "refs/heads/main",
-    "workflow_ref": REPOSITORY + "/.github/workflows/android.yml@refs/heads/main",
     "runner_environment": "github-hosted",
 }
+
+# Deux canaux légitimes, même dépôt, même branche protégée par OIDC.
+# Aucun motif générique : chaque workflow doit correspondre exactement.
+ALLOWED_WORKFLOW_REFS = frozenset({
+    REPOSITORY + "/.github/workflows/android.yml@refs/heads/main",
+    REPOSITORY + "/.github/workflows/google-play.yml@refs/heads/main",
+})
+
+
+def validate_claims(claims):
+    return (all(claims.get(name) == value for name, value in CLAIMS.items())
+            and claims.get("workflow_ref") in ALLOWED_WORKFLOW_REFS
+            and claims.get("event_name") in {"push", "workflow_dispatch"})
 
 
 def authenticate(token):
@@ -26,8 +38,7 @@ def authenticate(token):
         token, key, algorithms=["RS256"], issuer=ISSUER, audience=AUDIENCE,
         options={"require": ["exp", "iat", "nbf", "sub", "iss", "aud"]},
     )
-    return (all(claims.get(name) == value for name, value in CLAIMS.items())
-            and claims.get("event_name") in {"push", "workflow_dispatch"})
+    return validate_claims(claims)
 
 
 async def issue_coran_signing(request):
