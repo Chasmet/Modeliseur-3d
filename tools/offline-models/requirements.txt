@@ -1,0 +1,4 @@
+# Build-time quantization only; Android runs the embedded native ONNX runtime.
+onnx==1.17.0
+onnxruntime==1.20.0
+numpy==2.3.5

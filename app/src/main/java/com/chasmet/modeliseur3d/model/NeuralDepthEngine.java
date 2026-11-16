@@ -49,11 +49,16 @@ public final class NeuralDepthEngine implements AutoCloseable {
     private final String backend;
 
     public NeuralDepthEngine(Context context) throws Exception {
+        this(context,10,true);
+    }
+
+    /** Explicit CPU budget for the independent offline workshop; legacy defaults stay the same. */
+    public NeuralDepthEngine(Context context,int requestedThreads,boolean useNnapi) throws Exception {
         Context applicationContext = context.getApplicationContext();
         File model = copyModelIfNeeded(applicationContext);
         environment = OrtEnvironment.getEnvironment();
 
-        SessionBundle bundle = createSession(model);
+        SessionBundle bundle = createSession(model,requestedThreads,useNnapi);
         session = bundle.session;
         backend = bundle.backend;
         inputName = session.getInputNames().iterator().next();
@@ -129,9 +134,9 @@ public final class NeuralDepthEngine implements AutoCloseable {
         }
     }
 
-    private SessionBundle createSession(File model) throws Exception {
+    private SessionBundle createSession(File model,int requestedThreads,boolean useNnapi) throws Exception {
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
-        int neuralThreads = Math.max(2, Math.min(10, processors - 1));
+        int neuralThreads = Math.max(1, Math.min(Math.max(1,requestedThreads), Math.max(2,processors - 1)));
 
         OrtSession.SessionOptions accelerated = new OrtSession.SessionOptions();
         accelerated.setOptimizationLevel(
@@ -140,7 +145,7 @@ public final class NeuralDepthEngine implements AutoCloseable {
         accelerated.setIntraOpNumThreads(neuralThreads);
         accelerated.setInterOpNumThreads(1);
 
-        boolean nnapiRequested = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1;
+        boolean nnapiRequested = useNnapi && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1;
         if (nnapiRequested) {
             try {
                 accelerated.addNnapi();
