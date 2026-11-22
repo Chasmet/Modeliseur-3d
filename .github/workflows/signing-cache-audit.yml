@@ -20,3 +20,12 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/Chasmet/Modeliseur-3d/actions/caches?per_page=100" --paginate             --jq '.actions_caches[] | select((.key | ascii_downcase | contains("keystore")) or (.key | ascii_downcase | contains("sign"))) | "cache: key=\(.key) ref=\(.ref) created=\(.created_at) last=\(.last_accessed_at)"'
+
+      - name: Afficher uniquement le certificat public de la Release 6.6.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --connect-timeout 30 -o "$RUNNER_TEMP/old-release.apk" \
+            "https://github.com/Chasmet/Modeliseur-3d/releases/download/v6.6.6/Modeliseur-3D-6.6.6.apk"
+          echo "0ec7ee8382d78d8b97d802d543919e37a8624578d99d4377f6b11d3d7abd13ca  $RUNNER_TEMP/old-release.apk" | sha256sum -c -
+          "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/34.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/old-release.apk" | grep -E "Signer #1 certificate (DN|SHA-256 digest):"
