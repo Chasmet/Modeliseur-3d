@@ -142,9 +142,12 @@ jobs:
 
       - name: Vérifier les GLB officiels libres sous 8 Mo
         shell: bash
+        env:
+          GH_API_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           import json
+          import os
           import urllib.request
 
           models = [
@@ -162,7 +165,8 @@ jobs:
               )
               request = urllib.request.Request(url, headers={
                   "User-Agent": "Modeliseur3D-CI/6.6.7",
-                  "Accept": "application/vnd.github+json"
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GH_API_TOKEN"]
               })
               try:
                   with urllib.request.urlopen(request, timeout=30) as response:
