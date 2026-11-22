@@ -56,30 +56,36 @@ public class NavigationUpdateTest {
         UpdateManager.executor.submit(()->{}).get(180,TimeUnit.SECONDS);
         shadowOf(Looper.getMainLooper()).idle();
     }
-    @Test public void fourTabsKeepBothEnginesFusionAndAssetsAccessible(){
+    @Test public void fiveTabsKeepBothEnginesFusionAndAssetsAccessible(){
         try(var controller=Robolectric.buildActivity(HomeActivity.class).setup()){
             HomeActivity home=controller.get();TabHost tabs=home.findViewById(android.R.id.tabhost);
             List<?> specs=ReflectionHelpers.getField(shadowOf(tabs),"tabSpecs");
-            assertEquals(4,specs.size());
-            for(String tag:new String[]{"25d","3d","trellis","fusion360"})assertNotNull(shadowOf(tabs).getSpecByTag(tag));
-            assertEquals(1,tabs.getCurrentTab());
+            assertEquals(5,specs.size());
+            for(String tag:new String[]{"viewer","25d","3d","trellis","fusion360"})assertNotNull(shadowOf(tabs).getSpecByTag(tag));
+            assertEquals("viewer",tabs.getCurrentTabTag());
+            assertNotNull(text(home.findViewById(R.id.tabViewer),"Lecteur GLB intégré"));
+            assertNotNull(home.findViewById(R.id.tabOpenGlbButton));
+            home.findViewById(R.id.tabOpenAssetsButton).performClick();
+            assertEquals(Asset3DActivity.class.getName(),
+                    shadowOf(home).getNextStartedActivity().getComponent().getClassName());
             TextView indicator=(TextView)shadowOf(shadowOf(tabs).getSpecByTag("3d")).getIndicatorAsView();
             assertTrue(indicator.getText().toString().contains("4 images"));
             int unselected=indicator.getTextColors().getColorForState(new int[]{},0);
             int selected=indicator.getTextColors().getColorForState(new int[]{android.R.attr.state_selected},0);
             assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(unselected,0xFFDEE5EF)>=4.5);
             assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(selected,0xFFA83D00)>=4.5);
-            tabs.setCurrentTab(2);
+            tabs.setCurrentTabByTag("trellis");
             assertNull(text(home.findViewById(R.id.tabTrellis),"GPU distant"));
             assertNull(text(home.findViewById(R.id.tabTrellis),"MCP"));
             int[] ids={R.id.mode25dButton,R.id.mode3dButton,R.id.assets3dButton,R.id.settingsButton,R.id.offline3dButton};
             Class<?>[] targets={MainActivityV52.class,Manual3DActivity.class,Asset3DActivity.class,SettingsActivity.class,Offline3DActivity.class};
             for(int i=0;i<ids.length;i++){
-                if(i<2)tabs.setCurrentTab(i);else if(i==4)tabs.setCurrentTab(2);
+                if(i<2)tabs.setCurrentTabByTag(i==0?"25d":"3d");
+                else if(i==4)tabs.setCurrentTabByTag("trellis");
                 home.findViewById(ids[i]).performClick();
                 assertEquals(targets[i].getName(),shadowOf(home).getNextStartedActivity().getComponent().getClassName());
             }
-            tabs.setCurrentTab(3);
+            tabs.setCurrentTabByTag("fusion360");
             assertNotNull(text(home.findViewById(R.id.tabFusion360),"Tripo Fusion 360°"));
             home.findViewById(R.id.fusion360Button).performClick();
             Intent fusionIntent=shadowOf(home).getNextStartedActivity();
