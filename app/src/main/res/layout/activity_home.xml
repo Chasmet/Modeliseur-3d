@@ -24,8 +24,33 @@
         <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="16dp">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-                <TabWidget android:id="@android:id/tabs" android:layout_width="match_parent" android:layout_height="56dp" />
+                <HorizontalScrollView android:id="@+id/homeTabsScroll"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:fillViewport="false" android:scrollbars="horizontal">
+                    <TabWidget android:id="@android:id/tabs"
+                        android:layout_width="wrap_content" android:layout_height="56dp" />
+                </HorizontalScrollView>
                 <FrameLayout android:id="@android:id/tabcontent" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <LinearLayout android:id="@+id/tabViewer" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:text="Lecteur GLB intégré : ouvre tes fichiers .glb directement sur ton téléphone, sans quitter Modéliseur 3D et sans connexion."
+                            android:textColor="@color/text_secondary" android:textSize="16sp" />
+                        <Button android:id="@+id/tabOpenGlbButton"
+                            android:layout_width="match_parent" android:layout_height="106dp"
+                            android:layout_marginTop="18dp" android:backgroundTint="@color/viewer_background"
+                            android:text="Ouvrir un fichier GLB\nAfficher le modèle en 3D"
+                            android:textColor="#FFFFFF" android:textAllCaps="false" android:textSize="20sp" />
+                        <Button android:id="@+id/tabOpenAssetsButton"
+                            android:layout_width="match_parent" android:layout_height="94dp"
+                            android:layout_marginTop="14dp" android:backgroundTint="@color/launcher_background"
+                            android:text="Bibliothèque 3D\nOuvrir les 259 modèles"
+                            android:textColor="#FFFFFF" android:textAllCaps="false" android:textSize="18sp" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:text="Gestes tactiles : rotation et zoom. Animations, textures, affichage argile ou filaire, et vues face/dos/profils."
+                            android:textColor="@color/text_secondary" android:textSize="14sp" />
+                    </LinearLayout>
                     <LinearLayout android:id="@+id/tab25d" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="18dp">
                         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reconstruction locale à partir de la face et du dos."
                             android:textColor="@color/text_secondary" android:textSize="16sp" />
@@ -62,6 +87,11 @@
                 </FrameLayout>
             </LinearLayout>
         </TabHost>
+        <Button android:id="@+id/openGlbButton" android:layout_width="match_parent"
+            android:layout_height="86dp" android:layout_marginTop="20dp"
+            android:backgroundTint="@color/viewer_background" android:textColor="#FFFFFF"
+            android:text="Lecteur GLB • Ouvrir un fichier 3D\nRotation · zoom · animations · hors ligne"
+            android:textAllCaps="false" android:textSize="18sp" />
         <Button android:id="@+id/assets3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="24dp"
             android:backgroundTint="@color/launcher_background" android:text="Assets 3D disponibles\n259 modèles • ouverture + export" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
         <TextView android:id="@+id/updateHomeStatus" android:layout_width="match_parent" android:layout_height="wrap_content"

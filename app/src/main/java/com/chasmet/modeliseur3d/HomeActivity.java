@@ -1,6 +1,10 @@
 package com.chasmet.modeliseur3d;
 
 import android.content.Intent;
+import android.content.ClipData;
+import android.net.Uri;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.os.Bundle;
 import android.widget.TabHost;
 import android.widget.TextView;
@@ -12,6 +16,27 @@ import androidx.appcompat.app.AppCompatActivity;
 
 /** Accueil des moteurs locaux, du catalogue et du pont MCP ChatGPT. */
 public final class HomeActivity extends AppCompatActivity {
+    private final ActivityResultLauncher<String[]> glbPicker = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            this::openChosenGlb
+    );
+
+    private void openChosenGlb(Uri uri) {
+        if (uri == null) return;
+        try {
+            getContentResolver().takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (SecurityException ignored) {
+            // Some providers only grant temporary access, which is sufficient here.
+        }
+        Intent intent = new Intent(this, CloudModelViewerActivity.class);
+        intent.putExtra(CloudModelViewerActivity.EXTRA_CONTENT_URI, uri.toString());
+        intent.setData(uri);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(ClipData.newRawUri("GLB local", uri));
+        startActivity(intent);
+    }
+
     private final android.os.Handler connectionUi = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable refreshConnection = new Runnable() {
         @Override public void run() {
@@ -46,13 +71,37 @@ public final class HomeActivity extends AppCompatActivity {
         });
         TabHost tabs = findViewById(android.R.id.tabhost);
         tabs.setup();
+        // Le lecteur GLB est un véritable onglet permanent, en première position.
+        tabs.addTab(tabs.newTabSpec("viewer").setIndicator(tabTitle("Lecteur GLB")).setContent(R.id.tabViewer));
         tabs.addTab(tabs.newTabSpec("25d").setIndicator(tabTitle("2.5D")).setContent(R.id.tab25d));
         tabs.addTab(tabs.newTabSpec("3d").setIndicator(tabTitle("3D · 4 images")).setContent(R.id.tab3d));
         tabs.addTab(tabs.newTabSpec("trellis").setIndicator(tabTitle("IA locale")).setContent(R.id.tabTrellis));
         tabs.addTab(tabs.newTabSpec("fusion360").setIndicator(tabTitle("Fusion 360°")).setContent(R.id.tabFusion360));
-        tabs.setCurrentTab(savedInstanceState != null ? savedInstanceState.getInt("homeTab", 1)
-                : getPreferences(MODE_PRIVATE).getInt("homeTab", 1));
-        tabs.setOnTabChangedListener(tag -> getPreferences(MODE_PRIVATE).edit().putInt("homeTab", tabs.getCurrentTab()).apply());
+        android.content.SharedPreferences tabsPrefs = getPreferences(MODE_PRIVATE);
+        String rememberedTab = savedInstanceState != null
+                ? savedInstanceState.getString("homeTabTag", null)
+                : tabsPrefs.getString("homeTabTag", null);
+        // Présenter le nouveau lecteur au premier lancement de cette version.
+        if (!tabsPrefs.getBoolean("glbTabIntroShown", false)) {
+            rememberedTab = "viewer";
+        } else if (rememberedTab == null) {
+            // Ancienne version : l'IA locale était l'onglet par défaut.
+            rememberedTab = "trellis";
+        }
+        tabs.setCurrentTabByTag(rememberedTab);
+        tabsPrefs.edit().putBoolean("glbTabIntroShown", true).apply();
+        android.widget.HorizontalScrollView tabScroll = findViewById(R.id.homeTabsScroll);
+        Runnable scrollToActiveTab = () -> {
+            android.view.View current = tabs.getTabWidget().getChildAt(tabs.getCurrentTab());
+            if (current != null) {
+                tabScroll.smoothScrollTo(Math.max(0, current.getLeft() - 8), 0);
+            }
+        };
+        tabs.setOnTabChangedListener(tag -> {
+            tabsPrefs.edit().putString("homeTabTag", tag).apply();
+            tabScroll.post(scrollToActiveTab);
+        });
+        tabScroll.post(scrollToActiveTab);
         findViewById(R.id.settingsButton).setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
         findViewById(R.id.mode25dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, MainActivityV52.class))
@@ -66,6 +115,12 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
         );
+        android.view.View.OnClickListener openGlb = view ->
+                glbPicker.launch(new String[]{"model/gltf-binary", "application/octet-stream", "*/*"});
+        findViewById(R.id.openGlbButton).setOnClickListener(openGlb);
+        findViewById(R.id.tabOpenGlbButton).setOnClickListener(openGlb);
+        findViewById(R.id.tabOpenAssetsButton).setOnClickListener(view ->
+                startActivity(new Intent(this, Asset3DActivity.class)));
     }
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -91,6 +146,9 @@ public final class HomeActivity extends AppCompatActivity {
         title.setTextColor(new android.content.res.ColorStateList(new int[][]{{android.R.attr.state_selected},{}},
                 new int[]{android.graphics.Color.WHITE,0xFF121722}));
         title.setGravity(android.view.Gravity.CENTER);
+        title.setMinWidth((int) (96 * getResources().getDisplayMetrics().density));
+        int inset = (int) (8 * getResources().getDisplayMetrics().density);
+        title.setPadding(inset, 0, inset, 0);
         android.graphics.drawable.StateListDrawable background = new android.graphics.drawable.StateListDrawable();
         for (boolean selected : new boolean[]{true,false}) {
             android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
@@ -113,13 +171,13 @@ public final class HomeActivity extends AppCompatActivity {
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
-        state.putInt("homeTab", ((TabHost) findViewById(android.R.id.tabhost)).getCurrentTab());
+        state.putString("homeTabTag", ((TabHost) findViewById(android.R.id.tabhost)).getCurrentTabTag());
         super.onSaveInstanceState(state);
     }
     @Override protected void onResume() {
         super.onResume();
         UpdateManager.schedule(this);
-        if (((TabHost) findViewById(android.R.id.tabhost)).getCurrentTab() != 2 && UpdateManager.automatic(this)) {
+        if (!"trellis".equals(((TabHost) findViewById(android.R.id.tabhost)).getCurrentTabTag()) && UpdateManager.automatic(this)) {
             UpdateManager.executor.execute(() -> {
                 try { UpdateManager.check(this); } catch (Exception ignored) { }
                 runOnUiThread(() -> {
