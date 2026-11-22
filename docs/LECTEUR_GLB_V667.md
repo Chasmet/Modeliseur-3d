@@ -41,3 +41,12 @@ réservé aux identifiants de jobs du module Cloud.
 
 La compilation et la compatibilité de signature ne sont pas déclarées réussies
 avant confirmation par GitHub Actions et/ou un test sur appareil.
+
+## Correctif interface — 22 novembre 2026
+
+- L'accueil affiche désormais **cinq onglets**, avec « Lecteur GLB » en premier.
+- Au premier lancement de V6.6.7, le lecteur est sélectionné pour être immédiatement visible.
+- La navigation entre les onglets est défilante horizontalement ; les onglets originaux sont conservés.
+- Boutons « Ouvrir un fichier GLB » et « Bibliothèque 3D » directement dans cet onglet.
+- Le lecteur interne, les animations et l'export du catalogue sont conservés.
+- La publication doit impérativement réutiliser la signature historique via le workflow OIDC autorisé de la branche de release ; ne jamais publier un nouvel APK signé différemment.

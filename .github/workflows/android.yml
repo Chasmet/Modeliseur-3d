@@ -242,7 +242,10 @@ jobs:
   publish:
     name: Publier une mise à jour signée et compatible
     needs: build
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    # Ne jamais publier depuis main : ce build utilise une clé de test qui peut différer
+    # de la signature historique. La publication signée est assurée par release.yml
+    # sur la branche agent/trellis-third-tab-auto-update (OIDC + clé persistante).
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
