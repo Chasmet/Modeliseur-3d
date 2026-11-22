@@ -294,12 +294,12 @@ jobs:
             fi
             RESUME_DRAFT=true
           fi
-          cat > /tmp/modeliseur-release.md <<'NOTES'
-          V6.6.4 : précision adaptative TripoSR entièrement hors ligne.
-          Le maillage 3D recherche une résolution adaptée au budget de triangles au lieu de réduire systématiquement la grille de 20 %. Un filtre local préserve les frontières de couleurs et réduit légèrement le bruit sur les textures des surfaces cachées ; la face photographiée reste intacte. Option désactivable « Précision 3D adaptative + finition des faces cachées ».
-          Les poids IA, le stockage et les modes précédents sont conservés. Le calcul prend potentiellement plus longtemps, sans consommation de crédits ou serveur. Une seule photo ne permet pas de scanner réellement les surfaces invisibles.
-          Mise à jour par-dessus la version installée avec le certificat Android vérifié ; fichiers GLB, photos et réglages conservés.
-          NOTES
+          NOTES_PATH="release-notes/$VERSION.md"
+          if [ -f "$NOTES_PATH" ]; then
+            cp "$NOTES_PATH" /tmp/modeliseur-release.md
+          else
+            printf 'Modéliseur 3D %s - mise à jour signée conservant les données.\n' "$VERSION" > /tmp/modeliseur-release.md
+          fi
           bash signing/publish_source_snapshot.sh "$VERSION" "$RUNNER_TEMP/modeliseur-release-target.txt"
           SOURCE_COMMIT=$(cat "$RUNNER_TEMP/modeliseur-release-target.txt")
           printf '\nSources APK : %s. Application compilée et testée depuis %s, avec les workflows de la branche principale conservés dans la branche de sources de publication.\n' "$SOURCE_COMMIT" "$GITHUB_SHA" >> /tmp/modeliseur-release.md
