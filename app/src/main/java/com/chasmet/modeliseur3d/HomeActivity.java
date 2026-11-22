@@ -1,6 +1,10 @@
 package com.chasmet.modeliseur3d;
 
 import android.content.Intent;
+import android.content.ClipData;
+import android.net.Uri;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.os.Bundle;
 import android.widget.TabHost;
 import android.widget.TextView;
@@ -12,6 +16,27 @@ import androidx.appcompat.app.AppCompatActivity;
 
 /** Accueil des moteurs locaux, du catalogue et du pont MCP ChatGPT. */
 public final class HomeActivity extends AppCompatActivity {
+    private final ActivityResultLauncher<String[]> glbPicker = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            this::openChosenGlb
+    );
+
+    private void openChosenGlb(Uri uri) {
+        if (uri == null) return;
+        try {
+            getContentResolver().takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (SecurityException ignored) {
+            // Some providers only grant temporary access, which is sufficient here.
+        }
+        Intent intent = new Intent(this, CloudModelViewerActivity.class);
+        intent.putExtra(CloudModelViewerActivity.EXTRA_CONTENT_URI, uri.toString());
+        intent.setData(uri);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(ClipData.newRawUri("GLB local", uri));
+        startActivity(intent);
+    }
+
     private final android.os.Handler connectionUi = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable refreshConnection = new Runnable() {
         @Override public void run() {
@@ -65,6 +90,9 @@ public final class HomeActivity extends AppCompatActivity {
         findViewById(R.id.fusion360Button).setOnClickListener(view -> startActivity(new Intent(this, Offline3DActivity.class).putExtra(Offline3DActivity.EXTRA_FUSION_360,true)));
         findViewById(R.id.assets3dButton).setOnClickListener(view ->
                 startActivity(new Intent(this, Asset3DActivity.class))
+        );
+        findViewById(R.id.openGlbButton).setOnClickListener(view ->
+                glbPicker.launch(new String[]{"model/gltf-binary", "application/octet-stream", "*/*"})
         );
     }
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {

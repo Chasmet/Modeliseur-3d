@@ -2,7 +2,7 @@ name: Compiler l'APK Android
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/lecteur-glb-v667']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/models/isnet_anime_fp32.onnx
-          key: modeliseur-v5910-259-assets-export-isnet-fp32-6a92a19a
+          key: modeliseur-v667-259-assets-export-isnet-fp32-6a92a19a
 
       - name: Télécharger et vérifier IS-Net Anime FP32
         shell: bash
@@ -82,14 +82,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.9.10
+      - name: Vérifier l'architecture V6.6.7
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.10" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.10'" app/build.gradle
-          grep -q "versionCode 35" app/build.gradle
+          grep -q "Modéliseur 3D V6.6.7" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.6.7'" app/build.gradle
+          grep -q "versionCode 69" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -107,6 +107,11 @@ jobs:
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q 'openGlbButton' app/src/main/res/layout/activity_home.xml
+          grep -q 'CloudModelViewerActivity.EXTRA_CONTENT_URI' app/src/main/java/com/chasmet/modeliseur3d/HomeActivity.java
+          grep -q 'new Intent(this, CloudModelViewerActivity.class)' app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
+          grep -q 'getContentResolver().openInputStream(documentUri)' app/src/main/java/com/chasmet/modeliseur3d/CloudModelViewerActivity.java
+          grep -q "versionCode 69" app/build.gradle
 
       - name: Vérifier les GLB officiels libres sous 8 Mo
         shell: bash
@@ -198,7 +203,7 @@ jobs:
       - name: Publier l'APK V5.9.10
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.10-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.6.7-Lecteur-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

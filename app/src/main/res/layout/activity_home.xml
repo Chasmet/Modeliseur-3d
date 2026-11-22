@@ -62,6 +62,11 @@
                 </FrameLayout>
             </LinearLayout>
         </TabHost>
+        <Button android:id="@+id/openGlbButton" android:layout_width="match_parent"
+            android:layout_height="86dp" android:layout_marginTop="20dp"
+            android:backgroundTint="@color/viewer_background" android:textColor="#FFFFFF"
+            android:text="Lecteur GLB • Ouvrir un fichier 3D\\nRotation · zoom · animations · hors ligne"
+            android:textAllCaps="false" android:textSize="18sp" />
         <Button android:id="@+id/assets3dButton" android:layout_width="match_parent" android:layout_height="112dp" android:layout_marginTop="24dp"
             android:backgroundTint="@color/launcher_background" android:text="Assets 3D disponibles\n259 modèles • ouverture + export" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="20sp" />
         <TextView android:id="@+id/updateHomeStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
