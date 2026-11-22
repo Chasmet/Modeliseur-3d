@@ -29,6 +29,40 @@ def test_unicode_and_root_paths():
         validate_path("")
 
 @pytest.mark.asyncio
+async def test_protocol_four_registry_and_old_phone_negotiation():
+    names={tool.name for tool in await relay.browser_mcp.list_tools()}
+    assert {"browser_capabilities","browser_cut","browser_publication","browser_studio_project","browser_files_references","browser_files_archive"} <= names
+    row=relay.get_device(DEVICE);row["seen"]=time.monotonic();row["workspace_version"]=3
+    token=relay.OWNER.set(DEVICE)
+    try:
+        result=await relay.browser_mcp.call_tool("browser_files_archive",{"paths":["Videos"],"destination":"Videos.zip"})
+        assert "protocole 4" in str(result)
+        assert not row["commands"]
+    finally: relay.OWNER.reset(token)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,args,action",[
+    ("browser_capabilities",{},"workspace_capabilities"),
+    ("browser_cut",{"operation":"resume","request":{"request_id":"cut_1"}},"cut_resume"),
+    ("browser_studio_project",{"operation":"list"},"video_editor_project_list"),
+    ("browser_publication",{"operation":"status","request":{"id":"post_1"}},"publication_status"),
+    ("browser_video_editor_export",{"resume":True},"video_editor_resume"),
+])
+async def test_protocol_four_tools_route_to_the_correct_phone(name,args,action):
+    row=relay.get_device(DEVICE);row["seen"]=time.monotonic();row["workspace_version"]=4
+    token=relay.OWNER.set(DEVICE)
+    try:
+        task=asyncio.create_task(relay.browser_mcp.call_tool(name,args))
+        for _ in range(100):
+            await asyncio.sleep(0)
+            if row["commands"]: break
+        assert row["commands"][0]["action"]==action
+        command=row["commands"][0]
+        row["pending"][command["id"]].set_result({"ok":True,"result":"verified-phone-result"})
+        assert "verified-phone-result" in str(await task)
+    finally: relay.OWNER.reset(token)
+
+@pytest.mark.asyncio
 async def test_tool_registry_and_revision_schema():
     tools = {t.name:t for t in await relay.browser_mcp.list_tools()}
     required = ["browser_files_list", "browser_files_write_text", "browser_files_import", "browser_upload_workspace_file", "browser_notes_save", "browser_notes_export", "browser_files_preview"]
