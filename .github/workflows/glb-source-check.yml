@@ -1,8 +1,6 @@
 name: Vérification rapide du lecteur GLB
 
 on:
-  push:
-    branches: ['feature/lecteur-glb-v667']
   pull_request:
     branches: [main]
   workflow_dispatch:
