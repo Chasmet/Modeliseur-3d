@@ -28,6 +28,33 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Installer Python 3.12 pour TripoSR
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/offline-models/requirements.txt
+
+      - name: Installer les dépendances de conversion TripoSR
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check -r tools/offline-models/requirements.txt
+          python - <<'PY'
+          import onnx, onnxruntime, numpy
+          assert (onnx.__version__, onnxruntime.__version__, numpy.__version__) == ('1.17.0','1.20.0','2.3.5')
+          print('Dépendances TripoSR vérifiées.')
+          PY
+
+      - name: Mettre en cache les modèles TripoSR vérifiés
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-sha76dab0-fd5be2-2026
+
       - name: Conserver la signature APK de test
         uses: actions/cache@v4
         with:
@@ -82,14 +109,14 @@ jobs:
           "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
           chmod +x gradlew
 
-      - name: Vérifier l'architecture V5.9.10
+      - name: Vérifier l'architecture V6.6.7
         shell: bash
         run: |
           set -euo pipefail
           grep -q "android.permission.INTERNET" app/src/main/AndroidManifest.xml
-          grep -q "Modéliseur 3D V5.9.10" app/src/main/AndroidManifest.xml
-          grep -q "versionName '5.9.10'" app/build.gradle
-          grep -q "versionCode 35" app/build.gradle
+          grep -q "Modéliseur 3D V6.6.7" app/src/main/AndroidManifest.xml
+          grep -q "versionName '6.6.7'" app/build.gradle
+          grep -q "versionCode 69" app/build.gradle
           grep -q 'ANIMATED = "Animés"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'WEAPONS = "Armes et équipements"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
           grep -q 'PORTS = "Ports et maritime"' app/src/main/java/com/chasmet/modeliseur3d/assets/Asset3DCatalog.java
@@ -107,12 +134,20 @@ jobs:
           grep -q "ExternalViewerGlbExporter.write" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           ! grep -q "FastMobileMeshOptimizer.simplify" app/src/main/java/com/chasmet/modeliseur3d/model/Fast3DGlbExporter.java
           grep -q "FaceBack25DEngine" app/src/main/java/com/chasmet/modeliseur3d/MainActivityV52.java
+          grep -q 'openGlbButton' app/src/main/res/layout/activity_home.xml
+          grep -q 'CloudModelViewerActivity.EXTRA_CONTENT_URI' app/src/main/java/com/chasmet/modeliseur3d/HomeActivity.java
+          grep -q 'new Intent(this, CloudModelViewerActivity.class)' app/src/main/java/com/chasmet/modeliseur3d/Asset3DActivity.java
+          grep -q 'getContentResolver().openInputStream(documentUri)' app/src/main/java/com/chasmet/modeliseur3d/CloudModelViewerActivity.java
+          grep -q "versionCode 69" app/build.gradle
 
       - name: Vérifier les GLB officiels libres sous 8 Mo
         shell: bash
+        env:
+          GH_API_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           import json
+          import os
           import urllib.request
 
           models = [
@@ -129,8 +164,9 @@ jobs:
                   f"Models/{model}/glTF-Binary/{model}.glb?ref=main"
               )
               request = urllib.request.Request(url, headers={
-                  "User-Agent": "Modeliseur3D-CI/5.9.10",
-                  "Accept": "application/vnd.github+json"
+                  "User-Agent": "Modeliseur3D-CI/6.6.7",
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GH_API_TOKEN"]
               })
               try:
                   with urllib.request.urlopen(request, timeout=30) as response:
@@ -195,10 +231,54 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | sed -n '1,3p'
           test "$(unzip -p "$APK" assets/models/isnet_anime_fp32.onnx | sha256sum | cut -d' ' -f1)" = "$ISNET_SHA"
 
-      - name: Publier l'APK V5.9.10
+      - name: Publier l'APK V6.6.7
         uses: actions/upload-artifact@v4
         with:
-          name: Modeliseur-V5.9.10-259-Assets-Export-GLB-debug
+          name: Modeliseur-V6.6.7-Lecteur-GLB-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Publier une mise à jour signée et compatible
+    needs: build
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer l'APK vérifié par le job build
+        uses: actions/download-artifact@v4
+        with:
+          name: Modeliseur-V6.6.7-Lecteur-GLB-debug
+          path: dist
+
+      - name: Contrôler la signature avec la Release 6.6.6 et créer la 6.6.7
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SIGNER="$SDK_ROOT/build-tools/34.0.0/apksigner"
+          test -x "$SIGNER"
+          test -f dist/app-debug.apk
+          mv dist/app-debug.apk dist/Modeliseur-3D-6.6.7.apk
+
+          OLD_APK="$RUNNER_TEMP/Modeliseur-3D-6.6.6.apk"
+          OLD_URL="https://github.com/Chasmet/Modeliseur-3d/releases/download/v6.6.6/Modeliseur-3D-6.6.6.apk"
+          curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 30 -o "$OLD_APK" "$OLD_URL"
+          echo "0ec7ee8382d78d8b97d802d543919e37a8624578d99d4377f6b11d3d7abd13ca  $OLD_APK" | sha256sum -c -
+
+          "$SIGNER" verify --verbose --print-certs "$OLD_APK" > "$RUNNER_TEMP/previous-signers.txt"
+          "$SIGNER" verify --verbose --print-certs dist/Modeliseur-3D-6.6.7.apk > "$RUNNER_TEMP/new-signers.txt"
+          old_cert="$(grep -m1 'Signer #1 certificate SHA-256 digest:' "$RUNNER_TEMP/previous-signers.txt" | awk -F': ' '{print $NF}')"
+          new_cert="$(grep -m1 'Signer #1 certificate SHA-256 digest:' "$RUNNER_TEMP/new-signers.txt" | awk -F': ' '{print $NF}')"
+          if [[ -z "$old_cert" || "$new_cert" != "$old_cert" ]]; then
+            echo "ERREUR : certificat différent de la version 6.6.6. Publication bloquée pour préserver les données." >&2
+            exit 1
+          fi
+          echo "Même certificat de signature que la Release 6.6.6."
+          sha256sum dist/Modeliseur-3D-6.6.7.apk > dist/Modeliseur-3D-6.6.7.apk.sha256
+          gh release create v6.6.7 dist/Modeliseur-3D-6.6.7.apk dist/Modeliseur-3D-6.6.7.apk.sha256 --repo Chasmet/Modeliseur-3d --title "Modéliseur 3D 6.6.7" --notes "Lecteur GLB intégré : ouverture depuis l'accueil et le catalogue, rotation, zoom, textures et animations. Moteurs IA, projet, MCP et mise à jour interne conservés."

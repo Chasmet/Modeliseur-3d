@@ -303,32 +303,26 @@ public final class Asset3DActivity extends AppCompatActivity
         return safe + ".glb";
     }
 
+    /** Open a catalog GLB in the existing offline viewer, not in another application. */
     private void openAsset(File file, Asset3DItem item) {
-        Uri uri = FileProvider.getUriForFile(
-                this,
-                getPackageName() + ".fileprovider",
-                file
-        );
-        Intent viewer = new Intent(Intent.ACTION_VIEW);
-        viewer.setDataAndType(uri, "model/gltf-binary");
-        viewer.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        viewer.setClipData(ClipData.newRawUri("Asset GLB", uri));
+        if (file == null || !file.isFile()) {
+            Toast.makeText(this, "GLB introuvable.", Toast.LENGTH_LONG).show();
+            return;
+        }
         try {
+            Uri uri = FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", file);
+            Intent viewer = new Intent(this, CloudModelViewerActivity.class);
+            viewer.putExtra(CloudModelViewerActivity.EXTRA_CONTENT_URI, uri.toString());
+            viewer.setData(uri);
+            viewer.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            viewer.setClipData(ClipData.newRawUri("Asset GLB", uri));
             startActivity(viewer);
-            status.setText(item.getName() + " ouvert • "
-                    + Asset3DDownloader.formatBytes(file.length())
-                    + (item.isAnimated() ? " • animation intégrée" : ""));
-        } catch (Exception unavailable) {
-            Intent share = new Intent(Intent.ACTION_SEND);
-            share.setType("model/gltf-binary");
-            share.putExtra(Intent.EXTRA_STREAM, uri);
-            share.putExtra(Intent.EXTRA_SUBJECT, item.getName());
-            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            share.setClipData(ClipData.newRawUri("Asset GLB", uri));
-            startActivity(Intent.createChooser(
-                    share,
-                    "Ouvrir ou enregistrer l'asset 3D"
-            ));
+            status.setText(item.getName() + " • lecteur GLB intégré"
+                    + (item.isAnimated() ? " • animations disponibles" : ""));
+        } catch (RuntimeException error) {
+            status.setText("Ouverture interne impossible : " + error.getMessage());
+            Toast.makeText(this, "Impossible d'ouvrir le GLB.", Toast.LENGTH_LONG).show();
         }
     }
 

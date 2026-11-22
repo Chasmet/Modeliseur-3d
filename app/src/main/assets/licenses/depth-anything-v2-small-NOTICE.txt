@@ -1,0 +1,8 @@
+Depth Anything V2 Small (Apache License 2.0)
+Authors: Depth Anything V2 contributors (Lihe Yang, Bingyi Kang and collaborators).
+Original project: https://github.com/DepthAnything/Depth-Anything-V2
+ONNX conversion: ONNX Community / Xenova
+Model: https://huggingface.co/onnx-community/depth-anything-v2-small
+Pinned revision: 64fe43eba7f8a384b02fe3fadaa26cbba35548d8
+SHA-256: afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c
+This application uses mobile-sized, letterboxed inputs and converts relative depth into a bounded approximation of the visible surface. It is not the TRELLIS generative model.
