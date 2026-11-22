@@ -1,0 +1,22 @@
+name: Audit des caches de signature
+
+on:
+  push:
+    branches: [audit/signature-ancienne-version]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-signing-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Lister les métadonnées des caches de signature (sans clés privées)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/Chasmet/Modeliseur-3d/actions/caches?per_page=100" --paginate             --jq '.actions_caches[] | select((.key | ascii_downcase | contains("keystore")) or (.key | ascii_downcase | contains("sign"))) | "cache: key=\(.key) ref=\(.ref) created=\(.created_at) last=\(.last_accessed_at)"'
