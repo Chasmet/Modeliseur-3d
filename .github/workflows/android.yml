@@ -28,6 +28,33 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Installer Python 3.12 pour TripoSR
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/offline-models/requirements.txt
+
+      - name: Installer les dépendances de conversion TripoSR
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check -r tools/offline-models/requirements.txt
+          python - <<'PY'
+          import onnx, onnxruntime, numpy
+          assert (onnx.__version__, onnxruntime.__version__, numpy.__version__) == ('1.17.0','1.20.0','2.3.5')
+          print('Dépendances TripoSR vérifiées.')
+          PY
+
+      - name: Mettre en cache les modèles TripoSR vérifiés
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/models/triposr_encoder_int4.onnx
+            app/src/main/assets/models/triposr_encoder_int4.onnx.data
+            app/src/main/assets/models/triposr_decoder.onnx
+            app/src/main/assets/models/triposr_decoder.onnx.data
+          key: modeliseur-triposr-int4-sha76dab0-fd5be2-2026
+
       - name: Conserver la signature APK de test
         uses: actions/cache@v4
         with:
