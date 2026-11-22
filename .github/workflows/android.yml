@@ -2,7 +2,7 @@ name: Compiler l'APK Android
 
 on:
   push:
-    branches: [main, 'feature/lecteur-glb-v667']
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -238,3 +238,47 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Publier une mise à jour signée et compatible
+    needs: build
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Récupérer l'APK vérifié par le job build
+        uses: actions/download-artifact@v4
+        with:
+          name: Modeliseur-V6.6.7-Lecteur-GLB-debug
+          path: dist
+
+      - name: Contrôler la signature avec la Release 6.6.6 et créer la 6.6.7
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SIGNER="$SDK_ROOT/build-tools/34.0.0/apksigner"
+          test -x "$SIGNER"
+          test -f dist/app-debug.apk
+          mv dist/app-debug.apk dist/Modeliseur-3D-6.6.7.apk
+
+          OLD_APK="$RUNNER_TEMP/Modeliseur-3D-6.6.6.apk"
+          OLD_URL="https://github.com/Chasmet/Modeliseur-3d/releases/download/v6.6.6/Modeliseur-3D-6.6.6.apk"
+          curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 30 -o "$OLD_APK" "$OLD_URL"
+          echo "0ec7ee8382d78d8b97d802d543919e37a8624578d99d4377f6b11d3d7abd13ca  $OLD_APK" | sha256sum -c -
+
+          "$SIGNER" verify --verbose --print-certs "$OLD_APK" > "$RUNNER_TEMP/previous-signers.txt"
+          "$SIGNER" verify --verbose --print-certs dist/Modeliseur-3D-6.6.7.apk > "$RUNNER_TEMP/new-signers.txt"
+          old_cert="$(grep -m1 'Signer #1 certificate SHA-256 digest:' "$RUNNER_TEMP/previous-signers.txt" | awk -F': ' '{print $NF}')"
+          new_cert="$(grep -m1 'Signer #1 certificate SHA-256 digest:' "$RUNNER_TEMP/new-signers.txt" | awk -F': ' '{print $NF}')"
+          if [[ -z "$old_cert" || "$new_cert" != "$old_cert" ]]; then
+            echo "ERREUR : certificat différent de la version 6.6.6. Publication bloquée pour préserver les données." >&2
+            exit 1
+          fi
+          echo "Même certificat de signature que la Release 6.6.6."
+          sha256sum dist/Modeliseur-3D-6.6.7.apk > dist/Modeliseur-3D-6.6.7.apk.sha256
+          gh release create v6.6.7 dist/Modeliseur-3D-6.6.7.apk dist/Modeliseur-3D-6.6.7.apk.sha256 --repo Chasmet/Modeliseur-3d --title "Modéliseur 3D 6.6.7" --notes "Lecteur GLB intégré : ouverture depuis l'accueil et le catalogue, rotation, zoom, textures et animations. Moteurs IA, projet, MCP et mise à jour interne conservés."
