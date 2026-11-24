@@ -28,7 +28,6 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 from backend.browser_signing import issue_signing
-from backend.lesfaits_signing import issue_signing as issue_lesfaits_signing
 from backend.browser_workspace import WORKSPACE_ACTIONS, register_workspace
 from backend.browser_keyboard import register_keyboard
 from backend.browser_desktop import register_desktop
@@ -450,7 +449,6 @@ async def health(request: Request):
 browser_http = Starlette(
     routes=[
         Route("/agentbrowser/ci/signing", issue_signing, methods=["GET"]),
-        Route("/lesfaits/ci/signing", issue_lesfaits_signing, methods=["GET"]),
         Route("/agentbrowser/api/health", health, methods=["GET"]),
         Route("/agentbrowser/api/register", register, methods=["POST"]),
         Route("/agentbrowser/api/heartbeat", heartbeat, methods=["POST"]),
