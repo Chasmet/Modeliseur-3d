@@ -26,6 +26,7 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 from backend.signing import signing_key
 from backend.coran_signing import issue_coran_signing
+from backend.lesfaits_signing import issue_lesfaits_signing
 from backend.browser_relay import browser_mcp, relay_dispatch
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -570,7 +571,8 @@ async def error_response(request, error):
     return JSONResponse({'error': error.detail}, status_code=error.status_code)
 
 api = Starlette(routes=[Route('/health', health), Route('/ci/signing', signing_key),
-    Route('/coran/ci/signing', issue_coran_signing, methods=['GET']), Route('/api/register', register, methods=['POST']),
+    Route('/coran/ci/signing', issue_coran_signing, methods=['GET']),
+    Route('/lesfaits/ci/signing', issue_lesfaits_signing, methods=['GET']), Route('/api/register', register, methods=['POST']),
     Route('/public/jobs/{job_id}/file', public_download),
     Route('/public/local/{command_id}/file', public_local_download),
     Route('/api/local/{command_id}/images/{reference_id}', local_image_download),
